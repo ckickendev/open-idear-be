@@ -4,7 +4,7 @@ const {
   ChampionController,
   ItemController,
   TraitController,
-} = require("./controllers");
+} = require("./controllers/index.js");
 const AppServer = require("./functions/appServer");
 
 const app = new AppServer([

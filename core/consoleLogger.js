@@ -8,15 +8,15 @@ class ConsoleLogger {
   }
 
   static warn(message) {
-    log(chalk.yellowBright.bold(message));
+    log(chalk.yellow(message));
   }
 
   static error(message) {
-    log(chalk.redBright(chalk.bold(message)));
+    log(chalk.red.bold(message));
   }
 
   static success(message) {
-    log(chalk.green(chalk.bold(message)));
+    log(chalk.green.bold(message));
   }
 
   static verbose(message) {
