@@ -1,11 +1,19 @@
 const User = require("./user.schema");
-const Champion = require("./champion.schema");
-const Item = require("./item.schema.js");
-const Trait = require("./trait.schema");
+const Category = require("./category.schema");
+const Like = require("./like.schema");
+const Media = require("./media.schema");
+const Notification = require("./notification.schema");
+const Post = require("./post.schema");
+const Sub = require("./sub.schema");
+const Tag = require("./tag.schema")
 
 module.exports = {
   User,
-  Champion,
-  Item,
-  Trait,
+  Category,
+  Like,
+  Media,
+  Notification,
+  Post,
+  Sub,
+  Tag
 };

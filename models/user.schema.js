@@ -8,8 +8,10 @@ const userSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       required: true,
     },
-    username: String,
-    password: String,
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    avatar: { type: String },
+    bio: { type: String },
     role: {
       type: Number,
       default: 0,
