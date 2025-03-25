@@ -48,7 +48,9 @@ class AuthController extends Controller {
   async register(req, res, next) {
     const { email, password } = req.body;
     try {
+      ConsoleLogger.info("come 1")
       await userServices.register(email, password);
+      ConsoleLogger.info("come 2")
       return res.status(200).json({
         message: "Create Success",
         user: email,

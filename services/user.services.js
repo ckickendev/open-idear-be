@@ -1,4 +1,4 @@
-const { Service } = require("../core");
+const { Service, ConsoleLogger } = require("../core");
 const { User } = require("../models");
 const { makeRandomNumber, makeRandomString } = require("../utils/function");
 const { ServerException, ForbiddenException } = require("../exceptions");
@@ -6,6 +6,7 @@ const sendEmailHandler = require("../utils/sendEmailOptions");
 const { confirmTokenEmail, confirmRegiter } = require("../utils/emailTemplate");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
+const sendEmailHandlerEnhance = require("../utils/sendEmailOptions");
 class UserService extends Service {
   async getAllUser() {
     const users = await User.find({});
@@ -24,24 +25,26 @@ class UserService extends Service {
         "&email=" +
         email;
       const passwordEncrypt = await bcrypt.hash(password, 10);
-
-      await sendEmailHandler({
+      ConsoleLogger.info(email)
+      const isSendEmailSuccess = await sendEmailHandlerEnhance({
         to: email,
         subject: "Please enter this code to confirm register account",
         html: confirmTokenEmail(numberTokenGenerate, randomLink),
-        GOOGLE_MAILER_CLIENT_ID: process.env.GOOGLE_MAILER_CLIENT_ID,
-        GOOGLE_MAILER_CLIENT_SECRET: process.env.GOOGLE_MAILER_CLIENT_SECRET,
-        GOOGLE_MAILER_REFRESH_TOKEN: process.env.GOOGLE_MAILER_REFRESH_TOKEN,
       });
-      const newUser = new User({
-        _id: new mongoose.Types.ObjectId(),
-        username: email,
-        password: passwordEncrypt,
-        email: email,
-        activate: false,
-        activate_code: numberTokenGenerate,
-      });
-      newUser.save();
+      if (isSendEmailSuccess) {
+        const newUser = new User({
+          _id: new mongoose.Types.ObjectId(),
+          username: email,
+          password: passwordEncrypt,
+          email: email,
+          activate: false,
+          activate_code: numberTokenGenerate,
+        });
+        newUser.save();
+      } else {
+        throw new ServerException("Cannot send email");
+      }
+
     } catch (e) {
       throw new ServerException("Error", e.message);
     }
@@ -62,7 +65,7 @@ class UserService extends Service {
         GOOGLE_MAILER_CLIENT_SECRET: process.env.GOOGLE_MAILER_CLIENT_SECRET,
         GOOGLE_MAILER_REFRESH_TOKEN: process.env.GOOGLE_MAILER_REFRESH_TOKEN,
       });
-      
+
       const userUpdate = await User.findOne({ email: email });
       userUpdate.token_reset_pass = tokenGenerate;
       userUpdate.save();
@@ -76,8 +79,8 @@ class UserService extends Service {
     if (user.activate) {
       throw new ForbiddenException(
         "Your account (" +
-          email +
-          ") is activated before, return to login now !"
+        email +
+        ") is activated before, return to login now !"
       );
     }
     if (user.activate_code == token) {
@@ -98,7 +101,7 @@ class UserService extends Service {
   }
 
   async confirmNewPassword(access_token, new_password) {
-    const user = await User.findOne({token_reset_pass: access_token});
+    const user = await User.findOne({ token_reset_pass: access_token });
     const newPassword = await bcrypt.hash(new_password, 10);
     user.password = newPassword;
     user.token_reset_pass = "";
