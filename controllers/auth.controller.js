@@ -29,6 +29,8 @@ class AuthController extends Controller {
         email,
         role
       };
+      console.log(payload);
+
       const token = await authServices.generateToken(payload);
       const refreshToken = await authServices.generateRefreshToken(payload);
       ConsoleLogger.info(token);
@@ -73,15 +75,23 @@ class AuthController extends Controller {
   }
 
   async validateBeforeLogin(req, res, next) {
+    console.log(req.body);
+
     try {
-      const { email, password } = req.body;
-      const user = await User.findOne({ email: email });
+      const { account, password } = req.body;
+
+      const user = await User.findOne({
+        $or: [
+          { email: account },
+          { username: account }
+        ]
+      })
       if (!user) {
         throw new NotFoundException("User not found");
       }
       const isPasswordTrue = await bcrypt.compare(password, user.password);
       if (!isPasswordTrue) {
-        throw new BadRequestException("Password not matching!");
+        throw new BadRequestException("Password incorrect ! Please try again");
       }
       if (!user.activate) {
         throw new ForbiddenException(

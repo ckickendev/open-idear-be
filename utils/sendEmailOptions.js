@@ -53,7 +53,7 @@ const sendEmailHandlerEnhance = async (mailOptionsInfo) => {
         port: 465,
         auth: {
           user: ADMIN_EMAIL_ADDRESS,
-          pass: 'zhnp exjp ptgu pjhj'
+          pass: process.env.PASSWORD
         }
       }
     );
