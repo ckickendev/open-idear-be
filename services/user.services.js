@@ -13,7 +13,7 @@ class UserService extends Service {
     return users;
   }
 
-  async register(email, password) {
+  async register(email, username, password) {
     try {
       const numberTokenGenerate = makeRandomNumber(6);
       const randomLink =
@@ -34,7 +34,7 @@ class UserService extends Service {
       if (isSendEmailSuccess) {
         const newUser = new User({
           _id: new mongoose.Types.ObjectId(),
-          username: email,
+          username: username,
           password: passwordEncrypt,
           email: email,
           activate: false,
@@ -75,21 +75,18 @@ class UserService extends Service {
   }
 
   async confirmToken(token, email) {
+    // 0 => not authen, 1: ok, 2=> already
     const user = await User.findOne({ email: email });
     if (user.activate) {
-      throw new ForbiddenException(
-        "Your account (" +
-        email +
-        ") is activated before, return to login now !"
-      );
+      return 2;
     }
     if (user.activate_code == token) {
       user.activate = true;
       user.activate_code = "";
       await user.save();
-      return true;
+      return 1;
     }
-    return false;
+    return 0;
   }
 
   async confirmTokenAccess(access_token) {

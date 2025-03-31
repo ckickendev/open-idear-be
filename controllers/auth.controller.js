@@ -48,13 +48,11 @@ class AuthController extends Controller {
   }
 
   async register(req, res, next) {
-    const { email, password } = req.body;
+    const { email, username, password } = req.body;
     try {
-      ConsoleLogger.info("come 1")
-      await userServices.register(email, password);
-      ConsoleLogger.info("come 2")
+      await userServices.register(email, username, password,);
       return res.status(200).json({
-        message: "Create Success",
+        message: "Register Success",
         user: email,
       });
     } catch (error) {
@@ -128,16 +126,22 @@ class AuthController extends Controller {
     try {
       const { token, user_authen } = req.body;
       const confirmToken = await userServices.confirmToken(token, user_authen);
-      if (confirmToken) {
+      if (confirmToken === 1) {
         res
           .status(200)
-          .json({ message: "Confirm Success !", user: user_authen });
-      } else {
+          .json({ message: "Your account is register successfully, you will redirect to login !", user: user_authen });
+      } else if (confirmToken === 0) {
         res
           .status(500)
           .json({ error: "Your code/link is not match, please check again" });
+      } else {
+        res.
+          status(200)
+          .json({ message: `Your account (${user_authen} is already activated, you will redirect to login)`, user: user_authen });
       }
     } catch (err) {
+      console.log(err);
+
       res.status(500).json({ error: err.message });
     }
   }
