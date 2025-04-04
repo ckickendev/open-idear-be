@@ -18,7 +18,7 @@ class UserService extends Service {
       const numberTokenGenerate = makeRandomNumber(6);
       const randomLink =
         process.env.ROOT_FRONTEND +
-        "/confirm_register?link=" +
+        "/authen/confirm_register?link=" +
         makeRandomString(100) +
         "&access_token=" +
         numberTokenGenerate +
@@ -54,8 +54,10 @@ class UserService extends Service {
     const tokenGenerate = makeRandomString(50);
     const linkResetPassword =
       process.env.ROOT_FRONTEND +
-      "/reset-password-link?token_access=" +
-      tokenGenerate;
+      "/authen/reset-password-link?token_access=" +
+      tokenGenerate +
+      "&email=" +
+      email;
     try {
       await sendEmailHandler({
         to: email,
@@ -68,10 +70,21 @@ class UserService extends Service {
 
       const userUpdate = await User.findOne({ email: email });
       userUpdate.token_reset_pass = tokenGenerate;
+      // set minute
+
+      userUpdate.token_reset_pass_expired = Date.now() + 30*60*1000
       userUpdate.save();
     } catch (e) {
       throw new ServerException("Error", e.message);
     }
+  }
+
+  findUserByAccount = async (account) => {
+    const user = await User.findOne({ $or: [{ email: account }, { username: account }] });
+    if (user) {
+      return user;
+    }
+    return null;
   }
 
   async confirmToken(token, email) {
@@ -89,12 +102,24 @@ class UserService extends Service {
     return 0;
   }
 
-  async confirmTokenAccess(access_token) {
-    const user = await User.findOne({ token_reset_pass: access_token });
-    if (user.id) {
-      return true;
+  async confirmTokenAccess(access_token, email) {
+    const user = await User.findOne({ email: email });
+    console.log(access_token);
+
+    console.log(user.token_reset_pass);
+    
+
+    if(user.token_reset_pass === access_token) {
+      
+      if(user.token_reset_pass_expired <= Date.now()) { 
+        throw new ServerException("Your token is expired")
+      } else {
+        return true;
+      }
+    } else {
+      return false;
     }
-    return false;
+
   }
 
   async confirmNewPassword(access_token, new_password) {

@@ -146,12 +146,18 @@ class AuthController extends Controller {
     }
   }
 
-  resetPass = async (req, res, next) => {
+  sendEmailResetPass = async (req, res, next) => {
     try {
-      const email = req.body.email;
-      await userServices.resetpassword(email);
+      const account = req.body.account;
+      const user = await userServices.findUserByAccount(account);
+      if (!user) {
+        throw new ServerException("Cannot find user ! Please try again");
+      }
+
+      await userServices.resetpassword(user.email);
       return res.status(200).json({
         status: 200,
+        email: user.email.replace(/(.{3}).*(@.*)/, '$1***$2'),
         message: "Email sent,please check your email !",
       });
     } catch (err) {
@@ -176,20 +182,20 @@ class AuthController extends Controller {
     }
   };
 
-  confirmTokenAccess = async (req, res, next) => {
+  confirmTokenAccess = async (req, res, next) => {    
     try {
-      const { access_token } = req.body;
-      if (!access_token) {
+      const { access_token, email } = req.body;
+      if (!access_token || !email) {
         throw new NotFoundException("Your token is invalid");
       }
-      const isExistToken = await userServices.confirmTokenAccess(access_token);
+      const isExistToken = await userServices.confirmTokenAccess(access_token, email);
       if (isExistToken) {
         return res.status(200).json({
           message: "Confirm Success !",
         });
       } else {
         throw new UnauthorizedException(
-          "Your link is invalid or expired, please try again! "
+          "Your link is invalid, please try again! "
         );
       }
     } catch (err) {
@@ -216,7 +222,7 @@ class AuthController extends Controller {
       `${this._rootPath}/confirm-token-access`,
       this.confirmTokenAccess
     );
-    this._router.post(`${this._rootPath}/resetpassword`, this.resetPass);
+    this._router.post(`${this._rootPath}/resetpassword`, this.sendEmailResetPass);
     this._router.post(
       `${this._rootPath}/confirm-new-password`,
       this.confirmNewPassword

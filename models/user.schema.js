@@ -20,6 +20,7 @@ const userSchema = new Schema(
     activate: Boolean,
     activate_code: String,
     token_reset_pass: String,
+    token_reset_pass_expired: Date,
     del_flag: {
       type: Number,
       default: 0
