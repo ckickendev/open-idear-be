@@ -154,7 +154,7 @@ class AuthController extends Controller {
         throw new ServerException("Cannot find user ! Please try again");
       }
 
-      await userServices.resetpassword(user.email);
+      await userServices.sendEmailResetPass(user.email);
       return res.status(200).json({
         status: 200,
         email: user.email.replace(/(.{3}).*(@.*)/, '$1***$2'),
@@ -222,7 +222,7 @@ class AuthController extends Controller {
       `${this._rootPath}/confirm-token-access`,
       this.confirmTokenAccess
     );
-    this._router.post(`${this._rootPath}/resetpassword`, this.sendEmailResetPass);
+    this._router.post(`${this._rootPath}/sendEmailResetPassword`, this.sendEmailResetPass);
     this._router.post(
       `${this._rootPath}/confirm-new-password`,
       this.confirmNewPassword

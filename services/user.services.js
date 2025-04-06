@@ -3,7 +3,7 @@ const { User } = require("../models");
 const { makeRandomNumber, makeRandomString } = require("../utils/function");
 const { ServerException, ForbiddenException } = require("../exceptions");
 const sendEmailHandler = require("../utils/sendEmailOptions");
-const { confirmTokenEmail, confirmRegiter } = require("../utils/emailTemplate");
+const { confirmTokenEmail, confirmResetPass } = require("../utils/emailTemplate");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
 const sendEmailHandlerEnhance = require("../utils/sendEmailOptions");
@@ -50,7 +50,7 @@ class UserService extends Service {
     }
   }
 
-  async resetpassword(email) {
+  async sendEmailResetPass(email) {
     const tokenGenerate = makeRandomString(50);
     const linkResetPassword =
       process.env.ROOT_FRONTEND +
@@ -62,7 +62,7 @@ class UserService extends Service {
       await sendEmailHandler({
         to: email,
         subject: "Your link to reset your password",
-        html: confirmRegiter(linkResetPassword),
+        html: confirmResetPass(linkResetPassword),
         GOOGLE_MAILER_CLIENT_ID: process.env.GOOGLE_MAILER_CLIENT_ID,
         GOOGLE_MAILER_CLIENT_SECRET: process.env.GOOGLE_MAILER_CLIENT_SECRET,
         GOOGLE_MAILER_REFRESH_TOKEN: process.env.GOOGLE_MAILER_REFRESH_TOKEN,

@@ -195,7 +195,7 @@ const confirmTokenEmail = (token, link) => {
   </div>`;
 };
 
-const confirmRegiter = (link) => {
+const confirmResetPass = (link) => {
   return `<div width="100%" style="margin: 0; background-color: #f0f2f3">
   <div
     style="margin: auto; max-width: 600px; padding-top: 50px"
@@ -398,4 +398,4 @@ const confirmRegiter = (link) => {
 </div>`;
 };
 
-module.exports = { confirmTokenEmail, confirmRegiter };
+module.exports = { confirmTokenEmail, confirmResetPass };
