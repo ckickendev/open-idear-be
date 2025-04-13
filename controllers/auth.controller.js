@@ -169,8 +169,10 @@ class AuthController extends Controller {
 
   confirmNewPassword = async (req, res, next) => {
     try {
-      const { access_token, new_password } = req.body;
-      await userServices.confirmNewPassword(access_token, new_password);
+      console.log(req.body);
+      
+      const { emailSent, password } = req.body;
+      await userServices.confirmNewPassword(emailSent, password);
       return res.status(200).json({
         message:
           "Password changed, please return to homepage and check again !",
@@ -192,6 +194,7 @@ class AuthController extends Controller {
       if (isExistToken) {
         return res.status(200).json({
           message: "Confirm Success !",
+          user: isExistToken.username
         });
       } else {
         throw new UnauthorizedException(

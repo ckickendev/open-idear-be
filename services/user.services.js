@@ -1,7 +1,7 @@
 const { Service, ConsoleLogger } = require("../core");
 const { User } = require("../models");
 const { makeRandomNumber, makeRandomString } = require("../utils/function");
-const { ServerException, ForbiddenException } = require("../exceptions");
+const { ServerException, ForbiddenException, UnauthorizedException, NotFoundException } = require("../exceptions");
 const sendEmailHandler = require("../utils/sendEmailOptions");
 const { confirmTokenEmail, confirmResetPass } = require("../utils/emailTemplate");
 const bcrypt = require("bcrypt");
@@ -72,7 +72,7 @@ class UserService extends Service {
       userUpdate.token_reset_pass = tokenGenerate;
       // set minute
 
-      userUpdate.token_reset_pass_expired = Date.now() + 30*60*1000
+      userUpdate.token_reset_pass_expired = Date.now() + 30 * 60 * 1000
       userUpdate.save();
     } catch (e) {
       throw new ServerException("Error", e.message);
@@ -104,17 +104,11 @@ class UserService extends Service {
 
   async confirmTokenAccess(access_token, email) {
     const user = await User.findOne({ email: email });
-    console.log(access_token);
-
-    console.log(user.token_reset_pass);
-    
-
-    if(user.token_reset_pass === access_token) {
-      
-      if(user.token_reset_pass_expired <= Date.now()) { 
+    if (user.token_reset_pass === access_token) {
+      if (user.token_reset_pass_expired <= Date.now()) {
         throw new ServerException("Your token is expired")
       } else {
-        return true;
+        return user;
       }
     } else {
       return false;
@@ -122,12 +116,17 @@ class UserService extends Service {
 
   }
 
-  async confirmNewPassword(access_token, new_password) {
-    const user = await User.findOne({ token_reset_pass: access_token });
-    const newPassword = await bcrypt.hash(new_password, 10);
-    user.password = newPassword;
-    user.token_reset_pass = "";
-    user.save();
+  async confirmNewPassword(emailSent, password) {
+    const user = await User.findOne({ email: emailSent });
+    const newPassword = await bcrypt.hash(password, 10);
+    if (user) {
+      user.password = newPassword;
+      user.token_reset_pass = "";
+      user.token_reset_pass_expired = ""
+      await user.save();
+    } else {
+      throw new NotFoundException("Cannot find your username");
+    }
   }
 }
 

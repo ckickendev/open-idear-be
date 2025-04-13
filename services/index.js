@@ -1,8 +1,7 @@
 const userService = require("./user.services");
 const authService = require("./auth.services");
-const championService = require("./champion.services");
-const itemService = require("./item.services.js");
-const traitService = require("./trait.services");
+const categorieService = require("./category.services");
+const comment = require("./comment.services")
 
 module.exports = {
   userService,
