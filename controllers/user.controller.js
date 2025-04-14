@@ -13,7 +13,7 @@ class UserController extends Controller {
   async getAll(req, res, next) {
     const users = await userService.getAllUser();
     res.json({
-        users
+      users
     })
   }
 

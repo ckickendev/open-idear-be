@@ -3,7 +3,7 @@ const { Controller } = require("../core");
 const { categoryService } = require("../services")
 
 class CategoryController extends Controller {
-    _rootPath = "/Category";
+    _rootPath = "/category";
     _router = express.Router();
     constructor() {
         super();
@@ -11,7 +11,7 @@ class CategoryController extends Controller {
     }
 
     async getAll(req, res, next) {
-        const categories = await categoryService.getAllCategory();
+        const categories = await categoryService.getAll();
         res.json({
             categories
         })
