@@ -5,7 +5,10 @@ const { User } = require("../models");
 
 async function AuthMiddleware(req, res, next) {
   try {
-    const tokenClient = req.headers["authorization"].split(" ")[1];
+    console.log("AuthMiddleware", req.headers["authorization"]);
+    const headersToken =
+      req?.headers["authorization"] || req?.body?.headers["Authorization"];
+    const tokenClient = headersToken.split(" ")[1];
     const validToken = jwt.verify(tokenClient, "SECRET_KEY", {
       algorithms: ["HS256"],
     });
@@ -13,7 +16,14 @@ async function AuthMiddleware(req, res, next) {
     if (!checkingUser) {
       return next(new NotFoundException("User not found!"));
     }
-    req.userInfo = validToken;
+    req.userInfo = {
+      _id: checkingUser._id,
+      email: checkingUser.email,
+      username: checkingUser.username,
+      role: checkingUser.role,
+      avatar: checkingUser.avatar,
+      bio: checkingUser.bio,
+    };
     next();
   } catch (error) {
     res.status(403).send({ error: error.message || "Invalid Token" });

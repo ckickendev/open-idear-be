@@ -1,6 +1,7 @@
 const express = require("express");
 const { Controller } = require("../core");
-const { postService } = require("../services")
+const { postService, userService } = require("../services");
+const { AuthMiddleware } = require("../middlewares/auth.middleware");
 
 class PostController extends Controller {
     _rootPath = "/post";
@@ -17,8 +18,68 @@ class PostController extends Controller {
         })
     }
 
+    async getLastestPostByUser(req, res, next) {
+        const { userId } = req.body;
+        const posts = await postService.getLastestPostByUser(userId);
+        res.json({
+            posts
+        })
+    }
+
+    async create(req, res, next) {
+        console.log('req.userInfo', req.userInfo);
+
+        const { _id } = req.userInfo;
+        const { title, content } = req.body;
+        const user = userService.findUserById(_id);
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            })
+        }
+
+        const post = await postService.addPost({
+            content,
+            author: _id,
+            title
+        });
+        if (!post) {
+            return res.status(500).json({
+                message: "Error when creating post"
+            })
+        } else {
+            res.json({
+                message: "Post created successfully",
+                post
+            })
+        }
+    }
+
+    async deletePost(req, res, next) {
+        const { postId } = req.body;
+        const { _id } = req.userInfo;
+        const post = await postService.getPostById(postId);
+        if (!post) {
+            return res.status(404).json({
+                message: "Post not found"
+            })
+        }
+        if (post.author.toString() !== _id.toString()) {
+            return res.status(403).json({
+                message: "You are not the author of this post"
+            })
+        }
+        await postService.deletePost(postId);
+        res.json({
+            message: "Post deleted successfully"
+        })
+    }
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
+        this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
+        this._router.post(`${this._rootPath}/create`, AuthMiddleware, this.create);
+        this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
     };
 }
 

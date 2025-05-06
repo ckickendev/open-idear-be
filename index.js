@@ -1,18 +1,28 @@
 const {
   UserController,
+  CategoryController,
+  CommentController,
+  LikeController,
+  PostController,
+  MediaController,
+  NotificationController,
+  SubController,
+  TagController,
   AuthController,
-  ChampionController,
-  ItemController,
-  TraitController,
 } = require("./controllers/index.js");
 const AppServer = require("./functions/appServer");
 
 const app = new AppServer([
   new UserController(),
+  new CategoryController(),
+  new CommentController(),
+  new LikeController(),
+  new PostController(),
+  new MediaController(),
+  new NotificationController(),
+  new SubController(),
+  new TagController(),
   new AuthController(),
-  new ChampionController(),
-  new ItemController(),
-  new TraitController
 ]);
 
 app.startListening();

@@ -170,7 +170,7 @@ class AuthController extends Controller {
   confirmNewPassword = async (req, res, next) => {
     try {
       console.log(req.body);
-      
+
       const { emailSent, password } = req.body;
       await userServices.confirmNewPassword(emailSent, password);
       return res.status(200).json({
@@ -184,7 +184,7 @@ class AuthController extends Controller {
     }
   };
 
-  confirmTokenAccess = async (req, res, next) => {    
+  confirmTokenAccess = async (req, res, next) => {
     try {
       const { access_token, email } = req.body;
       if (!access_token || !email) {

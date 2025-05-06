@@ -87,6 +87,14 @@ class UserService extends Service {
     return null;
   }
 
+  async findUserById(id) {
+    const user = await User.findById(id);
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+    return user;
+  }
+
   async confirmToken(token, email) {
     // 0 => not authen, 1: ok, 2=> already
     const user = await User.findOne({ email: email });
