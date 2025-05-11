@@ -18,11 +18,6 @@ async function AuthMiddleware(req, res, next) {
     }
     req.userInfo = {
       _id: checkingUser._id,
-      email: checkingUser.email,
-      username: checkingUser.username,
-      role: checkingUser.role,
-      avatar: checkingUser.avatar,
-      bio: checkingUser.bio,
     };
     next();
   } catch (error) {

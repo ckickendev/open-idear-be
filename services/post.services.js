@@ -26,6 +26,22 @@ class PostService extends Service {
         return returnPost;
     }
 
+    async getPostById(postId) {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return null;
+        }
+        return post;
+    }
+
+    async updatePost(postId, post) {
+        const updatedPost = await Post.findByIdAndUpdate(postId, {
+            title: post.title,
+            content: post.content,
+        }, { new: true });
+        return updatedPost;
+    }
+
     slugify(str) {
         str = str.replace(/^\s+|\s+$/g, ''); // trim leading/trailing white space
         str = str.toLowerCase(); // convert string to lowercase

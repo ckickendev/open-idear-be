@@ -1,6 +1,6 @@
 const { Service, ConsoleLogger } = require("../core");
 const { User } = require("../models");
-const { makeRandomNumber, makeRandomString } = require("../utils/function");
+const { makeRandomNumber, makeRandomString, makeRandomAvatar } = require("../utils/function");
 const { ServerException, ForbiddenException, UnauthorizedException, NotFoundException } = require("../exceptions");
 const sendEmailHandler = require("../utils/sendEmailOptions");
 const { confirmTokenEmail, confirmResetPass } = require("../utils/emailTemplate");
@@ -39,6 +39,7 @@ class UserService extends Service {
           email: email,
           activate: false,
           activate_code: numberTokenGenerate,
+          avatar: makeRandomAvatar(),
         });
         newUser.save();
       } else {

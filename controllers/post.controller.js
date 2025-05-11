@@ -18,6 +18,31 @@ class PostController extends Controller {
         })
     }
 
+    async getPostById(req, res, next) {
+        const { postId } = req.query;
+        const { _id } = req.userInfo;
+        console.log('postId', postId);
+
+        const post = await postService.getPostById(postId);
+        if (!post) {
+            return res.status(404).json({
+                message: "Post not found"
+            })
+        }
+
+        if (post.author.toString() !== _id.toString()) {
+            return res.status(403).json({
+                message: "You are not the author of this post"
+            })
+        }
+
+        res.json({
+            post
+        })
+    }
+
+    async
+
     async getLastestPostByUser(req, res, next) {
         const { userId } = req.body;
         const posts = await postService.getLastestPostByUser(userId);
@@ -75,11 +100,37 @@ class PostController extends Controller {
         })
     }
 
+    async update(req, res, next) {
+        const { postId, title, content } = req.body;
+        const { _id } = req.userInfo;
+        const post = await postService.getPostById(postId);
+        if (!post) {
+            return res.status(404).json({
+                message: "Post not found"
+            })
+        }
+        if (post.author.toString() !== _id.toString()) {
+            return res.status(403).json({
+                message: "You are not the author of this post"
+            })
+        }
+        const updatedPost = await postService.updatePost(postId, {
+            title,
+            content
+        });
+        res.json({
+            message: "Post updated successfully",
+            post: updatedPost
+        })
+    }
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
+        this._router.get(`${this._rootPath}/getPost`, AuthMiddleware, this.getPostById);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.post(`${this._rootPath}/create`, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
+        this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
     };
 }
 

@@ -1,3 +1,19 @@
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:3000";
+const randomAvatar = [
+  `${BACKEND_URL}/icon/profile/cat.png`,
+  `${BACKEND_URL}/icon/profile/dog.png`,
+  `${BACKEND_URL}/icon/profile/dolphin.png`,
+  `${BACKEND_URL}/icon/profile/elephant.png`,
+  `${BACKEND_URL}/icon/profile/fish.png`,
+  `${BACKEND_URL}/icon/profile/hippo.png`,
+  `${BACKEND_URL}/icon/profile/lion.png`,
+  `${BACKEND_URL}/icon/profile/monkey.png`,
+  `${BACKEND_URL}/icon/profile/pengiun.png`,
+  `${BACKEND_URL}/icon/profile/shark.png`,
+  `${BACKEND_URL}/icon/profile/snake.png`,
+  `${BACKEND_URL}/icon/profile/tiger.png`,
+];
+
 const makeRandomString = (length) => {
   let result = "";
   const characters =
@@ -24,4 +40,13 @@ const makeRandomNumber = (length) => {
   return result;
 };
 
-module.exports = { makeRandomString, makeRandomNumber };
+const makeRandomAvatar = () => {
+  const randomNumber = randomIntFromInterval(0, randomAvatar.length - 1);
+  return randomAvatar[randomNumber];
+}
+
+function randomIntFromInterval(min, max) { // min and max included 
+  return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
+module.exports = { makeRandomString, makeRandomNumber, makeRandomAvatar };

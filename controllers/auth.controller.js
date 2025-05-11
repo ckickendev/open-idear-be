@@ -60,12 +60,27 @@ class AuthController extends Controller {
     }
   }
 
-  async WhoAmI(req, res, next) {
-    const userInfo = req.userInfo;
+  async getProfile(req, res, next) {
     try {
+      const userId = req.userInfo._id;
+      const userInfo = await userServices.findUserById(userId);
+      if (!userInfo) {
+        throw new NotFoundException("User not found !");
+      }
+      const userFilter = {
+        _id: userInfo._id,
+        username: userInfo.username,
+        email: userInfo.email,
+        role: userInfo.role,
+        activate: userInfo.activate,
+        createdAt: userInfo.createdAt,
+        bio: userInfo.bio,
+        avatar: userInfo.avatar,
+      }
+
       return res.status(200).json({
         message: "success",
-        userInfo: userInfo,
+        userInfo: userFilter,
       });
     } catch (e) {
       res.status(404).json({ error: e.message });
@@ -209,7 +224,7 @@ class AuthController extends Controller {
   };
 
   initController() {
-    this._router.get(`${this._rootPath}/whoAmI`, AuthMiddleware, this.WhoAmI);
+    this._router.get(`${this._rootPath}/getProfile`, AuthMiddleware, this.getProfile);
     this._router.post(`${this._rootPath}/confirmSignup`, this.confirmSignup);
     this._router.post(
       `${this._rootPath}/login`,
