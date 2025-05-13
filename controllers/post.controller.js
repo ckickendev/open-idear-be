@@ -41,7 +41,39 @@ class PostController extends Controller {
         })
     }
 
-    async
+    async getPostByAuthor(req, res, next) {
+        const { userId } = req.query;
+        const { _id } = req.userInfo;
+        console.log('userId', userId);
+        console.log('_id', _id);
+
+
+
+        try {
+            if (userId !== _id.toString()) {
+                return res.status(403).json({
+                    message: "You are not the author of this post"
+                })
+            }
+
+            const posts = await postService.getPostByUser(userId);
+            console.log("hello");
+
+            if (posts.length === 0) {
+                console.log('length bang 0');
+
+                return res.status(404).json({
+                    message: "Post not found"
+                })
+            }
+            res.json({
+                posts
+            })
+        } catch (error) {
+            res.status(404).json({ error: error.message });
+        }
+
+    }
 
     async getLastestPostByUser(req, res, next) {
         const { userId } = req.body;
@@ -128,6 +160,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getPost`, AuthMiddleware, this.getPostById);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
+        this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
         this._router.post(`${this._rootPath}/create`, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);

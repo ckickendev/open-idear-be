@@ -1,6 +1,7 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { Post } = require("../models");
+const { NotFoundException } = require("../exceptions");
 
 class PostService extends Service {
     async getAll() {
@@ -10,6 +11,16 @@ class PostService extends Service {
 
     async getLastestPostByUser(userId) {
         const posts = await Post.find({ userId }).sort({ createdAt: -1 }).limit(5);
+        return posts;
+    }
+
+    async getPostByUser(userId) {
+        if (!userId) {
+            throw new NotFoundException("User not found");
+        }
+        
+        const posts = await Post.find({ author: userId });
+
         return posts;
     }
 
