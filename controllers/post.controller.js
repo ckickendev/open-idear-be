@@ -42,21 +42,13 @@ class PostController extends Controller {
     }
 
     async getPostByAuthor(req, res, next) {
-        const { userId } = req.query;
         const { _id } = req.userInfo;
-        console.log('userId', userId);
         console.log('_id', _id);
 
 
 
         try {
-            if (userId !== _id.toString()) {
-                return res.status(403).json({
-                    message: "You are not the author of this post"
-                })
-            }
-
-            const posts = await postService.getPostByUser(userId);
+            const posts = await postService.getPostByUser(_id);
             console.log("hello");
 
             if (posts.length === 0) {

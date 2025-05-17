@@ -60,7 +60,7 @@ const sendEmailHandlerEnhance = async (mailOptionsInfo) => {
     const { to, subject, html } = mailOptionsInfo;
     const mailOptions = {
       from: {
-        name: "OPEN TRASH TECH",
+        name: "OPEN IDEAR",
         address: ADMIN_EMAIL_ADDRESS
       },
       to: to, // Gửi đến ai?

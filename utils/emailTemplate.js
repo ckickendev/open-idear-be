@@ -173,13 +173,13 @@ const confirmTokenEmail = (token, link) => {
                 text-align: center;
               "
             >
-              This message was produced and distributed by OpenTrashTech Inc..
+              This message was produced and distributed by OpenIdeaR Inc..
               All rights reserved. AWS is a registered trademark of
               <a
                 href="https://bjdxkhre.r.us-east-1.awstrack.me/L0/https:%2F%2Fwww.amazon.com%2F/1/010001864bcea705-e24a3aa8-6a8f-45de-9acb-a138c0fa059e-000000/jMn7TpA1cW2yMg2sp1Vw9BjPee4=308"
                 target="_blank"
                 data-saferedirecturl="https://www.google.com/url?q=https://bjdxkhre.r.us-east-1.awstrack.me/L0/https:%252F%252Fwww.amazon.com%252F/1/010001864bcea705-e24a3aa8-6a8f-45de-9acb-a138c0fa059e-000000/jMn7TpA1cW2yMg2sp1Vw9BjPee4%3D308&amp;source=gmail&amp;ust=1679420722998000&amp;usg=AOvVaw1WShMwomKWpMirTjJFfvu2"
-                >OpenTrashTech</a
+                >OpenIdeaR</a
               >, Da Nang, VietNam
               <a
                 href="https://bjdxkhre.r.us-east-1.awstrack.me/L0/https:%2F%2Fwww.amazon.com%2Fgp%2Ff.html%3FC=ASNZCWDUG167%26M=urn:rtn:msg:20201117075724eb4b304704de4791b90718772250p0na%26R=24F5VU3RW0OAG%26T=C%26U=https%253A%252F%252Faws.amazon.com%252Fprivacy%252F%253Fsc_channel%253Dem%2526sc_campaign%253Dwlcm%2526sc_publisher%253Daws%2526sc_medium%253Dem_wlcm_footer%2526sc_detail%253Dwlcm_footer%2526sc_content%253Dother%2526sc_country%253Dglobal%2526sc_geo%253Dglobal%2526sc_category%253Dmult%2526ref_%253Dpe_1679150_261538020%26H=PSTTW2QUTETQPANYMBJB5CSZMMSA%26ref_=pe_1679150_261538020/1/010001864bcea705-e24a3aa8-6a8f-45de-9acb-a138c0fa059e-000000/Bb5hNo4Pk8P3Uicz3HoTbo_Rjns=308"
