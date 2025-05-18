@@ -47,4 +47,26 @@ async function AdminMiddleware(req, res, next) {
   }
 }
 
-module.exports = { AuthMiddleware, AdminMiddleware };
+async function LoginMiddleware(req, res, next) {
+  try {
+    const headersToken =
+      req?.headers["authorization"] || req?.body?.headers["Authorization"];
+    const tokenClient = headersToken.split(" ")[1];
+    const validToken = jwt.verify(tokenClient, "SECRET_KEY", {
+      algorithms: ["HS256"],
+    });
+    if (!validToken) {
+      return next(new UnauthorizedException("Please login!"));
+    }
+    const checkingUser = await User.findOne({ email: validToken.email });
+    if (!checkingUser) {
+      return next(new NotFoundException("User not found!"));
+    }
+    req.userInfo = checkingUser;
+    next();
+  } catch (error) {
+    res.status(403).send({ error: error.message || "Please re-login" });
+  }
+}
+
+module.exports = { AuthMiddleware, AdminMiddleware, LoginMiddleware };

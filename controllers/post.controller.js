@@ -1,7 +1,7 @@
 const express = require("express");
 const { Controller } = require("../core");
 const { postService, userService } = require("../services");
-const { AuthMiddleware } = require("../middlewares/auth.middleware");
+const { AuthMiddleware, LoginMiddleware } = require("../middlewares/auth.middleware");
 
 class PostController extends Controller {
     _rootPath = "/post";
@@ -153,7 +153,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getPost`, AuthMiddleware, this.getPostById);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
-        this._router.post(`${this._rootPath}/create`, AuthMiddleware, this.create);
+        this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
     };
