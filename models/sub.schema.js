@@ -7,8 +7,8 @@ const subSchema = new Schema(
             type: mongoose.Schema.Types.ObjectId,
             required: true,
         },
-        user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-        subscribedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+        subscribedTo: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
     },
     {
         timestamps: true,

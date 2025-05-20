@@ -44,16 +44,10 @@ class PostController extends Controller {
     async getPostByAuthor(req, res, next) {
         const { _id } = req.userInfo;
         console.log('_id', _id);
-
-
-
         try {
             const posts = await postService.getPostByUser(_id);
-            console.log("hello");
 
             if (posts.length === 0) {
-                console.log('length bang 0');
-
                 return res.status(404).json({
                     message: "Post not found"
                 })

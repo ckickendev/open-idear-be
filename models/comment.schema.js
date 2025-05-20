@@ -7,10 +7,10 @@ const commentSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       required: true,
     },
-    post: { type: mongoose.Schema.Types.ObjectId, ref: "Post", required: true },
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    post: { type: mongoose.Schema.Types.ObjectId, ref: "post", required: true },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
     content: { type: String, required: true },
-    replies: [{ type: mongoose.Schema.Types.ObjectId, ref: "Comment" }], // Nested replies
+    replies: [{ type: mongoose.Schema.Types.ObjectId, ref: "comment" }], // Nested replies
     del_flag: {
       type: Number,
       default: 0

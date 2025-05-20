@@ -1,7 +1,9 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { Post } = require("../models");
-const { NotFoundException } = require("../exceptions");
+const { Category } = require("../models");
+const { User } = require("../models");
+const { NotFoundException, ServerException } = require("../exceptions");
 
 class PostService extends Service {
     async getAll() {
@@ -18,10 +20,39 @@ class PostService extends Service {
         if (!userId) {
             throw new NotFoundException("User not found");
         }
-        
-        const posts = await Post.find({ author: userId });
+        try {
+            const posts = await Post.find({ author: userId })
+                .populate('category')
+                .populate('tags')
+                .populate('likes')
+                .populate('author', 'name email');
 
-        return posts;
+            const returnPosts = posts.map(post => {
+                return {
+                    _id: post._id,
+                    title: post.title,
+                    slug: post.slug,
+                    content: post.content,
+                    author: {
+                        name: post.author.name,
+                        avatar: post.author.avatar,
+                    },
+                    category: post.category.name,
+                    tags: post.tags.map(tag => tag.name),
+                    published: post.published,
+                    views: post.views,
+                    likes: post.likes,
+                    readTime: post.readTime,
+                    updatedAt: post.updatedAt,
+                }
+            });
+
+            return returnPosts;
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+
     }
 
     async addPost(post) {
@@ -31,6 +62,8 @@ class PostService extends Service {
             title: post.title,
             content: post.content,
             author: post.author,
+            category: post.category,
+            tags: post.tags,
             slug
         });
         const returnPost = await Post.create(newPost);

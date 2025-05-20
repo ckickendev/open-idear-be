@@ -10,16 +10,20 @@ const postSchema = new Schema(
     title: { type: String, required: true },
     slug: { type: String, required: true, unique: true },
     content: { type: String, required: true },
-    author: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
-    tags: [{ type: String }], // Array of tag names
+    author: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+    category: { type: mongoose.Schema.Types.ObjectId, ref: "category" },
+    tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "tag" }], // Array of tag names
     published: { type: Boolean, default: false },
     views: { type: Number, default: 0 },
-    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // Users who liked the post
-    comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Comment" }],
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], // Users who liked the post
+    comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "comment" }],
     del_flag: {
       type: Number,
       default: 0
+    },
+    readtime: {
+      type: String,
+      default: "0 min read"
     },
   },
   {
