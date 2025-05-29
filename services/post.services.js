@@ -1,8 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { Post } = require("../models");
-const { Category } = require("../models");
-const { User } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 
 class PostService extends Service {
@@ -42,7 +40,7 @@ class PostService extends Service {
                     published: post.published,
                     views: post.views,
                     likes: post.likes,
-                    readTime: post.readTime,
+                    readTime: post.readtime,
                     updatedAt: post.updatedAt,
                 }
             });
