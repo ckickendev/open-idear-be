@@ -1,6 +1,7 @@
 const express = require("express");
 const { Controller } = require("../core");
-const { userService } = require("../services")
+const { userService } = require("../services");
+const { AdminMiddleware } = require("../middlewares/auth.middleware");
 
 class UserController extends Controller {
   _rootPath = "/user";
@@ -18,7 +19,7 @@ class UserController extends Controller {
   }
 
   initController = () => {
-    this._router.get(`${this._rootPath}`, this.getAll);
+    this._router.get(`${this._rootPath}`, AdminMiddleware, this.getAll);
   };
 }
 

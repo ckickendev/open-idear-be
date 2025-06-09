@@ -1,7 +1,7 @@
 const express = require("express");
 const { Controller } = require("../core");
 const { postService, userService } = require("../services");
-const { AuthMiddleware, LoginMiddleware } = require("../middlewares/auth.middleware");
+const { AuthMiddleware, LoginMiddleware, AdminMiddleware } = require("../middlewares/auth.middleware");
 
 class PostController extends Controller {
     _rootPath = "/post";
@@ -142,6 +142,24 @@ class PostController extends Controller {
         })
     }
 
+    async updateStatus(req, res, next) {
+        try {
+            const id = req.params.id;
+            const post = await postService.getPostById(id);
+            if (!post) {
+                return res.status(404).json({
+                    message: "Post not found"
+                })
+            }
+            await postService.updateStatusPost(id, post.published);
+            res.json({
+                message: "Post updated successfully",
+            })
+        } catch (error) {
+            res.status(404).json({ error: error.message });
+        }
+    }
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getPost`, AuthMiddleware, this.getPostById);
@@ -150,6 +168,7 @@ class PostController extends Controller {
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
+        this._router.patch(`${this._rootPath}/status/:id`, AdminMiddleware, this.updateStatus);
     };
 }
 

@@ -5,7 +5,9 @@ const { NotFoundException, ServerException } = require("../exceptions");
 
 class PostService extends Service {
     async getAll() {
-        const posts = await Post.find({});
+        const posts = await Post.find({})
+            .populate('category', "name")
+            .populate('author', 'username email');
         return posts;
     }
 
@@ -23,7 +25,7 @@ class PostService extends Service {
                 .populate('category')
                 .populate('tags')
                 .populate('likes')
-                .populate('author', 'name email');
+                .populate('author', 'username email');
 
             const returnPosts = posts.map(post => {
                 return {
@@ -82,6 +84,14 @@ class PostService extends Service {
             content: post.content,
         }, { new: true });
         return updatedPost;
+    }
+
+    async updateStatusPost(postId, published) {
+        console.log(published);
+        
+        await Post.findByIdAndUpdate(postId, {
+            published: !published
+        }, { new: true });
     }
 
     slugify(str) {

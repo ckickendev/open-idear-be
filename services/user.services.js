@@ -34,6 +34,7 @@ class UserService extends Service {
       if (isSendEmailSuccess) {
         const newUser = new User({
           _id: new mongoose.Types.ObjectId(),
+          name: username,
           username: username,
           password: passwordEncrypt,
           email: email,

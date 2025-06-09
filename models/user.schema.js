@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const uuid = require("node-uuid");
 
 const { Schema } = mongoose;
 const userSchema = new Schema(
@@ -9,6 +8,7 @@ const userSchema = new Schema(
       required: true,
     },
     username: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
     password: { type: String, required: true },
     avatar: { type: String },
     bio: { type: String },
