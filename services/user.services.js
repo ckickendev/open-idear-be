@@ -41,6 +41,7 @@ class UserService extends Service {
           activate: false,
           activate_code: numberTokenGenerate,
           avatar: makeRandomAvatar(),
+          background: "https://codetheweb.blog/assets/img/posts/css-advanced-background-images/cover.jpg",
         });
         newUser.save();
       } else {
@@ -136,6 +137,26 @@ class UserService extends Service {
       await user.save();
     } else {
       throw new NotFoundException("Cannot find your username");
+    }
+  }
+
+  async updateAvatar(avatar, _id) {
+    const user = await User.findById(_id);
+    if (user) {
+      user.avatar = avatar;
+      await user.save();
+    } else {
+      throw new NotFoundException("Cannot find your user");
+    }
+  }
+
+  async updateBackground(background, _id) {
+    const user = await User.findById(_id);
+    if (user) {
+      user.background = background;
+      await user.save();
+    } else {
+      throw new NotFoundException("Cannot find your user");
     }
   }
 }

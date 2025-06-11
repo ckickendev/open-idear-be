@@ -76,6 +76,7 @@ class AuthController extends Controller {
         createdAt: userInfo.createdAt,
         bio: userInfo.bio,
         avatar: userInfo.avatar,
+        background: userInfo.background,
       }
 
       return res.status(200).json({

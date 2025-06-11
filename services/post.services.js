@@ -1,6 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
-const { Post } = require("../models");
+const { Post, Like } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 
 class PostService extends Service {
@@ -88,10 +88,15 @@ class PostService extends Service {
 
     async updateStatusPost(postId, published) {
         console.log(published);
-        
+
         await Post.findByIdAndUpdate(postId, {
             published: !published
         }, { new: true });
+    }
+
+    async getPostLikeById(userId) {
+        const likePost = await Like.find({ user: userId }).populate("post");
+        return likePost
     }
 
     slugify(str) {

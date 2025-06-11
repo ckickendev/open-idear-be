@@ -160,11 +160,29 @@ class PostController extends Controller {
         }
     }
 
+    async getLikeByUser(req, res, next) {
+        try {
+            const id = req.params.id;
+            const post = await postService.getPostLikeById(id);
+            if (!post) {
+                return res.status(404).json({
+                    message: "Post not found"
+                })
+            }
+            res.json({
+                message: "Post updated successfully",
+            })
+        } catch (error) {
+            res.status(404).json({ error: error.message });
+        }
+    }
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getPost`, AuthMiddleware, this.getPostById);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
+        this._router.get(`${this._rootPath}/getLikeByUser/:id`, this.getLikeByUser);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
