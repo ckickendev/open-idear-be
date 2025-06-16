@@ -23,11 +23,16 @@ class AuthController extends Controller {
 
   async login(req, res, next) {
     try {
-      const { email, _id, role } = req.user;
+      const { _id, username, name, email, role, activate, createAt } = req.user;
       const payload = {
-        id: _id,
+        _id,
+        username,
+        name,
         email,
-        role
+        role,
+        activate,
+        createAt,
+        bio
       };
       console.log(payload);
 
@@ -69,6 +74,7 @@ class AuthController extends Controller {
       }
       const userFilter = {
         _id: userInfo._id,
+        name: userInfo.name,
         username: userInfo.username,
         email: userInfo.email,
         role: userInfo.role,
@@ -93,7 +99,6 @@ class AuthController extends Controller {
 
     try {
       const { account, password } = req.body;
-
       const user = await User.findOne({
         $or: [
           { email: account },

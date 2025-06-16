@@ -159,6 +159,17 @@ class UserService extends Service {
       throw new NotFoundException("Cannot find your user");
     }
   }
+
+  async updateProfile(name, bio, _id) {
+    const user = await User.findById(_id);
+    if (user) {
+      user.name = name;
+      user.bio = bio;
+      await user.save();
+    } else {
+      throw new NotFoundException("Cannot find your user");
+    }
+  }
 }
 
 module.exports = new UserService();

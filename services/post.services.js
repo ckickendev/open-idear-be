@@ -87,8 +87,6 @@ class PostService extends Service {
     }
 
     async updateStatusPost(postId, published) {
-        console.log(published);
-
         await Post.findByIdAndUpdate(postId, {
             published: !published
         }, { new: true });
@@ -96,7 +94,7 @@ class PostService extends Service {
 
     async getPostLikeById(userId) {
         const likePost = await Like.find({ user: userId }).populate("post");
-        return likePost
+        return likePost;
     }
 
     slugify(str) {

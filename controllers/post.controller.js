@@ -163,14 +163,15 @@ class PostController extends Controller {
     async getLikeByUser(req, res, next) {
         try {
             const id = req.params.id;
-            const post = await postService.getPostLikeById(id);
-            if (!post) {
+            const posts = await postService.getPostLikeById(id);
+            if (posts.length == 0) {
                 return res.status(404).json({
                     message: "Post not found"
                 })
             }
             res.json({
-                message: "Post updated successfully",
+                posts: posts,
+                message: "Get like success",
             })
         } catch (error) {
             res.status(404).json({ error: error.message });
