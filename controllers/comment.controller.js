@@ -1,25 +1,25 @@
 const express = require("express");
 const { Controller } = require("../core");
-const { commentService } = require("../services")
+const { commentService } = require("../services");
+const asyncHandler = require("../utils/asyncHandler");
 
-class CategoryController extends Controller {
+class CommentController extends Controller {
     _rootPath = "/comment";
     _router = express.Router();
+
     constructor() {
         super();
         this.initController();
     }
 
-    async getAll(req, res, next) {
+    getAll = asyncHandler(async (req, res) => {
         const comments = await commentService.getAll();
-        res.json({
-            comments
-        })
-    }
+        res.json({ comments });
+    });
 
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
     };
 }
 
-module.exports = CategoryController;
+module.exports = CommentController;

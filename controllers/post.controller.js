@@ -2,181 +2,109 @@ const express = require("express");
 const { Controller } = require("../core");
 const { postService, userService } = require("../services");
 const { AuthMiddleware, LoginMiddleware, AdminMiddleware } = require("../middlewares/auth.middleware");
+const asyncHandler = require("../utils/asyncHandler");
 
 class PostController extends Controller {
     _rootPath = "/post";
     _router = express.Router();
+
     constructor() {
         super();
         this.initController();
     }
 
-    async getAll(req, res, next) {
+    getAll = asyncHandler(async (req, res) => {
         const posts = await postService.getAll();
-        res.json({
-            posts
-        })
-    }
+        res.status(200).json({ posts });
+    });
 
-    async getPostById(req, res, next) {
+    getPostById = asyncHandler(async (req, res) => {
         const { postId } = req.query;
         const { _id } = req.userInfo;
-        console.log('postId', postId);
 
         const post = await postService.getPostById(postId);
-        if (!post) {
-            return res.status(404).json({
-                message: "Post not found"
-            })
-        }
+        if (!post) return res.status(404).json({ message: "Post not found" });
 
-        if (post.author.toString() !== _id.toString()) {
-            return res.status(403).json({
-                message: "You are not the author of this post"
-            })
-        }
+        if (post.author.toString() !== _id.toString())
+            return res.status(403).json({ message: "You are not the author of this post" });
 
-        res.json({
-            post
-        })
-    }
+        res.status(200).json({ post });
+    });
 
-    async getPostByAuthor(req, res, next) {
+    getPostByAuthor = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
-        console.log('_id', _id);
-        try {
-            const posts = await postService.getPostByUser(_id);
+        const posts = await postService.getPostByUser(_id);
 
-            if (posts.length === 0) {
-                return res.status(404).json({
-                    message: "Post not found"
-                })
-            }
-            res.json({
-                posts
-            })
-        } catch (error) {
-            res.status(404).json({ error: error.message });
-        }
+        if (posts.length === 0)
+            return res.status(404).json({ message: "Post not found" });
 
-    }
+        res.status(200).json({ posts });
+    });
 
-    async getLastestPostByUser(req, res, next) {
+    getLastestPostByUser = asyncHandler(async (req, res) => {
         const { userId } = req.body;
         const posts = await postService.getLastestPostByUser(userId);
-        res.json({
-            posts
-        })
-    }
+        res.status(200).json({ posts });
+    });
 
-    async create(req, res, next) {
-        console.log('req.userInfo', req.userInfo);
-
+    create = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
         const { title, content } = req.body;
-        const user = userService.findUserById(_id);
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found"
-            })
-        }
 
-        const post = await postService.addPost({
-            content,
-            author: _id,
-            title
-        });
-        if (!post) {
-            return res.status(500).json({
-                message: "Error when creating post"
-            })
-        } else {
-            res.json({
-                message: "Post created successfully",
-                post
-            })
-        }
-    }
+        const user = await userService.findUserById(_id);
+        if (!user) return res.status(404).json({ message: "User not found" });
 
-    async deletePost(req, res, next) {
+        const post = await postService.addPost({ content, author: _id, title });
+        if (!post) return res.status(500).json({ message: "Error when creating post" });
+
+        res.status(201).json({ message: "Post created successfully", post });
+    });
+
+    deletePost = asyncHandler(async (req, res) => {
         const { postId } = req.body;
         const { _id } = req.userInfo;
-        const post = await postService.getPostById(postId);
-        if (!post) {
-            return res.status(404).json({
-                message: "Post not found"
-            })
-        }
-        if (post.author.toString() !== _id.toString()) {
-            return res.status(403).json({
-                message: "You are not the author of this post"
-            })
-        }
-        await postService.deletePost(postId);
-        res.json({
-            message: "Post deleted successfully"
-        })
-    }
 
-    async update(req, res, next) {
+        const post = await postService.getPostById(postId);
+        if (!post) return res.status(404).json({ message: "Post not found" });
+
+        if (post.author.toString() !== _id.toString())
+            return res.status(403).json({ message: "You are not the author of this post" });
+
+        await postService.deletePost(postId);
+        res.status(200).json({ message: "Post deleted successfully" });
+    });
+
+    update = asyncHandler(async (req, res) => {
         const { postId, title, content } = req.body;
         const { _id } = req.userInfo;
+
         const post = await postService.getPostById(postId);
-        if (!post) {
-            return res.status(404).json({
-                message: "Post not found"
-            })
-        }
-        if (post.author.toString() !== _id.toString()) {
-            return res.status(403).json({
-                message: "You are not the author of this post"
-            })
-        }
-        const updatedPost = await postService.updatePost(postId, {
-            title,
-            content
-        });
-        res.json({
-            message: "Post updated successfully",
-            post: updatedPost
-        })
-    }
+        if (!post) return res.status(404).json({ message: "Post not found" });
 
-    async updateStatus(req, res, next) {
-        try {
-            const id = req.params.id;
-            const post = await postService.getPostById(id);
-            if (!post) {
-                return res.status(404).json({
-                    message: "Post not found"
-                })
-            }
-            await postService.updateStatusPost(id, post.published);
-            res.json({
-                message: "Post updated successfully",
-            })
-        } catch (error) {
-            res.status(404).json({ error: error.message });
-        }
-    }
+        if (post.author.toString() !== _id.toString())
+            return res.status(403).json({ message: "You are not the author of this post" });
 
-    async getLikeByUser(req, res, next) {
-        try {
-            const id = req.params.id;
-            const posts = await postService.getPostLikeById(id);
-            if (posts.length == 0) {
-                return res.status(404).json({
-                    message: "Post not found"
-                })
-            }
-            res.json({
-                posts: posts,
-                message: "Get like success",
-            })
-        } catch (error) {
-            res.status(404).json({ error: error.message });
-        }
-    }
+        const updatedPost = await postService.updatePost(postId, { title, content });
+        res.status(200).json({ message: "Post updated successfully", post: updatedPost });
+    });
+
+    updateStatus = asyncHandler(async (req, res) => {
+        const id = req.params.id;
+        const post = await postService.getPostById(id);
+        if (!post) return res.status(404).json({ message: "Post not found" });
+
+        await postService.updateStatusPost(id, post.published);
+        res.status(200).json({ message: "Post status updated successfully" });
+    });
+
+    getLikeByUser = asyncHandler(async (req, res) => {
+        const id = req.params.id;
+        const posts = await postService.getPostLikeById(id);
+        if (!posts || posts.length === 0)
+            return res.status(404).json({ message: "Post not found" });
+
+        res.status(200).json({ posts, message: "Get like success" });
+    });
 
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);

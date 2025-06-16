@@ -70,6 +70,7 @@ class UserController extends Controller {
       `${this._rootPath}/updateProfile`, AuthMiddleware, this.updateProfile
     );
   };
+  
 }
 
 module.exports = UserController;

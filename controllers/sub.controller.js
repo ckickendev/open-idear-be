@@ -1,21 +1,24 @@
 const express = require("express");
 const { Controller } = require("../core");
-const { subService } = require("../services")
+const { subService } = require("../services");
+const asyncHandler = require("../utils/asyncHandler");
 
 class SubController extends Controller {
     _rootPath = "/sub";
     _router = express.Router();
+
     constructor() {
         super();
         this.initController();
     }
 
-    async getAll(req, res, next) {
+    getAll = asyncHandler(async (req, res) => {
         const subs = await subService.getAll();
-        res.json({
-            subs
-        })
-    }
+        res.status(200).json({
+            status: "success",
+            data: subs,
+        });
+    });
 
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
