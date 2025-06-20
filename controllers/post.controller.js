@@ -49,12 +49,12 @@ class PostController extends Controller {
 
     create = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
-        const { title, content } = req.body;
+        const { title, content, text } = req.body;
 
         const user = await userService.findUserById(_id);
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        const post = await postService.addPost({ content, author: _id, title });
+        const post = await postService.addPost({ content, author: _id, title, text });
         if (!post) return res.status(500).json({ message: "Error when creating post" });
 
         res.status(201).json({ message: "Post created successfully", post });
@@ -75,7 +75,8 @@ class PostController extends Controller {
     });
 
     update = asyncHandler(async (req, res) => {
-        const { postId, title, content } = req.body;
+        const { postId, title, content, text } = req.body;
+        
         const { _id } = req.userInfo;
 
         const post = await postService.getPostById(postId);
@@ -84,7 +85,7 @@ class PostController extends Controller {
         if (post.author.toString() !== _id.toString())
             return res.status(403).json({ message: "You are not the author of this post" });
 
-        const updatedPost = await postService.updatePost(postId, { title, content });
+        const updatedPost = await postService.updatePost(postId, { title, content, text });
         res.status(200).json({ message: "Post updated successfully", post: updatedPost });
     });
 

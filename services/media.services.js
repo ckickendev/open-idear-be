@@ -1,5 +1,6 @@
 const { Service } = require("../core");
 const { Media } = require("../models");
+const mongoose = require("mongoose");
 
 class MediaService extends Service {
     async getAll() {

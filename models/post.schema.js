@@ -10,6 +10,7 @@ const postSchema = new Schema(
     title: { type: String, required: true },
     slug: { type: String, required: true, unique: true },
     content: { type: String, required: true },
+    text: { type: String, required: true }, // Text content for search indexing
     author: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "category" },
     tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "tag" }], // Array of tag names

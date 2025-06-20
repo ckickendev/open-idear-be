@@ -60,12 +60,14 @@ class AuthController extends Controller {
     const userFilter = {
       _id: userInfo._id,
       username: userInfo.username,
+      name: userInfo.name,
       email: userInfo.email,
       role: userInfo.role,
       activate: userInfo.activate,
       createdAt: userInfo.createdAt,
       bio: userInfo.bio,
       avatar: userInfo.avatar,
+      background: userInfo.background,
     };
 
     return res.status(200).json({ message: "success", userInfo: userFilter });

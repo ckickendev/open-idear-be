@@ -33,7 +33,7 @@ class UserController extends Controller {
         mediaService.addMedia(_id, avatar, "image");
       } else {
         userService.updateBackground(background, _id);
-        mediaService.addMedia(_id, avatar, "image");
+        mediaService.addMedia(_id, background, "image");
       }
       return res.status(200).json({
         message: "success",
@@ -49,7 +49,9 @@ class UserController extends Controller {
       if (!_id) {
         throw new ServerException("No id found");
       }
-      const { name, bio } = req.body;
+      const { name, bio } = req.body.data;
+      console.log("Updating profile with data:", { name, bio });
+      
 
       userService.updateProfile(name, bio, _id);
 
@@ -70,7 +72,7 @@ class UserController extends Controller {
       `${this._rootPath}/updateProfile`, AuthMiddleware, this.updateProfile
     );
   };
-  
+
 }
 
 module.exports = UserController;

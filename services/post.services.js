@@ -33,11 +33,12 @@ class PostService extends Service {
                     title: post.title,
                     slug: post.slug,
                     content: post.content,
+                    text: post.text,
                     author: {
                         name: post.author.name,
                         avatar: post.author.avatar,
                     },
-                    category: post.category.name,
+                    category: post.category ? post.category.name : "Uncategorized",
                     tags: post.tags.map(tag => tag.name),
                     published: post.published,
                     views: post.views,
@@ -61,6 +62,7 @@ class PostService extends Service {
             _id: new mongoose.Types.ObjectId(),
             title: post.title,
             content: post.content,
+            text: post.text,
             author: post.author,
             category: post.category,
             tags: post.tags,
@@ -82,6 +84,7 @@ class PostService extends Service {
         const updatedPost = await Post.findByIdAndUpdate(postId, {
             title: post.title,
             content: post.content,
+            text: post.text,
         }, { new: true });
         return updatedPost;
     }
