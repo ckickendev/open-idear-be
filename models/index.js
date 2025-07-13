@@ -6,7 +6,8 @@ const Media = require("./media.schema");
 const Notification = require("./notification.schema");
 const Post = require("./post.schema");
 const Sub = require("./sub.schema");
-const Tag = require("./tag.schema")
+const Tag = require("./tag.schema");
+const Series = require("./series.schema");
 
 module.exports = {
   User,
@@ -17,5 +18,6 @@ module.exports = {
   Notification,
   Post,
   Sub,
-  Tag
+  Tag,
+  Series,
 };
