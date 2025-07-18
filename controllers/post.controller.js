@@ -18,7 +18,7 @@ class PostController extends Controller {
         res.status(200).json({ posts });
     });
 
-    getPostById = asyncHandler(async (req, res) => {
+    getPost = asyncHandler(async (req, res) => {
         const { postId } = req.query;
         const { _id } = req.userInfo;
 
@@ -31,7 +31,16 @@ class PostController extends Controller {
         res.status(200).json({ post });
     });
 
+    getPostByID = asyncHandler(async (req, res) => {
+        console.log('getPostByID');
+        const { id } = req.params;
+        const post = await postService.getPostById(id);
+        if (!post) return res.status(404).json({ message: "Post not found" });
+        res.status(200).json({ post });
+    });
+
     getPostByAuthor = asyncHandler(async (req, res) => {
+        console.log('getPostByAuthorrrrrr');
         const { _id } = req.userInfo;
         const posts = await postService.getPostByUser(_id);
 
@@ -99,6 +108,8 @@ class PostController extends Controller {
     });
 
     getLikeByUser = asyncHandler(async (req, res) => {
+        console.log('getLikeByUser');
+        
         const id = req.params.id;
         const posts = await postService.getPostLikeById(id);
         if (!posts || posts.length === 0)
@@ -109,7 +120,8 @@ class PostController extends Controller {
 
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
-        this._router.get(`${this._rootPath}/getPost`, AuthMiddleware, this.getPostById);
+        this._router.get(`${this._rootPath}/getPost`, AuthMiddleware, this.getPost);
+        this._router.get(`${this._rootPath}/getPostByID`, this.getPostByID);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
         this._router.get(`${this._rootPath}/getLikeByUser/:id`, this.getLikeByUser);

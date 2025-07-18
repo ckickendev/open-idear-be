@@ -73,6 +73,8 @@ class PostService extends Service {
     }
 
     async getPostById(postId) {
+        console.log('postId', postId);
+        
         const post = await Post.findById(postId);
         if (!post) {
             return null;
