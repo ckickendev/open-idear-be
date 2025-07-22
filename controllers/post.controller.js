@@ -14,11 +14,14 @@ class PostController extends Controller {
     }
 
     getAll = asyncHandler(async (req, res) => {
+        console.log('Call function get all');
+
         const posts = await postService.getAll();
         res.status(200).json({ posts });
     });
 
     getPost = asyncHandler(async (req, res) => {
+        console.log('Call function get post');
         const { postId } = req.query;
         const { _id } = req.userInfo;
 
@@ -32,15 +35,18 @@ class PostController extends Controller {
     });
 
     getPostByID = asyncHandler(async (req, res) => {
-        console.log('getPostByID');
+        console.log('Call function get post by ID');
         const { id } = req.params;
+
         const post = await postService.getPostById(id);
+        console.log('post', post);
+        
         if (!post) return res.status(404).json({ message: "Post not found" });
         res.status(200).json({ post });
     });
 
     getPostByAuthor = asyncHandler(async (req, res) => {
-        console.log('getPostByAuthorrrrrr');
+        console.log('getPostByAuthor');
         const { _id } = req.userInfo;
         const posts = await postService.getPostByUser(_id);
 
@@ -51,12 +57,14 @@ class PostController extends Controller {
     });
 
     getLastestPostByUser = asyncHandler(async (req, res) => {
+        console.log('Call function get lastest post by user');
         const { userId } = req.body;
         const posts = await postService.getLastestPostByUser(userId);
         res.status(200).json({ posts });
     });
 
     create = asyncHandler(async (req, res) => {
+        console.log('Call function create Post');
         const { _id } = req.userInfo;
         const { title, content, text } = req.body;
 
@@ -70,6 +78,7 @@ class PostController extends Controller {
     });
 
     deletePost = asyncHandler(async (req, res) => {
+        console.log('Call function deletePost');
         const { postId } = req.body;
         const { _id } = req.userInfo;
 
@@ -108,20 +117,18 @@ class PostController extends Controller {
     });
 
     getLikeByUser = asyncHandler(async (req, res) => {
-        console.log('getLikeByUser');
-        
-        const id = req.params.id;
-        const posts = await postService.getPostLikeById(id);
-        if (!posts || posts.length === 0)
-            return res.status(404).json({ message: "Post not found" });
+        console.log('Call function getLikeByUser');
 
-        res.status(200).json({ posts, message: "Get like success" });
+        const id = req.params.id;
+        const likePost = await postService.getPostLikeById(id);
+
+        res.status(200).json({ likePost, message: "Get like success" });
     });
 
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getPost`, AuthMiddleware, this.getPost);
-        this._router.get(`${this._rootPath}/getPostByID`, this.getPostByID);
+        this._router.get(`${this._rootPath}/getPostByID/:id`, this.getPostByID);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
         this._router.get(`${this._rootPath}/getLikeByUser/:id`, this.getLikeByUser);
