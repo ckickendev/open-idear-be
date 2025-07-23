@@ -20,15 +20,17 @@ class PostController extends Controller {
         res.status(200).json({ posts });
     });
 
-    getPost = asyncHandler(async (req, res) => {
+    getPostToEdit = asyncHandler(async (req, res) => {
         console.log('Call function get post');
         const { postId } = req.query;
         const { _id } = req.userInfo;
 
         const post = await postService.getPostById(postId);
+        console.log('post data', post);
+        
         if (!post) return res.status(404).json({ message: "Post not found" });
 
-        if (post.author.toString() !== _id.toString())
+        if (post.author._id.toString() !== _id.toString())
             return res.status(403).json({ message: "You are not the author of this post" });
 
         res.status(200).json({ post });
@@ -127,7 +129,7 @@ class PostController extends Controller {
 
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
-        this._router.get(`${this._rootPath}/getPost`, AuthMiddleware, this.getPost);
+        this._router.get(`${this._rootPath}/getPostToEdit`, AuthMiddleware, this.getPostToEdit);
         this._router.get(`${this._rootPath}/getPostByID/:id`, this.getPostByID);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
