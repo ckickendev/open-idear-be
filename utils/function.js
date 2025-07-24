@@ -29,8 +29,7 @@ const makeRandomString = (length) => {
 
 const makeRandomNumber = (length) => {
   let result = "";
-  const characters =
-    "0123456789";
+  const characters = "0123456789";
   const charactersLength = characters.length;
   let counter = 0;
   while (counter < length) {
@@ -43,10 +42,21 @@ const makeRandomNumber = (length) => {
 const makeRandomAvatar = () => {
   const randomNumber = randomIntFromInterval(0, randomAvatar.length - 1);
   return randomAvatar[randomNumber];
-}
+};
 
-function randomIntFromInterval(min, max) { // min and max included 
+function randomIntFromInterval(min, max) {
+  // min and max included
   return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
-module.exports = { makeRandomString, makeRandomNumber, makeRandomAvatar };
+const slugify = (str) => {
+  str = str.replace(/^\s+|\s+$/g, ""); // trim leading/trailing white space
+  str = str.toLowerCase(); // convert string to lowercase
+  str = str
+    .replace(/[^a-z0-9 -]/g, "") // remove any non-alphanumeric characters
+    .replace(/\s+/g, "-") // replace spaces with hyphens
+    .replace(/-+/g, "-"); // remove consecutive hyphens
+  return str;
+};
+
+module.exports = { makeRandomString, makeRandomNumber, makeRandomAvatar, slugify };

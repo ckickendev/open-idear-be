@@ -40,6 +40,25 @@ class SeriesService extends Service {
             throw new ServerException("error");
         }
     }
+
+    async createSeries({ title, slug, userId }) {
+        if (!title || !slug || !userId) {
+            throw new BadRequestException("Title, slug and userId are required");
+        }
+        try {
+            const series = await Series.create({
+                title,
+                slug,
+                description: "",
+                user: userId,
+                post: [],
+            });
+            return series;
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+    }
 }
 
 module.exports = new SeriesService();
