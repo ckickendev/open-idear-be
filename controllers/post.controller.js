@@ -26,7 +26,6 @@ class PostController extends Controller {
         const { _id } = req.userInfo;
 
         const post = await postService.getPostById(postId);
-        console.log('post data', post);
         
         if (!post) return res.status(404).json({ message: "Post not found" });
 
@@ -41,7 +40,6 @@ class PostController extends Controller {
         const { id } = req.params;
 
         const post = await postService.getPostById(id);
-        console.log('post', post);
         
         if (!post) return res.status(404).json({ message: "Post not found" });
         res.status(200).json({ post });
@@ -87,7 +85,7 @@ class PostController extends Controller {
         const post = await postService.getPostById(postId);
         if (!post) return res.status(404).json({ message: "Post not found" });
 
-        if (post.author.toString() !== _id.toString())
+        if (post.author._id.toString() !== _id.toString())
             return res.status(403).json({ message: "You are not the author of this post" });
 
         await postService.deletePost(postId);
@@ -102,7 +100,7 @@ class PostController extends Controller {
         const post = await postService.getPostById(postId);
         if (!post) return res.status(404).json({ message: "Post not found" });
 
-        if (post.author.toString() !== _id.toString())
+        if (post.author._id.toString() !== _id.toString())
             return res.status(403).json({ message: "You are not the author of this post" });
 
         const updatedPost = await postService.updatePost(postId, { title, content, text });

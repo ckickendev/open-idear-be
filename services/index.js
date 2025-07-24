@@ -6,6 +6,7 @@ const likeService = require("./like.services");
 const postService = require("./post.services");
 const mediaService = require("./media.services");
 const subService = require("./sub.services");
+const seriesService = require("./series.services");
 const tagService = require("./tag.services");
 const notificationService = require("./notification.services");
 
@@ -18,6 +19,7 @@ module.exports = {
   postService,
   mediaService,
   subService,
+  seriesService,
   tagService,
   notificationService,
 };

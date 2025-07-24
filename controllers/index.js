@@ -5,6 +5,7 @@ const LikeController = require("./like.controller");
 const PostController = require("./post.controller");
 const MediaController = require("./media.controller");
 const NotificationController = require("./notification.controller");
+const SeriesController = require("./series.controller");
 const SubController = require("./sub.controller");
 const TagController = require("./tag.controller");
 const UserController = require("./user.controller");
@@ -17,6 +18,7 @@ module.exports = {
   PostController,
   MediaController,
   NotificationController,
+  SeriesController,
   SubController,
   TagController,
   AuthController,

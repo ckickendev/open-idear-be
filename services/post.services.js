@@ -78,6 +78,7 @@ class PostService extends Service {
         const post = await Post.findById(postId).populate('category', "name")
             .populate('author', 'username email')
             .populate('tags', 'name');
+
         if (!post) {
             return null;
         }

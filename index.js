@@ -9,8 +9,10 @@ const {
   SubController,
   TagController,
   AuthController,
+  SeriesController,
 } = require("./controllers/index.js");
 const AppServer = require("./functions/appServer");
+const { Series } = require("./models/index.js");
 
 const app = new AppServer([
   new UserController(),
@@ -20,6 +22,7 @@ const app = new AppServer([
   new PostController(),
   new MediaController(),
   new NotificationController(),
+  new SeriesController(),
   new SubController(),
   new TagController(),
   new AuthController(),

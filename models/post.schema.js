@@ -7,6 +7,7 @@ const postSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       required: true,
     },
+    image: { type: String, default: "" }, // Image URL for the post
     title: { type: String, required: true },
     slug: { type: String, required: true, unique: true },
     content: { type: String, required: true },
