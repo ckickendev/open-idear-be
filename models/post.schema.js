@@ -10,6 +10,7 @@ const postSchema = new Schema(
     image: { type: String, default: "" }, // Image URL for the post
     title: { type: String, required: true },
     slug: { type: String, required: true, unique: true },
+    description: { type: String, default: "" }, // Description for the post
     content: { type: String, required: true },
     text: { type: String, required: true }, // Text content for search indexing
     author: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },

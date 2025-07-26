@@ -1,6 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
-const { Post, Like } = require("../models");
+const { Post, Like, Series, Category } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 
 class PostService extends Service {
@@ -31,6 +31,8 @@ class PostService extends Service {
                 return {
                     _id: post._id,
                     title: post.title,
+                    description: post.description,
+                    image: post.image,
                     slug: post.slug,
                     content: post.content,
                     text: post.text,
@@ -45,6 +47,7 @@ class PostService extends Service {
                     likes: post.likes,
                     readTime: post.readtime,
                     updatedAt: post.updatedAt,
+                    
                 }
             });
 
@@ -104,6 +107,296 @@ class PostService extends Service {
         const likePost = await Like.find({ user: userId }).populate("post");
         return likePost;
     }
+
+    async publicPost(postId, publicInfo) {
+        if(publicInfo.series) {
+            const series = await Series.findById(publicInfo.series);
+            if (series) {
+                console.log('series', series);
+                
+                await Series.findByIdAndUpdate(series, {
+                    $push: { posts: postId }
+                });
+            } else {
+                throw new NotFoundException("Series not found");
+            }
+        }
+
+        if(publicInfo.category) {
+            const category = await Category.findById(publicInfo.category);
+            if (!category) {
+                throw new NotFoundException("Category not found");
+            }
+        }
+
+        const updatedPost = await Post.findByIdAndUpdate(postId, {
+            description: publicInfo.description,
+            image: publicInfo.image,
+            category: publicInfo.category,
+            public: true,
+        }, { new: true });
+        return updatedPost;
+    }
+
+
+    async calculateHotScore(post) {
+        const now = new Date();
+        const postAge = (now - post.createdAt) / (1000 * 60 * 60); // age in hours
+        
+        const likesCount = post.likes.length;
+        const commentsCount = post.comments.length;
+        const views = post.views;
+        
+        // Hot score formula (you can adjust weights)
+        const score = (likesCount * 3 + commentsCount * 2 + views * 0.1) / Math.pow(postAge + 1, 0.8);
+        
+        return score;
+    };
+
+
+    async getHotPostsToday(limit, page) {
+        try {
+            // Get posts from today
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            
+            const endOfDay = new Date();
+            endOfDay.setHours(23, 59, 59, 999);
+            
+            const posts = await Post.find({
+                published: true,
+                del_flag: 0,
+                createdAt: {
+                    $gte: startOfDay,
+                    $lte: endOfDay
+                }
+            })
+            .populate('author', 'name username avatar')
+            .populate('category', 'name slug')
+            .populate('tags', 'name slug')
+            .lean();
+            
+            // Calculate hot scores and sort
+            const postsWithScores = posts.map(post => ({
+                ...post,
+                hotScore: calculateHotScore(post)
+            }));
+            
+            postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
+            
+            // Pagination
+            const skip = (page - 1) * limit;
+            const paginatedPosts = postsWithScores.slice(skip, skip + parseInt(limit));
+            
+            return paginatedPosts;
+            
+        } catch (error) {
+            throw new ServerException("Error fetching hot posts");
+        }
+    };
+
+    // Get hot posts for this week
+    async getHotPostsThisWeek(req, res) {
+        try {
+            const { limit = 10, page = 1 } = req.query;
+            
+            // Get posts from this week
+            const startOfWeek = new Date();
+            startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday
+            startOfWeek.setHours(0, 0, 0, 0);
+            
+            const endOfWeek = new Date();
+            endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
+            endOfWeek.setHours(23, 59, 59, 999);
+            
+            const posts = await Post.find({
+            published: true,
+            del_flag: 0,
+            createdAt: {
+                $gte: startOfWeek,
+                $lte: endOfWeek
+            }
+            })
+            .populate('author', 'name username avatar')
+            .populate('category', 'name slug')
+            .populate('tags', 'name slug')
+            .lean();
+            
+            // Calculate hot scores and sort
+            const postsWithScores = posts.map(post => ({
+            ...post,
+            hotScore: calculateHotScore(post)
+            }));
+            
+            postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
+            
+            // Pagination
+            const skip = (page - 1) * limit;
+            const paginatedPosts = postsWithScores.slice(skip, skip + parseInt(limit));
+            
+            res.json({
+            success: true,
+            data: paginatedPosts,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPosts: postsWithScores.length,
+                totalPages: Math.ceil(postsWithScores.length / limit),
+                hasNext: skip + parseInt(limit) < postsWithScores.length,
+                hasPrev: page > 1
+            }
+            });
+            
+        } catch (error) {
+            console.error('Error fetching hot posts this week:', error);
+            res.status(500).json({
+            success: false,
+            message: 'Error fetching hot posts',
+            error: error.message
+            });
+        }
+    };
+
+    // Alternative: More efficient aggregation pipeline approach
+    async getHotPostsAggregation(req, res) {
+        try {
+            const { period = 'week', limit = 10, page = 1 } = req.query;
+            
+            // Calculate date range
+            const now = new Date();
+            let startDate;
+            
+            if (period === 'day') {
+            startDate = new Date();
+            startDate.setHours(0, 0, 0, 0);
+            } else if (period === 'week') {
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - 7);
+            } else {
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - 30); // month
+            }
+            
+            const pipeline = [
+            // Match published posts within date range
+            {
+                $match: {
+                published: true,
+                del_flag: 0,
+                createdAt: { $gte: startDate }
+                }
+            },
+            
+            // Add calculated fields
+            {
+                $addFields: {
+                likesCount: { $size: '$likes' },
+                commentsCount: { $size: '$comments' },
+                ageInHours: {
+                    $divide: [
+                    { $subtract: [now, '$createdAt'] },
+                    1000 * 60 * 60 // Convert to hours
+                    ]
+                }
+                }
+            },
+            
+            // Calculate hot score
+            {
+                $addFields: {
+                hotScore: {
+                    $divide: [
+                    {
+                        $add: [
+                        { $multiply: ['$likesCount', 3] },
+                        { $multiply: ['$commentsCount', 2] },
+                        { $multiply: ['$views', 0.1] }
+                        ]
+                    },
+                    { $pow: [{ $add: ['$ageInHours', 1] }, 0.8] }
+                    ]
+                }
+                }
+            },
+            
+            // Sort by hot score
+            { $sort: { hotScore: -1 } },
+            
+            // Pagination
+            { $skip: (page - 1) * parseInt(limit) },
+            { $limit: parseInt(limit) },
+            
+            // Populate references
+            {
+                $lookup: {
+                from: 'users',
+                localField: 'author',
+                foreignField: '_id',
+                as: 'author',
+                pipeline: [{ $project: { name: 1, username: 1, avatar: 1 } }]
+                }
+            },
+            {
+                $lookup: {
+                from: 'categories',
+                localField: 'category',
+                foreignField: '_id',
+                as: 'category',
+                pipeline: [{ $project: { name: 1, slug: 1 } }]
+                }
+            },
+            {
+                $lookup: {
+                from: 'tags',
+                localField: 'tags',
+                foreignField: '_id',
+                as: 'tags',
+                pipeline: [{ $project: { name: 1, slug: 1 } }]
+                }
+            },
+            
+            // Unwind author and category (single objects)
+            { $unwind: { path: '$author', preserveNullAndEmptyArrays: true } },
+            { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } }
+            ];
+            
+            const posts = await Post.aggregate(pipeline);
+            
+            // Get total count for pagination
+            const countPipeline = [
+            {
+                $match: {
+                published: true,
+                del_flag: 0,
+                createdAt: { $gte: startDate }
+                }
+            },
+            { $count: 'total' }
+            ];
+            
+            const countResult = await Post.aggregate(countPipeline);
+            const totalPosts = countResult[0]?.total || 0;
+            
+            res.json({
+            success: true,
+            data: posts,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPosts,
+                totalPages: Math.ceil(totalPosts / limit),
+                hasNext: page * limit < totalPosts,
+                hasPrev: page > 1
+            }
+            });
+            
+        } catch (error) {
+            console.error('Error fetching hot posts:', error);
+            res.status(500).json({
+            success: false,
+            message: 'Error fetching hot posts',
+            error: error.message
+            });
+        }
+    };
 
     slugify(str) {
         str = str.replace(/^\s+|\s+$/g, ''); // trim leading/trailing white space

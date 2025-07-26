@@ -45,6 +45,25 @@ class PostController extends Controller {
         res.status(200).json({ post });
     });
 
+    getHotTopics = asyncHandler(async (req, res) => {
+        console.log('Call function get hot topics');
+        const { limit = 10, page = 1 } = req.query;
+        const posts = await postService.getHotPostsToday(limit, page);
+        if (posts.length === 0) return res.status(404).json({ message: "No hot topics found" });
+
+        res.json({
+            success: true,
+            data: posts,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPosts: posts.length,
+                totalPages: Math.ceil(posts.length / limit),
+                hasNext: skip + parseInt(limit) < posts.length,
+                hasPrev: page > 1
+            }
+        });
+    });
+
     getPostByAuthor = asyncHandler(async (req, res) => {
         console.log('getPostByAuthor');
         const { _id } = req.userInfo;
@@ -91,6 +110,21 @@ class PostController extends Controller {
         await postService.deletePost(postId);
         res.status(200).json({ message: "Post deleted successfully" });
     });
+    
+    public = asyncHandler(async (req, res) => {
+        console.log('Call function public post');
+        const publicInfo = req.body.publicInfo;
+        const { _id } = req.userInfo;
+        const post = await postService.getPostById(publicInfo.postId);
+        if (!post) return res.status(404).json({ message: "Post not found" });
+
+        if (post.author._id.toString() !== _id.toString())
+            return res.status(403).json({ message: "You are not the author of this post" });
+
+        const updatedPost = await postService.publicPost(publicInfo.postId, publicInfo);
+
+        res.status(200).json({ message: "Post published successfully", post: updatedPost });
+    });
 
     update = asyncHandler(async (req, res) => {
         const { postId, title, content, text } = req.body;
@@ -119,8 +153,8 @@ class PostController extends Controller {
     getLikeByUser = asyncHandler(async (req, res) => {
         console.log('Call function getLikeByUser');
 
-        const id = req.params.id;
-        const likePost = await postService.getPostLikeById(id);
+        const { _id } = req.userInfo;
+        const likePost = await postService.getPostLikeById(_id);
 
         res.status(200).json({ likePost, message: "Get like success" });
     });
@@ -129,11 +163,14 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getPostToEdit`, AuthMiddleware, this.getPostToEdit);
         this._router.get(`${this._rootPath}/getPostByID/:id`, this.getPostByID);
+        this._router.get(`${this._rootPath}/getHotTopics`, this.getHotTopics);
+        this._router.get(`${this._rootPath}/getHotPostsToday`, this.getHotTopics);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
-        this._router.get(`${this._rootPath}/getLikeByUser/:id`, this.getLikeByUser);
+        this._router.get(`${this._rootPath}/getLikeByUser`, AuthMiddleware, this.getLikeByUser);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
+        this._router.post(`${this._rootPath}/public`, AuthMiddleware, this.public);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
         this._router.patch(`${this._rootPath}/status/:id`, AdminMiddleware, this.updateStatus);
     };

@@ -1,4 +1,6 @@
+const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
+const { ServerException, BadRequestException } = require("../exceptions");
 const { Series } = require("../models");
 
 class SeriesService extends Service {
@@ -47,6 +49,7 @@ class SeriesService extends Service {
         }
         try {
             const series = await Series.create({
+                _id: new mongoose.Types.ObjectId(),
                 title,
                 slug,
                 description: "",

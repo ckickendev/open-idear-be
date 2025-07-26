@@ -29,18 +29,17 @@ class SeriesController extends Controller {
         const series = await seriesService.getSeriesByUser(_id);
         res.status(200).json({
             status: "success",
-            data: series,
+            series: series,
         });
     });
 
     createSeries = asyncHandler(async (req, res) => {
-        console.log('Call function create series', req.body);
         const { _id } = req.userInfo;
         const series = await seriesService.createSeries({
             title: req.body.newSeries,
             slug: slugify(req.body.newSeries),
             userId: _id,
-        });
+        });        
         res.status(201).json({
             status: "success",
             data: series,
