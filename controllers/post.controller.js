@@ -58,7 +58,23 @@ class PostController extends Controller {
                 currentPage: parseInt(page),
                 totalPosts: posts.length,
                 totalPages: Math.ceil(posts.length / limit),
-                hasNext: skip + parseInt(limit) < posts.length,
+                hasPrev: page > 1
+            }
+        });
+    });
+
+    getHotPostsWeek = asyncHandler(async (req, res) => {
+        console.log('Call function get hot getHotPostsWeek this week');
+        const { limit = 10, page = 1 } = req.query;
+        const posts = await postService.getHotPostsThisWeek(limit, page);
+
+        res.json({
+            success: true,
+            posts,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPosts: posts.length,
+                totalPages: Math.ceil(posts.length / limit),
                 hasPrev: page > 1
             }
         });
@@ -165,6 +181,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getPostByID/:id`, this.getPostByID);
         this._router.get(`${this._rootPath}/getHotTopics`, this.getHotTopics);
         this._router.get(`${this._rootPath}/getHotPostsToday`, this.getHotTopics);
+        this._router.get(`${this._rootPath}/getHotPostsWeek`, this.getHotPostsWeek);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
         this._router.get(`${this._rootPath}/getLikeByUser`, AuthMiddleware, this.getLikeByUser);

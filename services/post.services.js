@@ -142,13 +142,15 @@ class PostService extends Service {
     async calculateHotScore(post) {
         const now = new Date();
         const postAge = (now - post.createdAt) / (1000 * 60 * 60); // age in hours
-        
+
         const likesCount = post.likes.length;
         const commentsCount = post.comments.length;
         const views = post.views;
         
         // Hot score formula (you can adjust weights)
         const score = (likesCount * 3 + commentsCount * 2 + views * 0.1) / Math.pow(postAge + 1, 0.8);
+
+        console.log('Hot score for post', post._id, 'is', score);
         
         return score;
     };
@@ -166,21 +168,66 @@ class PostService extends Service {
             const posts = await Post.find({
                 published: true,
                 del_flag: 0,
-                createdAt: {
-                    $gte: startOfDay,
-                    $lte: endOfDay
-                }
+                // createdAt: {
+                //     $gte: startOfDay,
+                //     $lte: endOfDay
+                // }
             })
             .populate('author', 'name username avatar')
             .populate('category', 'name slug')
             .populate('tags', 'name slug')
             .lean();
+
+            // Calculate hot scores and sort
+            const postsWithScores = posts.map(post => ({
+                ...post,
+                hotScore: this.calculateHotScore(post)
+            }));
+            
+            postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
+            
+            // Pagination
+            const skip = (page - 1) * limit;
+            const paginatedPosts = postsWithScores.slice(skip, skip + parseInt(limit));
+
+            return paginatedPosts;
+
+            
+        } catch (error) {
+            throw new ServerException("Error fetching hot posts");
+        }
+    };
+
+    // Get hot posts for this week
+    async getHotPostsThisWeek(limit, page) {
+        try {
+            // Get posts from this week
+            const now = new Date();
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 10); // 10 days ago from now
+
+            const posts = await Post.find({
+                published: true,
+                del_flag: 0,
+                createdAt: {
+                    $gte: sevenDaysAgo, // From 7 days ago
+                    $lte: now           // Until now
+                }
+            })
+            .populate('author', 'name username avatar')
+            .populate('category', 'name slug')
+            .lean();
+
+            console.log('posts', posts);
             
             // Calculate hot scores and sort
             const postsWithScores = posts.map(post => ({
                 ...post,
-                hotScore: calculateHotScore(post)
+                hotScore: this.calculateHotScore(post)
             }));
+
+            console.log('postsWithScores', postsWithScores.length);
+
             
             postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
             
@@ -189,63 +236,6 @@ class PostService extends Service {
             const paginatedPosts = postsWithScores.slice(skip, skip + parseInt(limit));
             
             return paginatedPosts;
-            
-        } catch (error) {
-            throw new ServerException("Error fetching hot posts");
-        }
-    };
-
-    // Get hot posts for this week
-    async getHotPostsThisWeek(req, res) {
-        try {
-            const { limit = 10, page = 1 } = req.query;
-            
-            // Get posts from this week
-            const startOfWeek = new Date();
-            startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday
-            startOfWeek.setHours(0, 0, 0, 0);
-            
-            const endOfWeek = new Date();
-            endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
-            endOfWeek.setHours(23, 59, 59, 999);
-            
-            const posts = await Post.find({
-            published: true,
-            del_flag: 0,
-            createdAt: {
-                $gte: startOfWeek,
-                $lte: endOfWeek
-            }
-            })
-            .populate('author', 'name username avatar')
-            .populate('category', 'name slug')
-            .populate('tags', 'name slug')
-            .lean();
-            
-            // Calculate hot scores and sort
-            const postsWithScores = posts.map(post => ({
-            ...post,
-            hotScore: calculateHotScore(post)
-            }));
-            
-            postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
-            
-            // Pagination
-            const skip = (page - 1) * limit;
-            const paginatedPosts = postsWithScores.slice(skip, skip + parseInt(limit));
-            
-            res.json({
-            success: true,
-            data: paginatedPosts,
-            pagination: {
-                currentPage: parseInt(page),
-                totalPosts: postsWithScores.length,
-                totalPages: Math.ceil(postsWithScores.length / limit),
-                hasNext: skip + parseInt(limit) < postsWithScores.length,
-                hasPrev: page > 1
-            }
-            });
-            
         } catch (error) {
             console.error('Error fetching hot posts this week:', error);
             res.status(500).json({
