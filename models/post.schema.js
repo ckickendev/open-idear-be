@@ -7,7 +7,7 @@ const postSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       required: true,
     },
-    image: { type: String, default: "" }, // Image URL for the post
+    image: { type: mongoose.Schema.Types.ObjectId, ref: "media" }, // Image URL for the post
     title: { type: String, required: true },
     slug: { type: String, required: true, unique: true },
     description: { type: String, default: "" }, // Description for the post

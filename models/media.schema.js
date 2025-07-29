@@ -8,6 +8,7 @@ const mediaSchema = new Schema(
             required: true,
         },
         user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+        description: { type: String, default: "" },
         url: { type: String, required: true },
         type: { type: String, enum: ["image", "video", "audio"], required: true },
         del_flag: {

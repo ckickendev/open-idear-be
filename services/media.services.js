@@ -24,7 +24,7 @@ class MediaService extends Service {
         return medias;
     }
 
-    async addMedia(userId, url, type) {
+    async addMedia(userId, url, type, description) {
         const types = ["image", "video", "audio"];
         if (!types.includes(type)) {
             throw new Error("Invalid media type");
@@ -34,6 +34,7 @@ class MediaService extends Service {
             user: userId,
             url,
             type,
+            description
         });
         await media.save();
         return media;

@@ -7,7 +7,8 @@ class PostService extends Service {
     async getAll() {
         const posts = await Post.find({})
             .populate('category', "name")
-            .populate('author', 'username email');
+            .populate('author', 'username email')
+            .populate('image', 'url description');
         return posts;
     }
 
@@ -131,7 +132,7 @@ class PostService extends Service {
 
         const updatedPost = await Post.findByIdAndUpdate(postId, {
             description: publicInfo.description,
-            image: publicInfo.image,
+            image: publicInfo.image._id,
             category: publicInfo.category,
             public: true,
         }, { new: true });
