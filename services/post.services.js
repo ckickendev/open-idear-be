@@ -26,7 +26,8 @@ class PostService extends Service {
                 .populate('category')
                 .populate('tags')
                 .populate('likes')
-                .populate('author', 'username email');
+                .populate('author', 'username email')
+                .populate('image', 'url description');
 
             const returnPosts = posts.map(post => {
                 return {
@@ -81,7 +82,8 @@ class PostService extends Service {
         
         const post = await Post.findById(postId).populate('category', "name")
             .populate('author', 'username email')
-            .populate('tags', 'name');
+            .populate('tags', 'name')
+            .populate('image', 'url description');
 
         if (!post) {
             return null;
@@ -110,33 +112,38 @@ class PostService extends Service {
     }
 
     async publicPost(postId, publicInfo) {
-        if(publicInfo.series) {
-            const series = await Series.findById(publicInfo.series);
-            if (series) {
-                console.log('series', series);
-                
-                await Series.findByIdAndUpdate(series, {
-                    $push: { posts: postId }
-                });
-            } else {
-                throw new NotFoundException("Series not found");
+        try {
+            if(publicInfo.series) {
+                const series = await Series.findById(publicInfo.series);
+                if (series) {
+                    console.log('series', series);
+                    
+                    await Series.findByIdAndUpdate(series, {
+                        $push: { posts: postId }
+                    });
+                } else {
+                    throw new NotFoundException("Series not found");
+                }
             }
-        }
 
-        if(publicInfo.category) {
-            const category = await Category.findById(publicInfo.category);
-            if (!category) {
-                throw new NotFoundException("Category not found");
+            if(publicInfo.category) {
+                const category = await Category.findById(publicInfo.category);
+                if (!category) {
+                    throw new NotFoundException("Category not found");
+                }
             }
+            console.log('publicInfo', publicInfo);
+            const updatedPost = await Post.findByIdAndUpdate(postId, {
+                description: publicInfo.description,
+                image: publicInfo.image,
+                category: publicInfo.category,
+                published: true,
+            }, { new: true });
+            return updatedPost;
+        } catch (error) {
+            console.error('Error publishing post:', error);
+            throw new ServerException("Error publishing post");
         }
-
-        const updatedPost = await Post.findByIdAndUpdate(postId, {
-            description: publicInfo.description,
-            image: publicInfo.image._id,
-            category: publicInfo.category,
-            public: true,
-        }, { new: true });
-        return updatedPost;
     }
 
 
@@ -177,6 +184,7 @@ class PostService extends Service {
             .populate('author', 'name username avatar')
             .populate('category', 'name slug')
             .populate('tags', 'name slug')
+            .populate('image', 'url description')
             .lean();
 
             // Calculate hot scores and sort
@@ -217,6 +225,8 @@ class PostService extends Service {
             })
             .populate('author', 'name username avatar')
             .populate('category', 'name slug')
+            .populate('tags', 'name slug')
+            .populate('image', 'url description')
             .lean();
 
             console.log('posts', posts);

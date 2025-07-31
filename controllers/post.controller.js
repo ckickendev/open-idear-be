@@ -128,7 +128,7 @@ class PostController extends Controller {
     });
     
     public = asyncHandler(async (req, res) => {
-        console.log('Call function public post');
+        console.log('Call function public post with data');
         const publicInfo = req.body.publicInfo;
         const { _id } = req.userInfo;
         const post = await postService.getPostById(publicInfo.postId);
