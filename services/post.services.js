@@ -102,7 +102,7 @@ class PostService extends Service {
 
     async updateStatusPost(postId, published) {
         await Post.findByIdAndUpdate(postId, {
-            published: !published
+            published: published
         }, { new: true });
     }
 

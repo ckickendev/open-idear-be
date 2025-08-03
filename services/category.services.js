@@ -1,6 +1,7 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { Category } = require("../models");
+const { slugify } = require("../utils/function");
 
 class CategoryService extends Service {
     async getAll() {
@@ -8,17 +9,18 @@ class CategoryService extends Service {
         return categories;
     }
 
-    async createCategory({ name, description, slug }) {
+    async createCategory({ name, description }) {
         const category = new Category({
             _id: new mongoose.Types.ObjectId(),
-            name, description, slug
+            name, description,
+            slug: slugify(name),
         });
         await category.save();
         return category;
     }
 
-    async updateCategory(id, { name, description, slug }) {
-        const category = await Category.findByIdAndUpdate(id, { name, description, slug }, { new: true });
+    async updateCategory(id, { name, description }) {
+        const category = await Category.findByIdAndUpdate(id, { name, description, slug: slugify(name) }, { new: true });
         if (!category) {
             throw new NotFoundException("Category not found");
         }
@@ -32,6 +34,17 @@ class CategoryService extends Service {
         }
         return category;
     }
+
+    async getRandomTopics(limit = 10, page = 1) {
+        const skip = (page - 1) * limit;
+        const categories = await Category.find({ del_flag: 0 })
+            .skip(skip)
+            .limit(limit)
+            .sort({ createdAt: -1 });
+        
+        return categories;
+    }
+
 }
 
 module.exports = new CategoryService();

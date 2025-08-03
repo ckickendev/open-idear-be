@@ -142,6 +142,18 @@ class PostController extends Controller {
         res.status(200).json({ message: "Post published successfully", post: updatedPost });
     });
 
+    changePublicManager = asyncHandler(async (req, res) => {
+        console.log('Call function change public manager');
+        const { id } = req.query;
+        const { published } = req.body;
+        const post = await postService.getPostById(id);
+        if (!post) return res.status(404).json({ message: "Post not found" }); 
+        if (post.published === published)
+            return res.status(400).json({ message: "Post already has this status" });
+        const updatedPost = await postService.updateStatusPost(id, published);
+        res.status(200).json({ message: "Post status updated successfully", post: updatedPost });
+    });
+
     update = asyncHandler(async (req, res) => {
         const { postId, title, content, text } = req.body;
         
@@ -188,6 +200,7 @@ class PostController extends Controller {
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
         this._router.post(`${this._rootPath}/public`, AuthMiddleware, this.public);
+        this._router.patch(`${this._rootPath}/changePublicManager`, AuthMiddleware, this.changePublicManager);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
         this._router.patch(`${this._rootPath}/status/:id`, AdminMiddleware, this.updateStatus);
     };

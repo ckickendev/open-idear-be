@@ -5,8 +5,6 @@ const { User } = require("../models");
 
 async function AuthMiddleware(req, res, next) {
   try {
-    // console.log("req?.headers", req?.headers);
-    // console.log("req?.body?.headers", req?.body?.headers);
     const headersToken =
       req?.headers["authorization"] || req?.body?.headers["Authorization"];
     const tokenClient = headersToken.split(" ")[1];
@@ -20,6 +18,8 @@ async function AuthMiddleware(req, res, next) {
     req.userInfo = {
       _id: checkingUser._id,
     };
+    console.log("AuthMiddleware userInfo:", req.userInfo);
+    
     next();
   } catch (error) {
     console.error("AuthMiddleware error:", error);
