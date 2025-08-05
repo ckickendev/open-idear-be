@@ -205,6 +205,178 @@ class CommentService extends Service {
       res.status(500).json({ error: error.message });
     }
   }
+
+  async findCommentById(commentId) {
+      const comment = Comment.findById(commentId)
+        .populate("author", "username avatar")
+        .lean();
+      return comment;
+  }
+
+  async parseCommentsRecursive(postId, maxDepth = 5) {
+    try {
+      // Get all comments for the post
+      const allComments = await Comment.find({ 
+        post: postId, 
+        del_flag: 0 
+      })
+      .populate('author', 'username avatar')
+      .sort({ createdAt: 1 })
+      .lean(); // Use lean() for better performance
+      
+      // Create a map for quick lookup
+      const commentMap = {};
+      allComments.forEach(comment => {
+        commentMap[comment._id] = {
+          ...comment,
+          replies: [],
+          timeAgo: getTimeAgo(comment.createdAt),
+          voteCount: comment.upvotes.length - comment.downvotes.length
+        };
+      });
+      
+      // Build the tree structure
+      const rootComments = [];
+      
+      allComments.forEach(comment => {
+        if (comment.parentComment) {
+          // This is a reply
+          if (commentMap[comment.parentComment]) {
+            commentMap[comment.parentComment].replies.push(commentMap[comment._id]);
+          }
+        } else {
+          // This is a top-level comment
+          rootComments.push(commentMap[comment._id]);
+        }
+      });
+      
+      return rootComments;
+    } catch (error) {
+      throw new Error(`Error parsing comments: ${error.message}`);
+    }
+  }
+
+  async parseCommentsFlat(postId, page = 1, limit = 20) {
+    try {
+      const comments = await Comment.aggregate([
+        // Match comments for the post
+        { $match: { post: mongoose.Types.ObjectId(postId), del_flag: 0 } },
+        
+        // Lookup author details
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'author',
+            foreignField: '_id',
+            as: 'author',
+            pipeline: [{ $project: { username: 1, avatar: 1 } }]
+          }
+        },
+        { $unwind: '$author' },
+        
+        // Add computed fields
+        {
+          $addFields: {
+            voteCount: { $subtract: [{ $size: '$upvotes' }, { $size: '$downvotes' }] },
+            replyCount: { $size: '$replies' },
+            isTopLevel: { $eq: ['$parentComment', null] }
+          }
+        },
+        
+        // Sort: top-level first, then by creation time
+        { 
+          $sort: { 
+            isTopLevel: -1, 
+            level: 1, 
+            createdAt: 1 
+          } 
+        },
+        
+        // Pagination
+        { $skip: (page - 1) * limit },
+        { $limit: limit }
+      ]);
+      
+      // Add time ago and format
+      const formattedComments = comments.map(comment => ({
+        ...comment,
+        timeAgo: getTimeAgo(comment.createdAt),
+        canReply: comment.level < 10, // Max nesting depth
+        indentLevel: Math.min(comment.level, 5) // Max visual indent
+      }));
+      
+      return {
+        comments: formattedComments,
+        page,
+        hasMore: formattedComments.length === limit
+      };
+    } catch (error) {
+      throw new Error(`Error parsing flat comments: ${error.message}`);
+    }
+  }
+
+  async parseCommentsPaginated(postId, page = 1, limit = 10) {
+    try {
+      // Get top-level comments with pagination
+      const topLevelComments = await Comment.find({
+        post: postId,
+        parentComment: null,
+        del_flag: 0
+      })
+      .populate('author', 'username avatar')
+      .sort({ score: -1, createdAt: -1 }) // Hot sorting
+      .limit(limit)
+      .skip((page - 1) * limit)
+      .lean();
+      
+      // For each top-level comment, get first few replies
+      const commentsWithReplies = await Promise.all(
+        topLevelComments.map(async (comment) => {
+          // Get direct replies (limit to 3 initially)
+          const directReplies = await Comment.find({
+            parentComment: comment._id,
+            del_flag: 0
+          })
+          .populate('author', 'username avatar')
+          .sort({ createdAt: 1 })
+          .limit(3)
+          .lean();
+          
+          // Count total replies for "show more" functionality
+          const totalReplies = await Comment.countDocuments({
+            parentComment: comment._id,
+            del_flag: 0
+          });
+          
+          // Format replies
+          const formattedReplies = directReplies.map(reply => ({
+            ...reply,
+            timeAgo: getTimeAgo(reply.createdAt),
+            voteCount: reply.upvotes.length - reply.downvotes.length,
+            level: 1
+          }));
+          
+          return {
+            ...comment,
+            timeAgo: getTimeAgo(comment.createdAt),
+            voteCount: comment.upvotes.length - comment.downvotes.length,
+            replies: formattedReplies,
+            totalReplies,
+            hasMoreReplies: totalReplies > 3,
+            level: 0
+          };
+        })
+      );
+      
+      return {
+        comments: commentsWithReplies,
+        page,
+        hasMore: topLevelComments.length === limit
+      };
+    } catch (error) {
+      throw new Error(`Error parsing paginated comments: ${error.message}`);
+    }
+  }
 }
 
 module.exports = new CommentService();

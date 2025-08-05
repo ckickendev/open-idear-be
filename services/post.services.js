@@ -213,7 +213,7 @@ class PostService extends Service {
             // Get posts from this week
             const now = new Date();
             const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 10); // 10 days ago from now
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 30); // 10 days ago from now
 
             const posts = await Post.find({
                 published: true,
@@ -229,16 +229,13 @@ class PostService extends Service {
             .populate('image', 'url description')
             .lean();
 
-            console.log('posts', posts);
+            // console.log('posts', posts);
             
             // Calculate hot scores and sort
             const postsWithScores = posts.map(post => ({
                 ...post,
                 hotScore: this.calculateHotScore(post)
             }));
-
-            console.log('postsWithScores', postsWithScores.length);
-
             
             postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
             
