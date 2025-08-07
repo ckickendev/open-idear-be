@@ -57,17 +57,7 @@ function getTimeAgo(date) {
   return `${diffInYears} năm trước`;
 }
 
-// Method 5: Real-time Comment Parsing (for WebSocket updates)
-function parseNewComment(commentData) {
-  return {
-    ...commentData,
-    timeAgo: "vừa xong",
-    voteCount: 0,
-    replies: [],
-    canReply: commentData.level < 10,
-    isNew: true // Flag for highlighting new comments
-  };
-}
+
 
 // Method 6: Search and Filter Comments
 async function parseFilteredComments(postId, filters = {}) {
@@ -114,7 +104,6 @@ async function parseFilteredComments(postId, filters = {}) {
 
 module.exports = {
   loadMoreReplies,
-  parseNewComment,
   parseFilteredComments,
   getTimeAgo
 };

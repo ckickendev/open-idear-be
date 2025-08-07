@@ -44,10 +44,6 @@ const commentSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId, 
       ref: "user" 
     }],
-    downvotes: [{ 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "user" 
-    }],
     // Score for sorting (upvotes - downvotes)
     score: {
       type: Number,
@@ -70,7 +66,7 @@ const commentSchema = new Schema(
     level: {
       type: Number,
       default: 0,
-      max: 10 // Limit nesting depth
+      max: 2 // Limit nesting depth
     }
   },
   {
@@ -85,14 +81,9 @@ commentSchema.index({ parentComment: 1, createdAt: 1 }); // Get replies
 commentSchema.index({ author: 1 }); // Get comments by user
 commentSchema.index({ post: 1, level: 1, score: -1 }); // For sorting
 
-// Virtual for vote count
-commentSchema.virtual('voteCount').get(function() {
-  return this.upvotes.length - this.downvotes.length;
-});
-
 // Pre-save middleware to update score
 commentSchema.pre('save', function(next) {
-  this.score = this.upvotes.length - this.downvotes.length;
+  this.score = this.upvotes.length
   next();
 });
 

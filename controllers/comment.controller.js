@@ -1,8 +1,10 @@
 const express = require("express");
 const { Controller } = require("../core");
 const { commentService } = require("../services");
+const { Comment } = require("../models"); 
 const asyncHandler = require("../utils/asyncHandler");
-const { parseNewComment, loadMoreReplies } = require("../utils/parseComment");
+const { loadMoreReplies } = require("../utils/parseComment");
+const { AuthMiddleware } = require("../middlewares/auth.middleware");
 
 class CommentController extends Controller {
   _rootPath = "/comments";
@@ -21,7 +23,7 @@ class CommentController extends Controller {
   async createComment(req, res) {
     try {
       const { content, postId, parentCommentId = null } = req.body;
-      const userId = req.user.id; // From auth middleware
+      const userId = req.userInfo._id; // From auth middleware
 
       // Validate parent comment if replying
       let level = 0;
@@ -43,43 +45,15 @@ class CommentController extends Controller {
         }
       }
 
-      // Create comment
-      const comment = new Comment({
-        content,
-        author: userId,
-        post: postId,
-        parentComment: parentCommentId,
-        level,
-      });
-
-      await comment.save();
-
-      // Update relationships
-      if (parentCommentId) {
-        await Comment.findByIdAndUpdate(parentCommentId, {
-          $push: { replies: comment._id },
-          $inc: { totalReplies: 1 },
-        });
-      }
-
-      await Post.findByIdAndUpdate(postId, {
-        $push: { comments: comment._id },
-      });
-
-      // Get populated comment data
-      const populatedComment = await commentService.findCommentById(comment._id)
-
-      // Parse for client consumption
-      const parsedComment = parseNewComment(populatedComment);
-
-      // TODO: Emit to WebSocket for real-time updates
-      // io.to(`post_${postId}`).emit('new_comment', parsedComment);
+      const parsedComment = await commentService.createComment({content, userId, postId, parentCommentId, level})
 
       res.status(201).json({
         success: true,
         data: parsedComment,
       });
     } catch (error) {
+      console.log(error.message);
+      
       res.status(500).json({
         success: false,
         error: error.message,
@@ -89,8 +63,6 @@ class CommentController extends Controller {
 
   // 2. Get comments for a post (with nested structure)
   async getPostComments(req, res) {
-    console.log("req.query", req.query);
-    console.log("req.params", req.params);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
     
     try {
       const {
@@ -129,12 +101,15 @@ class CommentController extends Controller {
           break;
       }
 
+      // console.log(result);
       res.json({
         success: true,
         data: result,
         method: method,
       });
     } catch (error) {
+      console.log(error);
+      
       res.status(500).json({
         success: false,
         error: error.message,
@@ -198,7 +173,6 @@ class CommentController extends Controller {
   async voteComment(req, res) {
     try {
       const { commentId } = req.params;
-      const { voteType } = req.body; // 'up', 'down', or 'remove'
       const userId = req.userInfo._id;
 
       const comment = await Comment.findById(commentId);
@@ -206,22 +180,23 @@ class CommentController extends Controller {
         return res.status(404).json({ error: "Comment not found" });
       }
 
-      // Remove existing votes
-      comment.upvotes.pull(userId);
-      comment.downvotes.pull(userId);
+      let hasVote;
 
-      // Add new vote
-      if (voteType === "up") {
+      // Remove existing votes
+      if(comment.upvotes.includes(userId)) {
+        comment.upvotes.pull(userId);
+        hasVote = false;
+      } else {
         comment.upvotes.push(userId);
-      } else if (voteType === "down") {
-        comment.downvotes.push(userId);
+        hasVote = true;
       }
 
       await comment.save();
 
       res.json({
         score: comment.score,
-        userVote: voteType === "remove" ? null : voteType,
+        userVote: hasVote,
+        upvotes: comment.upvotes
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -258,7 +233,8 @@ class CommentController extends Controller {
   initController = () => {
     this._router.get(`${this._rootPath}`, this.getAll);
     this._router.get(`${this._rootPath}/getPostComments`, this.getPostComments);
-    this._router.post(`${this._rootPath}/createComment`, this.createComment);
+    this._router.post(`${this._rootPath}/createComment`, AuthMiddleware, this.createComment);
+    this._router.post(`${this._rootPath}/vote/:commentId`, AuthMiddleware, this.voteComment);
     this._router.delete(`${this._rootPath}/deleteComment`, this.deleteComment);
   };
 }
