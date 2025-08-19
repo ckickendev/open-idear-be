@@ -1,7 +1,7 @@
 const express = require("express");
 const { Controller } = require("../core");
-const { commentService } = require("../services");
-const { Comment } = require("../models"); 
+const { commentService, postService } = require("../services");
+const { Comment, Post } = require("../models"); 
 const asyncHandler = require("../utils/asyncHandler");
 const { loadMoreReplies } = require("../utils/parseComment");
 const { AuthMiddleware } = require("../middlewares/auth.middleware");
@@ -203,6 +203,22 @@ class CommentController extends Controller {
     }
   }
 
+  async voteLike(req, res) {
+    try {
+      const { postId } = req.params;
+      const userId = req.userInfo._id;
+
+      const postLike = await commentService.voteLike(postId, userId)
+
+      res.json({
+        postLike
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+
   // 4. Delete a comment (soft delete)
   async deleteComment(req, res) {
     try {
@@ -235,6 +251,7 @@ class CommentController extends Controller {
     this._router.get(`${this._rootPath}/getPostComments`, this.getPostComments);
     this._router.post(`${this._rootPath}/createComment`, AuthMiddleware, this.createComment);
     this._router.post(`${this._rootPath}/vote/:commentId`, AuthMiddleware, this.voteComment);
+    this._router.post(`${this._rootPath}/voteLike/:postId`, AuthMiddleware, this.voteLike);
     this._router.delete(`${this._rootPath}/deleteComment`, this.deleteComment);
   };
 }

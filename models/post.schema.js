@@ -19,6 +19,7 @@ const postSchema = new Schema(
     published: { type: Boolean, default: false },
     views: { type: Number, default: 0 },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], // Users who liked the post
+    marked: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], // Users who marked the post
     comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "comment" }],
     del_flag: {
       type: Number,

@@ -1,4 +1,5 @@
 const { Service } = require("../core");
+const { ServerException } = require("../exceptions");
 const { Comment, Post } = require("../models");
 const mongoose = require("mongoose");
 
@@ -371,6 +372,31 @@ class CommentService extends Service {
       canReply: commentData.level < 10,
       isNew: true, // Flag for highlighting new comments
     };
+  }
+
+  async voteLike(postId, userId) {
+    const post = await Post.findById(postId);
+    if(!post) {
+      throw new ServerException("Not found post");
+    }
+
+    let isLike;
+
+    console.log("post.likes", post.likes);
+
+    if (post.likes.includes(userId)) {
+      console.log("post.likes 1");
+      post.likes.pull(userId);
+      isLike = false;
+    } else {
+      console.log("post.likes 2");
+      post.likes.push(userId);
+      isLike = true;
+    }
+
+    await post.save();
+
+    return isLike;
   }
 
   getTimeAgo(date) {

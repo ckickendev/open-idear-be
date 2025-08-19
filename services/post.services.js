@@ -26,6 +26,7 @@ class PostService extends Service {
                 .populate('category')
                 .populate('tags')
                 .populate('likes')
+                .populate('marked')
                 .populate('author', 'username email')
                 .populate('image', 'url description');
 
@@ -146,6 +147,24 @@ class PostService extends Service {
         }
     }
 
+    async markedPost(postId, userId) {
+        try {
+            const post = await Post.findById(postId);
+            if (!post) {
+                throw new NotFoundException("Post not found");
+            }
+            if (post.marked.includes(userId)) {
+                post.marked.pull(userId);
+            } else {
+                post.marked.push(userId);
+            }
+            await post.save();
+            return post.marked.includes(userId);
+        } catch (error) {
+            console.error('Error marking post:', error);
+            throw new ServerException("Error marking post");
+        }
+    }
 
     async calculateHotScore(post) {
         const now = new Date();

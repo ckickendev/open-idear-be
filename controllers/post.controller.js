@@ -98,6 +98,18 @@ class PostController extends Controller {
         res.status(200).json({ posts });
     });
 
+
+    getLikeAndMarked = asyncHandler(async (req, res) => {
+        console.log('Call function getLikeAndMarked');
+        const { _id } = req.userInfo;
+        const postId = req.query.postId;
+
+        const post = await postService.getPostById(postId);
+        if (!post) return res.status(404).json({ message: "Post not found" });
+        res.status(200).json({ isLiked: post.likes.includes(_id), isBookmarked: post.marked.includes(_id) });
+    });
+    
+
     create = asyncHandler(async (req, res) => {
         console.log('Call function create Post');
         const { _id } = req.userInfo;
@@ -110,6 +122,14 @@ class PostController extends Controller {
         if (!post) return res.status(500).json({ message: "Error when creating post" });
 
         res.status(201).json({ message: "Post created successfully", post });
+    });
+
+    marked = asyncHandler(async (req, res) => {
+        console.log('Call function marked post');
+        const { postId } = req.query;
+        const { _id } = req.userInfo;
+        const isMarked = await postService.markedPost(postId, _id);
+        res.status(200).json({ message: "Post created successfully", isMarked });
     });
 
     deletePost = asyncHandler(async (req, res) => {
@@ -126,7 +146,7 @@ class PostController extends Controller {
         await postService.deletePost(postId);
         res.status(200).json({ message: "Post deleted successfully" });
     });
-    
+
     public = asyncHandler(async (req, res) => {
         console.log('Call function public post with data');
         const publicInfo = req.body.publicInfo;
@@ -197,7 +217,9 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
         this._router.get(`${this._rootPath}/getLikeByUser`, AuthMiddleware, this.getLikeByUser);
+        this._router.get(`${this._rootPath}/getLikeAndMarked`, AuthMiddleware, this.getLikeAndMarked);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
+        this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
         this._router.post(`${this._rootPath}/public`, AuthMiddleware, this.public);
         this._router.patch(`${this._rootPath}/changePublicManager`, AuthMiddleware, this.changePublicManager);
