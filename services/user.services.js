@@ -170,6 +170,34 @@ class UserService extends Service {
       throw new NotFoundException("Cannot find your user");
     }
   }
+
+  async isFollowed(userId, authorId) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+    if(!user.followers) {
+      return false
+    }
+    return user.followers.includes(authorId);
+  }
+
+  async followUser(userId, authorId) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+    if (user.followers.includes(authorId)) {
+      // Unfollow the author
+      user.followers = user.followers.filter(follower => follower.toString() !== authorId.toString());
+    }
+    else {
+      // Follow the author
+      user.followers.push(authorId);
+    }
+    await user.save();
+    return user.followers.includes(authorId);
+  }
 }
 
 module.exports = new UserService();

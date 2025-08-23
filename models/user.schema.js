@@ -17,6 +17,7 @@ const userSchema = new Schema(
       type: Number,
       default: 0,
     },
+    followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
     email: String,
     activate: Boolean,
     activate_code: String,

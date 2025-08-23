@@ -82,7 +82,7 @@ class PostService extends Service {
         console.log('postId', postId);
         
         const post = await Post.findById(postId).populate('category', "name")
-            .populate('author', 'username email')
+            .populate('author', 'username email avatar')
             .populate('tags', 'name')
             .populate('image', 'url description');
 

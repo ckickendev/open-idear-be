@@ -99,14 +99,15 @@ class PostController extends Controller {
     });
 
 
-    getLikeAndMarked = asyncHandler(async (req, res) => {
-        console.log('Call function getLikeAndMarked');
+    getSideInformation = asyncHandler(async (req, res) => {
+        console.log('Call function getSideInformation');
         const { _id } = req.userInfo;
         const postId = req.query.postId;
 
         const post = await postService.getPostById(postId);
+        const isFollowed = await userService.isFollowed(_id, post.author._id);
         if (!post) return res.status(404).json({ message: "Post not found" });
-        res.status(200).json({ isLiked: post.likes.includes(_id), isBookmarked: post.marked.includes(_id) });
+        res.status(200).json({ isLiked: post.likes.includes(_id), isBookmarked: post.marked.includes(_id), isFollowed: isFollowed });
     });
     
 
@@ -207,6 +208,16 @@ class PostController extends Controller {
         res.status(200).json({ likePost, message: "Get like success" });
     });
 
+    followUser = asyncHandler(async (req, res) => {
+        console.log('Call function followUser');
+        const { postId } = req.query;
+        const { _id } = req.userInfo;
+        const post = await postService.getPostById(postId);
+        if (!post) return res.status(404).json({ message: "Post not found" });
+        const isFollowed = await userService.followUser(_id, post.author._id);
+        return res.status(200).json({ isFollowed });
+    });
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getPostToEdit`, AuthMiddleware, this.getPostToEdit);
@@ -217,7 +228,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
         this._router.get(`${this._rootPath}/getLikeByUser`, AuthMiddleware, this.getLikeByUser);
-        this._router.get(`${this._rootPath}/getLikeAndMarked`, AuthMiddleware, this.getLikeAndMarked);
+        this._router.get(`${this._rootPath}/getSideInformation`, AuthMiddleware, this.getSideInformation);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
@@ -225,6 +236,7 @@ class PostController extends Controller {
         this._router.patch(`${this._rootPath}/changePublicManager`, AuthMiddleware, this.changePublicManager);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
         this._router.patch(`${this._rootPath}/status/:id`, AdminMiddleware, this.updateStatus);
+        this._router.patch(`${this._rootPath}/followUser`, AuthMiddleware, this.followUser);
     };
 }
 
