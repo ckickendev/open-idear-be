@@ -82,11 +82,8 @@ class PostController extends Controller {
 
     getPostByAuthor = asyncHandler(async (req, res) => {
         console.log('getPostByAuthor');
-        const { _id } = req.userInfo;
+        const _id = req.query.profileId || req.userInfo._id;
         const posts = await postService.getPostByUser(_id);
-
-        if (posts.length === 0)
-            return res.status(404).json({ message: "Post not found" });
 
         res.status(200).json({ posts });
     });
@@ -202,7 +199,7 @@ class PostController extends Controller {
     getLikeByUser = asyncHandler(async (req, res) => {
         console.log('Call function getLikeByUser');
 
-        const { _id } = req.userInfo;
+        const _id = req.query.profileId || req.userInfo._id;
         const likePost = await postService.getPostLikeById(_id);
 
         res.status(200).json({ likePost, message: "Get like success" });

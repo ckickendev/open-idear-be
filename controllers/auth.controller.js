@@ -73,6 +73,29 @@ class AuthController extends Controller {
     return res.status(200).json({ message: "success", userInfo: userFilter });
   }
 
+  async getProfileById(req, res) {
+    const userId = req.query.id;
+    console.log("userId", userId);
+    
+    const userInfo = await userServices.findUserById(userId);
+    if (!userInfo) throw new NotFoundException("User not found !");
+
+    const userFilter = {
+      _id: userInfo._id,
+      username: userInfo.username,
+      name: userInfo.name,
+      email: userInfo.email,
+      role: userInfo.role,
+      activate: userInfo.activate,
+      createdAt: userInfo.createdAt,
+      bio: userInfo.bio,
+      avatar: userInfo.avatar,
+      background: userInfo.background,
+    };
+
+    return res.status(200).json({ message: "success", userInfo: userFilter });
+  }
+
   async validateBeforeLogin(req, res, next) {
     const { account, password } = req.body;
 
@@ -178,6 +201,11 @@ class AuthController extends Controller {
         path: "/getProfile",
         middlewares: [AuthMiddleware /*, AdminMiddleware*/],
         handler: this.getProfile,
+      },
+      {
+        method: "get",
+        path: "/getProfileById",
+        handler: this.getProfileById,
       },
       {
         method: "post",
