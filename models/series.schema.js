@@ -11,7 +11,7 @@ const seriesSchema = new Schema(
         description: { type: String, default: "" },
         slug: { type: String, required: true, unique: true },
         user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
-        post: [{ type: mongoose.Schema.Types.ObjectId, ref: "post" }],
+        posts: [{ type: mongoose.Schema.Types.ObjectId, ref: "post" }],
     },
     {
         timestamps: true,

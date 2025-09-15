@@ -76,8 +76,11 @@ class AuthController extends Controller {
   async getProfileById(req, res) {
     const userId = req.query.id;
     console.log("userId", userId);
+
+    const userLogin = req.userInfo._id;
     
     const userInfo = await userServices.findUserById(userId);
+    const isFollowed = await userServices.isFollowed(userLogin, userId);
     if (!userInfo) throw new NotFoundException("User not found !");
 
     const userFilter = {
@@ -91,6 +94,7 @@ class AuthController extends Controller {
       bio: userInfo.bio,
       avatar: userInfo.avatar,
       background: userInfo.background,
+      isFollowed: isFollowed,
     };
 
     return res.status(200).json({ message: "success", userInfo: userFilter });
@@ -205,6 +209,7 @@ class AuthController extends Controller {
       {
         method: "get",
         path: "/getProfileById",
+        middlewares: [AuthMiddleware /*, AdminMiddleware*/],
         handler: this.getProfileById,
       },
       {

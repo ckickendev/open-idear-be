@@ -172,6 +172,9 @@ class UserService extends Service {
   }
 
   async isFollowed(userId, authorId) {
+    if(userId.toString() === authorId.toString()) {
+      return null;
+    }
     const user = await User.findById(userId);
     if (!user) {
       throw new NotFoundException("User not found");

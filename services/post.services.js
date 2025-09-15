@@ -62,6 +62,23 @@ class PostService extends Service {
 
     }
 
+    async getSeriesByUser(id) {
+        if (!id) {
+            throw new NotFoundException("User not found");
+        }
+        try {
+            const series = await Series.find({ user: id })
+                .populate('user', 'username email')
+                .populate('posts', 'title slug');
+
+            return series;
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+
+    }
+
     async addPost(post) {
         const slug = this.slugify(post.title);
         const newPost = new Post({

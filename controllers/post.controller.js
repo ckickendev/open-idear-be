@@ -26,7 +26,7 @@ class PostController extends Controller {
         const { _id } = req.userInfo;
 
         const post = await postService.getPostById(postId);
-        
+
         if (!post) return res.status(404).json({ message: "Post not found" });
 
         if (post.author._id.toString() !== _id.toString())
@@ -40,7 +40,7 @@ class PostController extends Controller {
         const { id } = req.params;
 
         const post = await postService.getPostById(id);
-        
+
         if (!post) return res.status(404).json({ message: "Post not found" });
         res.status(200).json({ post });
     });
@@ -88,6 +88,23 @@ class PostController extends Controller {
         res.status(200).json({ posts });
     });
 
+    getPostByAuthorId = asyncHandler(async (req, res) => {
+        console.log('getPostByAuthorId');
+        const profileId = req.query.profileId;
+        const posts = await postService.getPostByUser(profileId);
+
+        res.status(200).json({ posts });
+    });
+
+
+    getSeriesByAuthorId = asyncHandler(async (req, res) => {
+        console.log('getSeriesByAuthorId');
+        const profileId = req.query.profileId;
+        const series = await postService.getSeriesByUser(profileId);
+
+        res.status(200).json({ series });
+    });
+
     getLastestPostByUser = asyncHandler(async (req, res) => {
         console.log('Call function get lastest post by user');
         const { userId } = req.body;
@@ -106,7 +123,7 @@ class PostController extends Controller {
         if (!post) return res.status(404).json({ message: "Post not found" });
         res.status(200).json({ isLiked: post.likes.includes(_id), isBookmarked: post.marked.includes(_id), isFollowed: isFollowed });
     });
-    
+
 
     create = asyncHandler(async (req, res) => {
         console.log('Call function create Post');
@@ -165,7 +182,7 @@ class PostController extends Controller {
         const { id } = req.query;
         const { published } = req.body;
         const post = await postService.getPostById(id);
-        if (!post) return res.status(404).json({ message: "Post not found" }); 
+        if (!post) return res.status(404).json({ message: "Post not found" });
         if (post.published === published)
             return res.status(400).json({ message: "Post already has this status" });
         const updatedPost = await postService.updateStatusPost(id, published);
@@ -174,7 +191,7 @@ class PostController extends Controller {
 
     update = asyncHandler(async (req, res) => {
         const { postId, title, content, text } = req.body;
-        
+
         const { _id } = req.userInfo;
 
         const post = await postService.getPostById(postId);
@@ -207,11 +224,17 @@ class PostController extends Controller {
 
     followUser = asyncHandler(async (req, res) => {
         console.log('Call function followUser');
+        let isFollowed;
         const { postId } = req.query;
-        const { _id } = req.userInfo;
-        const post = await postService.getPostById(postId);
-        if (!post) return res.status(404).json({ message: "Post not found" });
-        const isFollowed = await userService.followUser(_id, post.author._id);
+        if (postId) {
+            const { _id } = req.userInfo;
+            const post = await postService.getPostById(postId);
+            if (!post) return res.status(404).json({ message: "Post not found" });
+            isFollowed = await userService.followUser(_id, post.author._id);
+        } else {
+            const userId = req.query.userId;
+            isFollowed = await userService.followUser(req.userInfo._id, userId);
+        }
         return res.status(200).json({ isFollowed });
     });
 
@@ -224,6 +247,8 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getHotPostsWeek`, this.getHotPostsWeek);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
+        this._router.get(`${this._rootPath}/getPostByAuthorId`, this.getPostByAuthorId);
+        this._router.get(`${this._rootPath}/getSeriesByAuthorId`, this.getSeriesByAuthorId);
         this._router.get(`${this._rootPath}/getLikeByUser`, AuthMiddleware, this.getLikeByUser);
         this._router.get(`${this._rootPath}/getSideInformation`, AuthMiddleware, this.getSideInformation);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
