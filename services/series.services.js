@@ -15,7 +15,7 @@ class SeriesService extends Service {
         }
         try {
             const series = await Series.find({ user: userId })
-                .populate('post')
+                .populate('posts')
                 .populate('user', 'username email');
 
             const returnSeries = series.map(serie => {
@@ -27,7 +27,7 @@ class SeriesService extends Service {
                         name: serie.user.name,
                         avatar: serie.user.avatar,
                     },
-                    post: serie.post.map(post => ({
+                    posts: serie.posts.map(post => ({
                         _id: post._id,
                         title: post.title,
                         slug: post.slug,

@@ -27,7 +27,7 @@ class PostService extends Service {
                 .populate('tags')
                 .populate('likes')
                 .populate('marked')
-                .populate('author', 'username email')
+                .populate('author', 'username email avatar name')
                 .populate('image', 'url description');
 
             const returnPosts = posts.map(post => {
@@ -39,10 +39,7 @@ class PostService extends Service {
                     slug: post.slug,
                     content: post.content,
                     text: post.text,
-                    author: {
-                        name: post.author.name,
-                        avatar: post.author.avatar,
-                    },
+                    author: post.author,
                     category: post.category ? post.category.name : "Uncategorized",
                     tags: post.tags.map(tag => tag.name),
                     published: post.published,
@@ -68,7 +65,7 @@ class PostService extends Service {
         }
         try {
             const series = await Series.find({ user: id })
-                .populate('user', 'username email')
+                .populate('user', 'username name email avatar')
                 .populate('posts', 'title slug');
 
             return series;
