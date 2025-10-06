@@ -26,7 +26,6 @@ class PostService extends Service {
                 .populate('category')
                 .populate('tags')
                 .populate('likes')
-                .populate('marked')
                 .populate('author', 'username email avatar name')
                 .populate('image', 'url description');
 
@@ -45,9 +44,9 @@ class PostService extends Service {
                     published: post.published,
                     views: post.views,
                     likes: post.likes,
-                    readTime: post.readtime,
+                    marked: post.marked,
+                    readtime: post.readtime,
                     updatedAt: post.updatedAt,
-                    
                 }
             });
 
@@ -66,7 +65,8 @@ class PostService extends Service {
         try {
             const series = await Series.find({ user: id })
                 .populate('user', 'username name email avatar')
-                .populate('posts', 'title slug');
+                .populate('posts', 'title slug')
+                .populate('image', 'url description');
 
             return series;
         } catch (error) {
@@ -78,6 +78,7 @@ class PostService extends Service {
 
     async addPost(post) {
         const slug = this.slugify(post.title);
+        const readPost = post.text.split(" ").length / 225;
         const newPost = new Post({
             _id: new mongoose.Types.ObjectId(),
             title: post.title,
@@ -86,7 +87,8 @@ class PostService extends Service {
             author: post.author,
             category: post.category,
             tags: post.tags,
-            slug
+            slug,
+            readtime: Math.ceil(readPost),
         });
         const returnPost = await Post.create(newPost);
         return returnPost;
@@ -94,7 +96,7 @@ class PostService extends Service {
 
     async getPostById(postId) {
         console.log('postId', postId);
-        
+
         const post = await Post.findById(postId).populate('category', "name")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
@@ -107,10 +109,12 @@ class PostService extends Service {
     }
 
     async updatePost(postId, post) {
+        const readPost = post.text.split(" ").length / 225;
         const updatedPost = await Post.findByIdAndUpdate(postId, {
             title: post.title,
             content: post.content,
             text: post.text,
+            readtime: Math.ceil(readPost),
         }, { new: true });
         return updatedPost;
     }
@@ -126,13 +130,21 @@ class PostService extends Service {
         return likePost;
     }
 
+    async getPostMarkedById(userId) {
+        const markedPost = await Post.find({ marked: { $in: [userId] }, published: true })
+            .populate('author', 'username email avatar')
+            .populate('tags', 'name')
+            .populate('image', 'url description');
+        return markedPost;
+    }
+
     async publicPost(postId, publicInfo) {
         try {
-            if(publicInfo.series) {
+            if (publicInfo.series) {
                 const series = await Series.findById(publicInfo.series);
                 if (series) {
                     console.log('series', series);
-                    
+
                     await Series.findByIdAndUpdate(series, {
                         $push: { posts: postId }
                     });
@@ -141,7 +153,7 @@ class PostService extends Service {
                 }
             }
 
-            if(publicInfo.category) {
+            if (publicInfo.category) {
                 const category = await Category.findById(publicInfo.category);
                 if (!category) {
                     throw new NotFoundException("Category not found");
@@ -162,22 +174,22 @@ class PostService extends Service {
     }
 
     async markedPost(postId, userId) {
-        try {
-            const post = await Post.findById(postId);
-            if (!post) {
-                throw new NotFoundException("Post not found");
-            }
-            if (post.marked.includes(userId)) {
-                post.marked.pull(userId);
-            } else {
-                post.marked.push(userId);
-            }
-            await post.save();
-            return post.marked.includes(userId);
-        } catch (error) {
-            console.error('Error marking post:', error);
-            throw new ServerException("Error marking post");
+
+        const post = await Post.findById(postId);
+        if (!post) {
+            throw new NotFoundException("Post not found");
         }
+        if (post.published === false) {
+            throw new NotFoundException("Post not published");
+        }
+        if (post.marked.includes(userId)) {
+            post.marked.pull(userId);
+        } else {
+            post.marked.push(userId);
+        }
+        await post.save();
+        return post.marked.includes(userId);
+
     }
 
     async calculateHotScore(post) {
@@ -187,12 +199,12 @@ class PostService extends Service {
         const likesCount = post.likes.length;
         const commentsCount = post.comments.length;
         const views = post.views;
-        
+
         // Hot score formula (you can adjust weights)
         const score = (likesCount * 3 + commentsCount * 2 + views * 0.1) / Math.pow(postAge + 1, 0.8);
 
         console.log('Hot score for post', post._id, 'is', score);
-        
+
         return score;
     };
 
@@ -202,10 +214,10 @@ class PostService extends Service {
             // Get posts from today
             const startOfDay = new Date();
             startOfDay.setHours(0, 0, 0, 0);
-            
+
             const endOfDay = new Date();
             endOfDay.setHours(23, 59, 59, 999);
-            
+
             const posts = await Post.find({
                 published: true,
                 del_flag: 0,
@@ -214,27 +226,27 @@ class PostService extends Service {
                 //     $lte: endOfDay
                 // }
             })
-            .populate('author', 'name username avatar')
-            .populate('category', 'name slug')
-            .populate('tags', 'name slug')
-            .populate('image', 'url description')
-            .lean();
+                .populate('author', 'name username avatar')
+                .populate('category', 'name slug')
+                .populate('tags', 'name slug')
+                .populate('image', 'url description')
+                .lean();
 
             // Calculate hot scores and sort
             const postsWithScores = posts.map(post => ({
                 ...post,
                 hotScore: this.calculateHotScore(post)
             }));
-            
+
             postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
-            
+
             // Pagination
             const skip = (page - 1) * limit;
             const paginatedPosts = postsWithScores.slice(skip, skip + parseInt(limit));
 
             return paginatedPosts;
 
-            
+
         } catch (error) {
             throw new ServerException("Error fetching hot posts");
         }
@@ -256,33 +268,32 @@ class PostService extends Service {
                     $lte: now           // Until now
                 }
             })
-            .populate('author', 'name username avatar')
-            .populate('category', 'name slug')
-            .populate('tags', 'name slug')
-            .populate('image', 'url description')
-            .lean();
+                .populate('author', 'name username avatar')
+                .populate('category', 'name slug')
+                .populate('tags', 'name slug')
+                .populate('image', 'url description')
+                .lean();
 
             // console.log('posts', posts);
-            
+
             // Calculate hot scores and sort
             const postsWithScores = posts.map(post => ({
                 ...post,
                 hotScore: this.calculateHotScore(post)
             }));
-            
             postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
-            
+
             // Pagination
             const skip = (page - 1) * limit;
             const paginatedPosts = postsWithScores.slice(skip, skip + parseInt(limit));
-            
+
             return paginatedPosts;
         } catch (error) {
             console.error('Error fetching hot posts this week:', error);
             res.status(500).json({
-            success: false,
-            message: 'Error fetching hot posts',
-            error: error.message
+                success: false,
+                message: 'Error fetching hot posts',
+                error: error.message
             });
         }
     };
@@ -291,140 +302,140 @@ class PostService extends Service {
     async getHotPostsAggregation(req, res) {
         try {
             const { period = 'week', limit = 10, page = 1 } = req.query;
-            
+
             // Calculate date range
             const now = new Date();
             let startDate;
-            
+
             if (period === 'day') {
-            startDate = new Date();
-            startDate.setHours(0, 0, 0, 0);
+                startDate = new Date();
+                startDate.setHours(0, 0, 0, 0);
             } else if (period === 'week') {
-            startDate = new Date();
-            startDate.setDate(startDate.getDate() - 7);
+                startDate = new Date();
+                startDate.setDate(startDate.getDate() - 7);
             } else {
-            startDate = new Date();
-            startDate.setDate(startDate.getDate() - 30); // month
+                startDate = new Date();
+                startDate.setDate(startDate.getDate() - 30); // month
             }
-            
+
             const pipeline = [
-            // Match published posts within date range
-            {
-                $match: {
-                published: true,
-                del_flag: 0,
-                createdAt: { $gte: startDate }
-                }
-            },
-            
-            // Add calculated fields
-            {
-                $addFields: {
-                likesCount: { $size: '$likes' },
-                commentsCount: { $size: '$comments' },
-                ageInHours: {
-                    $divide: [
-                    { $subtract: [now, '$createdAt'] },
-                    1000 * 60 * 60 // Convert to hours
-                    ]
-                }
-                }
-            },
-            
-            // Calculate hot score
-            {
-                $addFields: {
-                hotScore: {
-                    $divide: [
-                    {
-                        $add: [
-                        { $multiply: ['$likesCount', 3] },
-                        { $multiply: ['$commentsCount', 2] },
-                        { $multiply: ['$views', 0.1] }
-                        ]
-                    },
-                    { $pow: [{ $add: ['$ageInHours', 1] }, 0.8] }
-                    ]
-                }
-                }
-            },
-            
-            // Sort by hot score
-            { $sort: { hotScore: -1 } },
-            
-            // Pagination
-            { $skip: (page - 1) * parseInt(limit) },
-            { $limit: parseInt(limit) },
-            
-            // Populate references
-            {
-                $lookup: {
-                from: 'users',
-                localField: 'author',
-                foreignField: '_id',
-                as: 'author',
-                pipeline: [{ $project: { name: 1, username: 1, avatar: 1 } }]
-                }
-            },
-            {
-                $lookup: {
-                from: 'categories',
-                localField: 'category',
-                foreignField: '_id',
-                as: 'category',
-                pipeline: [{ $project: { name: 1, slug: 1 } }]
-                }
-            },
-            {
-                $lookup: {
-                from: 'tags',
-                localField: 'tags',
-                foreignField: '_id',
-                as: 'tags',
-                pipeline: [{ $project: { name: 1, slug: 1 } }]
-                }
-            },
-            
-            // Unwind author and category (single objects)
-            { $unwind: { path: '$author', preserveNullAndEmptyArrays: true } },
-            { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } }
+                // Match published posts within date range
+                {
+                    $match: {
+                        published: true,
+                        del_flag: 0,
+                        createdAt: { $gte: startDate }
+                    }
+                },
+
+                // Add calculated fields
+                {
+                    $addFields: {
+                        likesCount: { $size: '$likes' },
+                        commentsCount: { $size: '$comments' },
+                        ageInHours: {
+                            $divide: [
+                                { $subtract: [now, '$createdAt'] },
+                                1000 * 60 * 60 // Convert to hours
+                            ]
+                        }
+                    }
+                },
+
+                // Calculate hot score
+                {
+                    $addFields: {
+                        hotScore: {
+                            $divide: [
+                                {
+                                    $add: [
+                                        { $multiply: ['$likesCount', 3] },
+                                        { $multiply: ['$commentsCount', 2] },
+                                        { $multiply: ['$views', 0.1] }
+                                    ]
+                                },
+                                { $pow: [{ $add: ['$ageInHours', 1] }, 0.8] }
+                            ]
+                        }
+                    }
+                },
+
+                // Sort by hot score
+                { $sort: { hotScore: -1 } },
+
+                // Pagination
+                { $skip: (page - 1) * parseInt(limit) },
+                { $limit: parseInt(limit) },
+
+                // Populate references
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'author',
+                        foreignField: '_id',
+                        as: 'author',
+                        pipeline: [{ $project: { name: 1, username: 1, avatar: 1 } }]
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'categories',
+                        localField: 'category',
+                        foreignField: '_id',
+                        as: 'category',
+                        pipeline: [{ $project: { name: 1, slug: 1 } }]
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'tags',
+                        localField: 'tags',
+                        foreignField: '_id',
+                        as: 'tags',
+                        pipeline: [{ $project: { name: 1, slug: 1 } }]
+                    }
+                },
+
+                // Unwind author and category (single objects)
+                { $unwind: { path: '$author', preserveNullAndEmptyArrays: true } },
+                { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } }
             ];
-            
+
             const posts = await Post.aggregate(pipeline);
-            
+
             // Get total count for pagination
             const countPipeline = [
-            {
-                $match: {
-                published: true,
-                del_flag: 0,
-                createdAt: { $gte: startDate }
-                }
-            },
-            { $count: 'total' }
+                {
+                    $match: {
+                        published: true,
+                        del_flag: 0,
+                        createdAt: { $gte: startDate }
+                    }
+                },
+                { $count: 'total' }
             ];
-            
+
             const countResult = await Post.aggregate(countPipeline);
             const totalPosts = countResult[0]?.total || 0;
-            
+
             res.json({
-            success: true,
-            data: posts,
-            pagination: {
-                currentPage: parseInt(page),
-                totalPosts,
-                totalPages: Math.ceil(totalPosts / limit),
-                hasNext: page * limit < totalPosts,
-                hasPrev: page > 1
-            }
+                success: true,
+                data: posts,
+                pagination: {
+                    currentPage: parseInt(page),
+                    totalPosts,
+                    totalPages: Math.ceil(totalPosts / limit),
+                    hasNext: page * limit < totalPosts,
+                    hasPrev: page > 1
+                }
             });
-            
+
         } catch (error) {
             console.error('Error fetching hot posts:', error);
             res.status(500).json({
-            success: false,
-            message: 'Error fetching hot posts',
-            error: error.message
+                success: false,
+                message: 'Error fetching hot posts',
+                error: error.message
             });
         }
     };

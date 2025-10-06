@@ -26,8 +26,8 @@ const postSchema = new Schema(
       default: 0
     },
     readtime: {
-      type: String,
-      default: "0 min read"
+      type: Number,
+      default: 0
     },
   },
   {

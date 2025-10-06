@@ -91,7 +91,7 @@ class PostController extends Controller {
     getPostByAuthorId = asyncHandler(async (req, res) => {
         console.log('getPostByAuthorId');
         const profileId = req.query.profileId;
-        const posts = await postService.getPostByUser(profileId);
+        const posts = await  postService.getPostByUser(profileId);
 
         res.status(200).json({ posts });
     });
@@ -215,11 +215,17 @@ class PostController extends Controller {
 
     getLikeByUser = asyncHandler(async (req, res) => {
         console.log('Call function getLikeByUser');
-
-        const _id = req.query.profileId || req.userInfo._id;
+        const _id = req.query.profileId;
         const likePost = await postService.getPostLikeById(_id);
 
         res.status(200).json({ likePost, message: "Get like success" });
+    });
+
+    getMarkedByUser = asyncHandler(async (req, res) => {
+        console.log('Call function getMarkedByUser');
+        const _id = req.query.profileId;
+        const markedPost = await postService.getPostMarkedById(_id);
+        res.status(200).json({ markedPost, message: "Get marked success" });
     });
 
     followUser = asyncHandler(async (req, res) => {
@@ -238,6 +244,18 @@ class PostController extends Controller {
         return res.status(200).json({ isFollowed });
     });
 
+    markedPost = asyncHandler(async (req, res) => {
+        console.log('Call function markedPost');
+        const { postId } = req.body;
+        const { _id } = req.userInfo;
+        try {
+            const isMarked = await postService.markedPost(postId, _id);
+            return res.status(200).json({ isMarked });
+        } catch (error) {
+            return res.status(500).json({ message: error.message });
+        }
+    });
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getPostToEdit`, AuthMiddleware, this.getPostToEdit);
@@ -249,7 +267,8 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
         this._router.get(`${this._rootPath}/getPostByAuthorId`, this.getPostByAuthorId);
         this._router.get(`${this._rootPath}/getSeriesByAuthorId`, this.getSeriesByAuthorId);
-        this._router.get(`${this._rootPath}/getLikeByUser`, AuthMiddleware, this.getLikeByUser);
+        this._router.get(`${this._rootPath}/getLikeByUser`, this.getLikeByUser);
+        this._router.get(`${this._rootPath}/getMarkedByUser`, this.getMarkedByUser);
         this._router.get(`${this._rootPath}/getSideInformation`, AuthMiddleware, this.getSideInformation);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
@@ -259,6 +278,7 @@ class PostController extends Controller {
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
         this._router.patch(`${this._rootPath}/status/:id`, AdminMiddleware, this.updateStatus);
         this._router.patch(`${this._rootPath}/followUser`, AuthMiddleware, this.followUser);
+        this._router.patch(`${this._rootPath}/markPost`, AuthMiddleware, this.markedPost);
     };
 }
 
