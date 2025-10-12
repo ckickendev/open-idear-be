@@ -47,6 +47,14 @@ class SeriesController extends Controller {
         }
     });
 
+    getSeriesByAuthorId = asyncHandler(async (req, res) => {
+        console.log('getSeriesByAuthorId');
+        const profileId = req.query.profileId;
+        const series = await seriesService.getSeriesByUser(profileId);
+
+        res.status(200).json({ series });
+    });
+
     createSeries = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
         const series = await seriesService.createSeries({
@@ -91,6 +99,7 @@ class SeriesController extends Controller {
         this._router.get(`${this._rootPath}`, this.getSeries);
         this._router.get(`${this._rootPath}/getByUser`, AuthMiddleware, this.getSeriesByUser);
         this._router.get(`${this._rootPath}/getMarkedByUser`, this.getMarkedByUser);
+        this._router.get(`${this._rootPath}/getSeriesByAuthorId`, this.getSeriesByAuthorId);
         this._router.post(`${this._rootPath}/create`, AuthMiddleware, this.createSeries);
         this._router.patch(`${this._rootPath}/edit`, AuthMiddleware, this.editSeries);
         this._router.patch(`${this._rootPath}/markSeries`, AuthMiddleware, this.markSeries);

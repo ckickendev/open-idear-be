@@ -3,6 +3,7 @@ const { Controller } = require("../core");
 const { postService, userService } = require("../services");
 const { AuthMiddleware, LoginMiddleware, AdminMiddleware } = require("../middlewares/auth.middleware");
 const asyncHandler = require("../utils/asyncHandler");
+const categoryServices = require("../services/category.services");
 
 class PostController extends Controller {
     _rootPath = "/post";
@@ -96,15 +97,6 @@ class PostController extends Controller {
         res.status(200).json({ posts });
     });
 
-
-    getSeriesByAuthorId = asyncHandler(async (req, res) => {
-        console.log('getSeriesByAuthorId');
-        const profileId = req.query.profileId;
-        const series = await postService.getSeriesByUser(profileId);
-
-        res.status(200).json({ series });
-    });
-
     getLastestPostByUser = asyncHandler(async (req, res) => {
         console.log('Call function get lastest post by user');
         const { userId } = req.body;
@@ -124,6 +116,16 @@ class PostController extends Controller {
         res.status(200).json({ isLiked: post.likes.includes(_id), isBookmarked: post.marked.includes(_id), isFollowed: isFollowed });
     });
 
+    getRecentlyData = asyncHandler(async (req, res) => {
+        console.log('Call function getRecentlyData');
+        try {
+            const recentlyFeatures = await categoryServices.getRecentlyFeatures();
+            const recentlyPost = await postService.getRecentlyPost();
+            res.status(200).json({ recentlyFeatures, recentlyPost });
+        } catch (error) {
+            return res.status(500).json({ message: error.message });
+        }
+    });
 
     create = asyncHandler(async (req, res) => {
         console.log('Call function create Post');
@@ -266,10 +268,10 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
         this._router.get(`${this._rootPath}/getPostByAuthorId`, this.getPostByAuthorId);
-        this._router.get(`${this._rootPath}/getSeriesByAuthorId`, this.getSeriesByAuthorId);
         this._router.get(`${this._rootPath}/getLikeByUser`, this.getLikeByUser);
         this._router.get(`${this._rootPath}/getMarkedByUser`, this.getMarkedByUser);
         this._router.get(`${this._rootPath}/getSideInformation`, AuthMiddleware, this.getSideInformation);
+        this._router.get(`${this._rootPath}/getRecentlyData`, this.getRecentlyData);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);

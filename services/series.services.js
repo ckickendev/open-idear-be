@@ -9,39 +9,22 @@ class SeriesService extends Service {
         return tags;
     }
 
-    async getSeriesByUser(userId) {
-        if (!userId) {
+    async getSeriesByUser(id) {
+        if (!id) {
             throw new NotFoundException("User not found");
         }
         try {
-            const series = await Series.find({ user: userId })
-                .populate('posts')
-                .populate('user', 'username email');
+            const series = await Series.find({ user: id })
+                .populate('user', 'username name email avatar')
+                .populate('posts', 'title slug')
+                .populate('image', 'url description');
 
-            const returnSeries = series.map(serie => {
-                return {
-                    _id: serie._id,
-                    title: serie.title,
-                    description: serie.description,
-                    user: {
-                        name: serie.user.name,
-                        avatar: serie.user.avatar,
-                    },
-                    posts: serie.posts.map(post => ({
-                        _id: post._id,
-                        title: post.title,
-                        slug: post.slug,
-                    })),
-                    marked: serie.marked,
-                    createdAt: serie.createdAt,
-                };
-            });
-
-            return returnSeries;
+            return series;
         } catch (error) {
             console.log('error', error);
             throw new ServerException("error");
         }
+
     }
 
     async getMarkedByUser(userId) {
@@ -50,29 +33,10 @@ class SeriesService extends Service {
         }
         try {
             const series = await Series.find({ marked: userId })
-                .populate('posts')
-                .populate('user', 'username email');
-
-            const returnSeries = series.map(serie => {
-                return {
-                    _id: serie._id,
-                    title: serie.title,
-                    description: serie.description,
-                    user: {
-                        name: serie.user.name,
-                        avatar: serie.user.avatar,
-                    },
-                    posts: serie.posts.map(post => ({
-                        _id: post._id,
-                        title: post.title,
-                        slug: post.slug,
-                    })),
-                    marked: serie.marked,
-                    createdAt: serie.createdAt,
-                };
-            });
-
-            return returnSeries;
+                .populate('user', 'username name email avatar')
+                .populate('posts', 'title slug')
+                .populate('image', 'url description');
+            return series;
         } catch (error) {
             console.log('error', error);
             throw new ServerException("error when get marked series");
@@ -111,7 +75,9 @@ class SeriesService extends Service {
             }
             if (title) series.title = title;
             if (description) series.description = description;
-            if (image) series.image = image._id;
+            if (image) {
+                if (image) series.image = image._id;
+            }
             
             await series.save();
             return series;
