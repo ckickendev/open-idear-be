@@ -9,6 +9,11 @@ class CategoryService extends Service {
         return categories;
     }
 
+    async getRecentlyFeatures() {
+        const categories = await Category.find({ del_flag: 0 }).sort({ createdAt: -1 }).limit(10);
+        return categories;
+    }
+
     async createCategory({ name, description }) {
         const category = new Category({
             _id: new mongoose.Types.ObjectId(),
@@ -44,7 +49,6 @@ class CategoryService extends Service {
         
         return categories;
     }
-
 }
 
 module.exports = new CategoryService();

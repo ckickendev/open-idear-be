@@ -23,7 +23,7 @@ class PostService extends Service {
         }
         try {
             const posts = await Post.find({ author: userId })
-                .populate('category')
+                .populate('category', 'name slug')
                 .populate('tags')
                 .populate('likes')
                 .populate('author', 'username email avatar name')
@@ -39,7 +39,7 @@ class PostService extends Service {
                     content: post.content,
                     text: post.text,
                     author: post.author,
-                    category: post.category ? post.category.name : "Uncategorized",
+                    category: post.category ? post.category : { name: "Uncategorized", slug: "uncategorized" },
                     tags: post.tags.map(tag => tag.name),
                     published: post.published,
                     views: post.views,
@@ -97,7 +97,8 @@ class PostService extends Service {
     async getPostById(postId) {
         console.log('postId', postId);
 
-        const post = await Post.findById(postId).populate('category', "name")
+        const post = await Post.findById(postId)
+            .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
             .populate('image', 'url description');
@@ -106,6 +107,25 @@ class PostService extends Service {
             return null;
         }
         return post;
+    }
+
+    async getRecentlyData() {
+        const categories = await Category.find({ del_flag: 0 }).sort({ createdAt: -1 }).limit(30);
+        const categoryIds = categories.map(cat => cat._id);
+
+        const posts = await Post.find({
+            category: { $in: categoryIds },
+            del_flag: 0,
+            published: true
+        })
+            .sort({ createdAt: -1 })
+            .limit(7)
+            .populate('category', "name slug")
+            .populate('author', 'username email avatar')
+            .populate('tags', 'name')
+            .populate('image', 'url description');
+
+        return { categories, posts };
     }
 
     async updatePost(postId, post) {
@@ -132,6 +152,7 @@ class PostService extends Service {
 
     async getPostMarkedById(userId) {
         const markedPost = await Post.find({ marked: { $in: [userId] }, published: true })
+            .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
             .populate('image', 'url description');

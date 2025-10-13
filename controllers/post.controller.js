@@ -119,9 +119,8 @@ class PostController extends Controller {
     getRecentlyData = asyncHandler(async (req, res) => {
         console.log('Call function getRecentlyData');
         try {
-            const recentlyFeatures = await categoryServices.getRecentlyFeatures();
-            const recentlyPost = await postService.getRecentlyPost();
-            res.status(200).json({ recentlyFeatures, recentlyPost });
+            const recentlyData = await postService.getRecentlyData();
+            res.status(200).json({ recentlyData });
         } catch (error) {
             return res.status(500).json({ message: error.message });
         }
