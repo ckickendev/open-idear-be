@@ -110,11 +110,9 @@ class PostService extends Service {
     }
 
     async getRecentlyData() {
-        const categories = await Category.find({ del_flag: 0 }).sort({ createdAt: -1 }).limit(30);
-        const categoryIds = categories.map(cat => cat._id);
+        const categories = await Category.find({ del_flag: 0 }).sort({ updatedAt: -1 }).limit(30);
 
         const posts = await Post.find({
-            category: { $in: categoryIds },
             del_flag: 0,
             published: true
         })
