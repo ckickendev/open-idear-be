@@ -110,18 +110,24 @@ class PostService extends Service {
     }
 
     async getRecentlyData() {
-        const categories = await Category.find({ del_flag: 0 }).sort({ updatedAt: -1 }).limit(30);
-
         const posts = await Post.find({
             del_flag: 0,
             published: true
         })
             .sort({ createdAt: -1 })
-            .limit(7)
+            .limit(15)
             .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
             .populate('image', 'url description');
+
+        const categories = posts.reduce((acc, post) => {
+            const category = post.category;
+            if (category && !acc.find(cat => cat._id.toString() === category._id.toString())) {
+                acc.push(category);
+            }
+            return acc;
+        }, []);
 
         return { categories, posts };
     }
@@ -458,6 +464,35 @@ class PostService extends Service {
             });
         }
     };
+
+    getRecentlyDataByFeatures = async (features) => {
+        try {
+            if (features === 'all' || !features) {
+                const posts = await Post.find({ del_flag: 0, published: true })
+                    .sort({ createdAt: -1 })
+                    .limit(15)
+                    .populate('category', "name slug")
+                    .populate('author', 'username email avatar')
+                    .populate('tags', 'name')
+                    .populate('image', 'url description');
+                return { posts };
+            }
+            const category = await Category.findOne({ slug: features });
+            const posts = await Post.find({ del_flag: 0, published: true, category: category._id })
+                .sort({ createdAt: -1 })
+                .limit(7)
+                .populate('category', "name slug")
+                .populate('author', 'username email avatar')
+                .populate('tags', 'name')
+                .populate('image', 'url description');
+
+
+            return { posts };
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+    }
 
     slugify(str) {
         str = str.replace(/^\s+|\s+$/g, ''); // trim leading/trailing white space

@@ -126,6 +126,17 @@ class PostController extends Controller {
         }
     });
 
+    getRecentlyDataByFeatures = asyncHandler(async (req, res) => {
+        console.log('Call function getRecentlyDataByFeatures');
+        try {
+            const features = req.query.feature ? req.query.feature : null;
+            const recentlyData = await postService.getRecentlyDataByFeatures(features);
+            res.status(200).json({ recentlyData });
+        } catch (error) {
+            return res.status(500).json({ message: error.message });
+        }
+    });
+
     create = asyncHandler(async (req, res) => {
         console.log('Call function create Post');
         const { _id } = req.userInfo;
@@ -271,6 +282,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getMarkedByUser`, this.getMarkedByUser);
         this._router.get(`${this._rootPath}/getSideInformation`, AuthMiddleware, this.getSideInformation);
         this._router.get(`${this._rootPath}/getRecentlyData`, this.getRecentlyData);
+        this._router.get(`${this._rootPath}/getRecentlyDataByFeatures`, this.getRecentlyDataByFeatures);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);

@@ -30,7 +30,7 @@ const confirmTokenEmail = (token, link) => {
               <img
                 src="${process.env.LOGO}"
                 height="75"
-                alt="Your logo"
+                alt="Your logo open idear"
                 border="0"
                 style="
                   font-family: sans-serif;
@@ -227,7 +227,7 @@ const confirmResetPass = (link) => {
             <img
               src="${process.env.LOGO}"
               height="75"
-              alt="Your logo"
+              alt="Your logo open idear"
               border="0"
               style="
                 font-family: sans-serif;
