@@ -2,6 +2,7 @@ const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { Post, Like, Series, Category } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
+const { default: slugify } = require("slugify");
 
 class PostService extends Service {
     async getAll() {
@@ -77,7 +78,10 @@ class PostService extends Service {
     }
 
     async addPost(post) {
-        const slug = this.slugify(post.title);
+        const slug = slugify(post.title, {
+            lower: true,
+            strict: true,
+        });
         const readPost = post.text.split(" ").length / 225;
         const newPost = new Post({
             _id: new mongoose.Types.ObjectId(),
@@ -139,6 +143,10 @@ class PostService extends Service {
             content: post.content,
             text: post.text,
             readtime: Math.ceil(readPost),
+            slug: slugify(post.title, {
+                lower: true,
+                strict: true,
+            }),
         }, { new: true });
         return updatedPost;
     }
@@ -492,15 +500,6 @@ class PostService extends Service {
             console.log('error', error);
             throw new ServerException("error");
         }
-    }
-
-    slugify(str) {
-        str = str.replace(/^\s+|\s+$/g, ''); // trim leading/trailing white space
-        str = str.toLowerCase(); // convert string to lowercase
-        str = str.replace(/[^a-z0-9 -]/g, '') // remove any non-alphanumeric characters
-            .replace(/\s+/g, '-') // replace spaces with hyphens
-            .replace(/-+/g, '-'); // remove consecutive hyphens
-        return str;
     }
 
 }
