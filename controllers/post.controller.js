@@ -46,6 +46,16 @@ class PostController extends Controller {
         res.status(200).json({ post });
     });
 
+    getPostBySlug = asyncHandler(async (req, res) => {
+        console.log('Call function get post by Slug');
+        const { slug } = req.params;
+
+        const post = await postService.getPostBySlug(slug);
+
+        if (!post) return res.status(404).json({ message: "Post not found" });
+        res.status(200).json({ post });
+    });
+
     getHotTopics = asyncHandler(async (req, res) => {
         console.log('Call function get hot topics');
         const { limit = 10, page = 1 } = req.query;
@@ -272,6 +282,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getPostToEdit`, AuthMiddleware, this.getPostToEdit);
         this._router.get(`${this._rootPath}/getPostByID/:id`, this.getPostByID);
+        this._router.get(`${this._rootPath}/getPostBySlug/:slug`, this.getPostBySlug);
         this._router.get(`${this._rootPath}/getHotTopics`, this.getHotTopics);
         this._router.get(`${this._rootPath}/getHotPostsToday`, this.getHotTopics);
         this._router.get(`${this._rootPath}/getHotPostsWeek`, this.getHotPostsWeek);

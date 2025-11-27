@@ -99,9 +99,20 @@ class PostService extends Service {
     }
 
     async getPostById(postId) {
-        console.log('postId', postId);
-
         const post = await Post.findById(postId)
+            .populate('category', "name slug")
+            .populate('author', 'username email avatar')
+            .populate('tags', 'name')
+            .populate('image', 'url description');
+
+        if (!post) {
+            return null;
+        }
+        return post;
+    }
+
+    async getPostBySlug(slug) {
+        const post = await Post.findOne({ slug: slug, published: true, del_flag: 0 })
             .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
