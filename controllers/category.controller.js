@@ -35,6 +35,36 @@ class CategoryController extends Controller {
         });
     });
 
+    getCategoryBySlug = asyncHandler(async (req, res) => {
+        const { slug } = req.params;
+        if (!slug) {
+            return res.status(400).json({ message: "Slug is required" });
+        }
+
+        const category = await categorieService.getCategoryBySlug(slug);
+        console.log("getCategoryBySlug category:", category);
+
+        if (!category) {
+            return res.status(404).json({ message: "Category not found" });
+        }
+
+        res.json({ category });
+    });
+
+    getPostsByCategorySlug = asyncHandler(async (req, res) => {
+        const { slug } = req.params;
+        if (!slug) {
+            return res.status(400).json({ message: "Slug is required" });
+        }
+
+        const posts = await categorieService.getPostsByCategorySlug(slug);
+        if (!posts) {
+            return res.status(404).json({ message: "No posts found for this category" });
+        }
+
+        res.json({ posts });
+    });
+
     createCategory = asyncHandler(async (req, res) => {
         const { name, description } = req.body;
 
@@ -84,6 +114,8 @@ class CategoryController extends Controller {
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getRandomTopic`, this.getRandomTopic);
+        this._router.get(`${this._rootPath}/getCategoryBySlug/:slug`, this.getCategoryBySlug);
+        this._router.get(`${this._rootPath}/getPostsByCategorySlug/:slug`, this.getPostsByCategorySlug);
         this._router.post(`${this._rootPath}/create`, AdminMiddleware, this.createCategory);
         this._router.patch(`${this._rootPath}/update/:id`, AdminMiddleware, this.updateCategory);
         this._router.delete(`${this._rootPath}/delete/:id`, AdminMiddleware, this.deleteCategory);
