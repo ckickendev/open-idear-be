@@ -16,19 +16,42 @@ class CategoryService extends Service {
 
     async getCategoryBySlug(slug) {
         const category = await Category.findOne({ slug, del_flag: 0 });
-        return category;
+        const countData = (await Post.find({ category: category._id })).length;
+        return { ...category._doc, countData };
     }
 
-    async getPostsByCategorySlug(slug) {
+    async getPostsByCategorySlug(slug, page) {
         const category = await Category.findOne({ slug, del_flag: 0 });
         if (!category) {
             return null;
         }
 
         const posts = await Post.find({ category: category._id })
+            .skip((page - 1) * 6)
+            .limit(6)
+            .sort({ createdAt: -1 })
             .populate('category', "name")
             .populate('author', 'username email')
             .populate('image', 'url description');
+        return posts;
+    }
+
+    async getPostsInAnotherCategorySlug(slug, number) {
+        const category = await Category.findOne({ slug, del_flag: 0 });
+        if (!category) {
+            return null;
+        }
+
+        const posts = await Post.find({
+            category: { $ne: category._id },
+            del_flag: 0
+        })
+            .limit(number)
+            .sort({ createdAt: -1 })
+            .populate('category', "name")
+            .populate('author', 'username email')
+            .populate('image', 'url description');
+
         return posts;
     }
 

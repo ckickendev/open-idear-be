@@ -52,16 +52,28 @@ class CategoryController extends Controller {
     });
 
     getPostsByCategorySlug = asyncHandler(async (req, res) => {
-        const { slug } = req.params;
+        const { slug, page } = req.params;
         if (!slug) {
             return res.status(400).json({ message: "Slug is required" });
         }
 
-        const posts = await categorieService.getPostsByCategorySlug(slug);
+        const posts = await categorieService.getPostsByCategorySlug(slug, page);
         if (!posts) {
             return res.status(404).json({ message: "No posts found for this category" });
         }
 
+        res.json({ posts });
+    });
+
+    getPostsInAnotherCategorySlug = asyncHandler(async (req, res) => {
+        const { slug, number } = req.params;
+        if (!slug) {
+            return res.status(400).json({ message: "Slug is required" });
+        }
+        const posts = await categorieService.getPostsInAnotherCategorySlug(slug, number);
+        if (!posts) {
+            return res.status(404).json({ message: "No posts found for this category" });
+        }
         res.json({ posts });
     });
 
@@ -115,7 +127,8 @@ class CategoryController extends Controller {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getRandomTopic`, this.getRandomTopic);
         this._router.get(`${this._rootPath}/getCategoryBySlug/:slug`, this.getCategoryBySlug);
-        this._router.get(`${this._rootPath}/getPostsByCategorySlug/:slug`, this.getPostsByCategorySlug);
+        this._router.get(`${this._rootPath}/getPostsByCategorySlug/:slug/:page`, this.getPostsByCategorySlug);
+        this._router.get(`${this._rootPath}/getPostsInAnotherCategorySlug/:slug/:number`, this.getPostsInAnotherCategorySlug);
         this._router.post(`${this._rootPath}/create`, AdminMiddleware, this.createCategory);
         this._router.patch(`${this._rootPath}/update/:id`, AdminMiddleware, this.updateCategory);
         this._router.delete(`${this._rootPath}/delete/:id`, AdminMiddleware, this.deleteCategory);

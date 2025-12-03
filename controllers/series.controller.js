@@ -3,7 +3,7 @@ const { Controller } = require("../core");
 const { seriesService } = require("../services");
 const asyncHandler = require("../utils/asyncHandler");
 const { AuthMiddleware } = require("../middlewares/auth.middleware");
-const { slugify } = require("../services/post.services");
+const { default: slugify } = require("slugify");
 
 class SeriesController extends Controller {
     _rootPath = "/series";
@@ -59,7 +59,10 @@ class SeriesController extends Controller {
         const { _id } = req.userInfo;
         const series = await seriesService.createSeries({
             title: req.body.newSeries,
-            slug: slugify(req.body.newSeries),
+            slug: slugify(req.body.newSeries, {
+                lower: true,
+                strict: true,
+            }),
             userId: _id,
         });
         res.status(201).json({
