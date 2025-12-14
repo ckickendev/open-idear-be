@@ -130,7 +130,7 @@ class PostService extends Service {
             published: true
         })
             .sort({ createdAt: -1 })
-            .limit(15)
+            .limit(7)
             .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
@@ -318,19 +318,20 @@ class PostService extends Service {
                 .populate('image', 'url description')
                 .lean();
 
-            // console.log('posts', posts);
-
             // Calculate hot scores and sort
-            const postsWithScores = posts.map(post => ({
-                ...post,
-                hotScore: this.calculateHotScore(post)
-            }));
-            postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
+            for (const post of posts) {
+                const score = await this.calculateHotScore(post);
+                post.hotScore = score;
+            }
+
+            posts.sort((a, b) => b.hotScore - a.hotScore);
 
             // Pagination
             const skip = (page - 1) * limit;
-            const paginatedPosts = postsWithScores.slice(skip, skip + parseInt(limit));
-
+            const paginatedPosts = posts.slice(skip, skip + parseInt(limit));
+            // for (const post of paginatedPosts) {
+            //     console.log('Paginated Post ID:', post._id, 'Hot Score:', post.hotScore);
+            // }
             return paginatedPosts;
         } catch (error) {
             console.error('Error fetching hot posts this week:', error);
@@ -489,7 +490,7 @@ class PostService extends Service {
             if (features === 'all' || !features) {
                 const posts = await Post.find({ del_flag: 0, published: true })
                     .sort({ createdAt: -1 })
-                    .limit(15)
+                    .limit(7)
                     .populate('category', "name slug")
                     .populate('author', 'username email avatar')
                     .populate('tags', 'name')
@@ -512,6 +513,32 @@ class PostService extends Service {
             throw new ServerException("error");
         }
     }
+
+    getAllPosts = async (limit, page) => {
+        try {
+
+            const posts = await Post.find({ del_flag: 0, published: true })
+                .sort({ createdAt: -1 })
+                .skip((page - 1) * limit)
+                .limit(parseInt(limit))
+                .populate('category', "name slug")
+                .populate('author', 'username email avatar name')
+                .populate('tags', 'name')
+                .populate('image', 'url description');
+
+            const query = { del_flag: 0, published: true };
+
+            const totalPosts = await Post.countDocuments(query);
+
+            return {
+                posts,
+                countData: totalPosts
+            };
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+    };
 
 }
 

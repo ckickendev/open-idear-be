@@ -102,7 +102,7 @@ class PostController extends Controller {
     getPostByAuthorId = asyncHandler(async (req, res) => {
         console.log('getPostByAuthorId');
         const profileId = req.query.profileId;
-        const posts = await  postService.getPostByUser(profileId);
+        const posts = await postService.getPostByUser(profileId);
 
         res.status(200).json({ posts });
     });
@@ -142,6 +142,18 @@ class PostController extends Controller {
             const features = req.query.feature ? req.query.feature : null;
             const recentlyData = await postService.getRecentlyDataByFeatures(features);
             res.status(200).json({ recentlyData });
+        } catch (error) {
+            return res.status(500).json({ message: error.message });
+        }
+    });
+
+    getAllPosts = asyncHandler(async (req, res) => {
+        const { limit, page } = req.query;
+        console.log('Call function getAllPosts with data', limit, page);
+
+        try {
+            const postData = await postService.getAllPosts(limit, page);
+            res.status(200).json({ posts: postData.posts, countData: postData.countData });
         } catch (error) {
             return res.status(500).json({ message: error.message });
         }
@@ -294,6 +306,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getSideInformation`, AuthMiddleware, this.getSideInformation);
         this._router.get(`${this._rootPath}/getRecentlyData`, this.getRecentlyData);
         this._router.get(`${this._rootPath}/getRecentlyDataByFeatures`, this.getRecentlyDataByFeatures);
+        this._router.get(`${this._rootPath}/getAllPosts`, this.getAllPosts);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);

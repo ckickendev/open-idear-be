@@ -1,7 +1,7 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { ServerException, BadRequestException } = require("../exceptions");
-const { Series } = require("../models");
+const { Series, Post } = require("../models");
 
 class SeriesService extends Service {
     async getAll() {
@@ -43,6 +43,53 @@ class SeriesService extends Service {
         }
     }
 
+    async getHotSeries() {
+        try {
+            let MAX_HOT_SERIES = 4;
+            const hotSeries = [];
+            // Get posts from this week
+            const now = new Date();
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 30); // 10 days ago from now
+            const series = await Series.find({
+                del_flag: 0,
+                updatedAt: {
+                    $gte: sevenDaysAgo,
+                    $lte: now
+                }
+            }).populate('user', 'username name email avatar')
+                .populate('posts', 'title slug')
+                .populate('image', 'url description');;
+
+            for (const serie of series) {
+                const posts = await Post.find({
+                    _id: { $in: serie.posts },
+                    del_flag: 0,
+                    updatedAt: {
+                        $gte: sevenDaysAgo,
+                        $lte: now
+                    }
+                });
+
+                let hotScore = 0;
+                posts.forEach(post => {
+                    hotScore += post.views + (post.likes ? post.likes.length * 2 : 0) + (post.comments ? post.comments.length * 3 : 0);
+                });
+
+                hotSeries.push({ series: serie, hotScore });
+            }
+
+            return hotSeries
+                .sort((a, b) => b.hotScore - a.hotScore)
+                .slice(0, MAX_HOT_SERIES)
+                .map(item => item.series);
+
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error when get hot series");
+        }
+    };
+
     async createSeries({ title, slug, userId }) {
         if (!title || !slug || !userId) {
             throw new BadRequestException("Title, slug and userId are required");
@@ -78,7 +125,7 @@ class SeriesService extends Service {
             if (image) {
                 if (image) series.image = image._id;
             }
-            
+
             await series.save();
             return series;
         } catch (error) {
@@ -87,7 +134,7 @@ class SeriesService extends Service {
         }
     }
 
-    async markedSeries(seriesId, userId) {        
+    async markedSeries(seriesId, userId) {
         if (!seriesId || !userId) {
             throw new BadRequestException("seriesId and userId are required");
         }
@@ -110,7 +157,7 @@ class SeriesService extends Service {
             console.log('error', error);
             throw new ServerException("error");
         }
-    } 
+    }
 }
 
 module.exports = new SeriesService();
