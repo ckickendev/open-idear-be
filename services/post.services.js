@@ -24,6 +24,7 @@ class PostService extends Service {
         }
         try {
             const posts = await Post.find({ author: userId })
+                .sort({ createdAt: -1 })
                 .populate('category', 'name slug')
                 .populate('tags')
                 .populate('likes')
@@ -65,6 +66,7 @@ class PostService extends Service {
         }
         try {
             const series = await Series.find({ user: id })
+                .sort({ createdAt: -1 })
                 .populate('user', 'username name email avatar')
                 .populate('posts', 'title slug')
                 .populate('image', 'url description');
@@ -175,6 +177,7 @@ class PostService extends Service {
 
     async getPostMarkedById(userId) {
         const markedPost = await Post.find({ marked: { $in: [userId] }, published: true })
+            .sort({ createdAt: -1 })
             .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
@@ -269,7 +272,7 @@ class PostService extends Service {
                 //     $gte: startOfDay,
                 //     $lte: endOfDay
                 // }
-            })
+            })  
                 .populate('author', 'name username avatar')
                 .populate('category', 'name slug')
                 .populate('tags', 'name slug')

@@ -90,6 +90,63 @@ class SeriesService extends Service {
         }
     };
 
+    async getSeriesBySlug(slug) {
+        if (!slug) {
+            throw new BadRequestException("Slug is required");
+        }
+        try {
+            const series = await Series.findOne({ slug: slug })
+                .populate('user', 'username name email avatar')
+                .populate({
+                    path: 'posts',
+                    select: 'title slug image category',
+                    populate: [
+                        {
+                            path: 'category',
+                            select: 'name slug' // fields from category
+                        },
+                        {
+                            path: 'image',
+                            select: 'url description' // fields from image
+                        }
+                    ]
+                })
+                .populate('image', 'url description');
+            if (!series) {
+                throw new NotFoundException("Series not found");
+            }
+            return series;
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+    }
+
+    async getAnotherSeriesBySlug(slug) {
+        if (!slug) {
+            throw new BadRequestException("Slug is required");
+        }
+        try {
+            const currentSeries = await Series.findOne({ slug: slug });
+            if (!currentSeries) {
+                throw new NotFoundException("Series not found");
+            }
+            const userId = currentSeries.user;
+            const anotherSeries = await Series.find({
+                user: userId,
+                _id: { $ne: currentSeries._id } // Exclude the current series
+            })
+                .limit(10)
+                .populate('user', 'username name email avatar')
+                .populate('posts', 'title slug')
+                .populate('image', 'url description');
+            return anotherSeries;
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+    }
+
     async createSeries({ title, slug, userId }) {
         if (!title || !slug || !userId) {
             throw new BadRequestException("Title, slug and userId are required");
@@ -156,6 +213,24 @@ class SeriesService extends Service {
         } catch (error) {
             console.log('error', error);
             throw new ServerException("error");
+        }
+    }
+
+    async deleteSeries(seriesId) {
+        if (!seriesId) {
+            throw new BadRequestException("seriesId is required");
+        }
+        try {
+            const series = await Series.findById(seriesId);
+            if (!series) {
+                throw new NotFoundException("Series not found");
+            }
+            // Soft delete: set del_flag to 1
+            series.del_flag = 1;
+            await series.save();
+        } catch (error) {
+            console.log('error when delete series', error);
+            throw new ServerException("Error when delete series");
         }
     }
 }
