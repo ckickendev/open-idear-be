@@ -14,6 +14,10 @@ const seriesSchema = new Schema(
         user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
         posts: [{ type: mongoose.Schema.Types.ObjectId, ref: "post" }],
         marked: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], // Users who marked the series
+        del_flag: {
+            type: Number,
+            default: 0
+        },
     },
     {
         timestamps: true,

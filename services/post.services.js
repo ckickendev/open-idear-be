@@ -6,7 +6,7 @@ const { default: slugify } = require("slugify");
 
 class PostService extends Service {
     async getAll() {
-        const posts = await Post.find({})
+        const posts = await Post.find({ del_flag: 0 })
             .populate('category', "name")
             .populate('author', 'username email')
             .populate('image', 'url description');
@@ -48,6 +48,7 @@ class PostService extends Service {
                     likes: post.likes,
                     marked: post.marked,
                     readtime: post.readtime,
+                    createdAt: post.createdAt,
                     updatedAt: post.updatedAt,
                 }
             });
@@ -95,6 +96,8 @@ class PostService extends Service {
             tags: post.tags,
             slug,
             readtime: Math.ceil(readPost),
+            published: false,
+            del_flag: 0,
         });
         const returnPost = await Post.create(newPost);
         return returnPost;
@@ -106,7 +109,6 @@ class PostService extends Service {
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
             .populate('image', 'url description');
-
         if (!post) {
             return null;
         }

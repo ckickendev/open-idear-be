@@ -18,8 +18,7 @@ class SeriesController extends Controller {
         console.log('Call function get series');
         const series = await seriesService.getAll();
         res.status(200).json({
-            status: "success",
-            data: series,
+            series: series,
         });
     });
 
@@ -115,6 +114,22 @@ class SeriesController extends Controller {
             return res.status(500).json({ message: error.message });
         }
 
+    }); 
+
+    update = asyncHandler(async (req, res) => {
+        const { _id, title, slug, description } = req.body;
+        console.log('Call function update series', _id, title, description, slug);
+        try {
+            const series = await seriesService.updateSeries(_id, title, description);
+            console.log('series', series);
+            
+            res.status(200).json({
+                status: "success",
+                series: series,
+            });
+        } catch (error) {
+            return res.status(500).json({ message: error.message });
+        }
     });
 
     markSeries = asyncHandler(async (req, res) => {
@@ -130,10 +145,11 @@ class SeriesController extends Controller {
     });
 
     deleteSeries = asyncHandler(async (req, res) => {
-        console.log('Call function deleteSeries');
-        const { seriesId } = req.query;
+        const { seriesId } = req.body;
+        console.log('Call function deleteSeries', seriesId);
         try {
             await seriesService.deleteSeries(seriesId);
+
             res.status(200).json({
                 status: "success",
                 message: "Series deleted successfully",
@@ -144,7 +160,7 @@ class SeriesController extends Controller {
     });
 
     initController = () => {
-        this._router.get(`${this._rootPath}`, this.getSeries);
+        this._router.get(`${this._rootPath}`, AuthMiddleware, this.getSeries);
         this._router.get(`${this._rootPath}/getByUser`, AuthMiddleware, this.getSeriesByUser);
         this._router.get(`${this._rootPath}/getMarkedByUser`, this.getMarkedByUser);
         this._router.get(`${this._rootPath}/getSeriesByAuthorId`, this.getSeriesByAuthorId);
@@ -153,8 +169,9 @@ class SeriesController extends Controller {
         this._router.get(`${this._rootPath}/getAnotherSeriesBySlug`, this.getAnotherSeriesBySlug);
         this._router.post(`${this._rootPath}/create`, AuthMiddleware, this.createSeries);
         this._router.patch(`${this._rootPath}/edit`, AuthMiddleware, this.editSeries);
+        this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
         this._router.patch(`${this._rootPath}/markSeries`, AuthMiddleware, this.markSeries);
-        this._router.delete(`${this._rootPath}`, AuthMiddleware, this.deleteSeries);
+        this._router.delete(`${this._rootPath}/delete`, AuthMiddleware, this.deleteSeries);
     };
 }
 

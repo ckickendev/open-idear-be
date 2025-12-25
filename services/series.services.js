@@ -2,11 +2,12 @@ const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { ServerException, BadRequestException } = require("../exceptions");
 const { Series, Post } = require("../models");
+const { default: slugify } = require("slugify");
 
 class SeriesService extends Service {
     async getAll() {
-        const tags = await Series.find({});
-        return tags;
+        const series = await Series.find({}).populate('user', 'username avatar');
+        return series;
     }
 
     async getSeriesByUser(id) {
@@ -14,7 +15,7 @@ class SeriesService extends Service {
             throw new NotFoundException("User not found");
         }
         try {
-            const series = await Series.find({ user: id })
+            const series = await Series.find({ user: id, del_flag: 0 })
                 .populate('user', 'username name email avatar')
                 .populate('posts', 'title slug')
                 .populate('image', 'url description');
@@ -32,7 +33,7 @@ class SeriesService extends Service {
             throw new NotFoundException("User not found");
         }
         try {
-            const series = await Series.find({ marked: userId })
+            const series = await Series.find({ marked: userId, del_flag: 0 })
                 .populate('user', 'username name email avatar')
                 .populate('posts', 'title slug')
                 .populate('image', 'url description');
@@ -95,7 +96,7 @@ class SeriesService extends Service {
             throw new BadRequestException("Slug is required");
         }
         try {
-            const series = await Series.findOne({ slug: slug })
+            const series = await Series.findOne({ slug: slug, del_flag: 0 })
                 .populate('user', 'username name email avatar')
                 .populate({
                     path: 'posts',
@@ -127,7 +128,7 @@ class SeriesService extends Service {
             throw new BadRequestException("Slug is required");
         }
         try {
-            const currentSeries = await Series.findOne({ slug: slug });
+            const currentSeries = await Series.findOne({ slug: slug, del_flag: 0 });
             if (!currentSeries) {
                 throw new NotFoundException("Series not found");
             }
@@ -160,6 +161,7 @@ class SeriesService extends Service {
                 user: userId,
                 posts: [],
                 marked: [],
+                del_flag: 0,
             });
             return series;
         } catch (error) {
@@ -180,7 +182,7 @@ class SeriesService extends Service {
             if (title) series.title = title;
             if (description) series.description = description;
             if (image) {
-                if (image) series.image = image._id;
+                series.image = image._id;
             }
 
             await series.save();
@@ -190,6 +192,32 @@ class SeriesService extends Service {
             throw new ServerException("Error when update series");
         }
     }
+
+    updateSeries = async (_id, title, description) => {
+        if (!_id) {
+            throw new BadRequestException("seriesId is required");
+        }
+        try {
+            const series = await Series.findById(_id);
+            if (!series) {
+                throw new NotFoundException("Series not found");
+            }
+            if (title) {
+                series.title = title;
+                series.slug = slugify(title, {
+                    lower: true,
+                    strict: true,
+                });
+            }
+            if (description) series.description = description;
+
+            await series.save();
+            return series.populate('user', 'username name avatar');
+        } catch (error) {
+            console.log('error when update series', error);
+            throw new ServerException("Error when update series");
+        }
+    };
 
     async markedSeries(seriesId, userId) {
         if (!seriesId || !userId) {
@@ -226,6 +254,7 @@ class SeriesService extends Service {
                 throw new NotFoundException("Series not found");
             }
             // Soft delete: set del_flag to 1
+
             series.del_flag = 1;
             await series.save();
         } catch (error) {
