@@ -159,6 +159,19 @@ class PostController extends Controller {
         }
     });
 
+    getAllPostLikeByUser = asyncHandler(async (req, res) => {
+        console.log('Call function getAllPostLikeByUser');
+        const { id } = req.params;
+        const { page } = req.body;
+
+        try {
+            const postData = await postService.getAllPostLikeByUser(id, page);
+            res.status(200).json({ posts: postData.posts });
+        } catch (error) {
+            return res.status(500).json({ message: error.message });
+        }
+    });
+
     create = asyncHandler(async (req, res) => {
         console.log('Call function create Post');
         const { _id } = req.userInfo;
@@ -307,6 +320,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getRecentlyData`, this.getRecentlyData);
         this._router.get(`${this._rootPath}/getRecentlyDataByFeatures`, this.getRecentlyDataByFeatures);
         this._router.get(`${this._rootPath}/getAllPosts`, this.getAllPosts);
+        this._router.get(`${this._rootPath}/getAllPostLikeByUser/:id`, AuthMiddleware, this.getAllPostLikeByUser);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);

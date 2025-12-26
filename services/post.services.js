@@ -274,7 +274,7 @@ class PostService extends Service {
                 //     $gte: startOfDay,
                 //     $lte: endOfDay
                 // }
-            })  
+            })
                 .populate('author', 'name username avatar')
                 .populate('category', 'name slug')
                 .populate('tags', 'name slug')
@@ -545,6 +545,26 @@ class PostService extends Service {
         }
     };
 
-}
+    getAllPostLikeByUser = async (userId, page) => {
+        try {
+
+            const likePosts = await Post.find({ likes: { $in: [userId] }, del_flag: 0, published: true })
+                .sort({ createdAt: -1 })
+                .skip((page - 1) * 10)
+                .limit(10)
+                .populate('category', "name slug")
+                .populate('author', 'username email avatar name')
+                .populate('tags', 'name')
+                .populate('image', 'url description');
+
+            return {
+                likePosts,
+            };
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+    };
+};
 
 module.exports = new PostService();
