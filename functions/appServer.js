@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const { ConsoleLogger } = require("../core");
 const { default: mongoose } = require("mongoose");
 require("dotenv").config();
@@ -12,6 +14,7 @@ class AppServer {
     this.loadDatabase();
     this.initMiddleWares();
     this.loadControllers(controllers);
+    this.initErrorHandling();
   }
 
   // CORS
@@ -47,6 +50,19 @@ class AppServer {
   initMiddleWares() {
     const corsOptions = this.loadCorsOption();
 
+    // Security headers
+    this._app.use(helmet());
+
+    // Rate limiting
+    const limiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // Limit each IP to 100 requests per `window`
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: "Too many requests from this IP, please try again after 15 minutes"
+    });
+    this._app.use(limiter);
+
     // add Vary: Origin to prevent cache poisoning
     this._app.use((req, res, next) => { res.header("Vary", "Origin"); next(); });
 
@@ -58,10 +74,45 @@ class AppServer {
     this._app.use(express.urlencoded({ extended: true }));
   }
 
+  initErrorHandling() {
+    // 404 handler
+    this._app.use((req, res, next) => {
+      res.status(404).json({ error: "Not Found" });
+    });
+
+    // Global error handler
+    this._app._router.stack.forEach((layer) => {
+      if (layer.route) {
+        // This is a bit hacky for Express, usually we add it at the end
+      }
+    });
+
+    this._app.use((err, req, res, next) => {
+      ConsoleLogger.error(`Error: ${err.message}`);
+      const status = err.status || 500;
+      res.status(status).json({
+        error: err.message || "Internal Server Error",
+        status
+      });
+    });
+  }
+
   loadDatabase = () => {
     const mongoUrl = process.env.MONGO_URL;
     mongoose.connect(mongoUrl, { autoCreate: true, autoIndex: true });
     mongoose.set("strictQuery", true);
+
+    mongoose.connection.on("connected", () => {
+      ConsoleLogger.success("MongoDB connected successfully");
+    });
+
+    mongoose.connection.on("error", (err) => {
+      ConsoleLogger.error(`MongoDB connection error: ${err.message}`);
+    });
+
+    mongoose.connection.on("disconnected", () => {
+      ConsoleLogger.warn("MongoDB disconnected");
+    });
   };
 
   startListening() {

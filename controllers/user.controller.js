@@ -29,17 +29,17 @@ class UserController extends Controller {
       const { avatar, background } = req.body;
 
       if (avatar) {
-        userService.updateAvatar(avatar, _id);
-        mediaService.addMedia(_id, avatar, "image");
-      } else {
-        userService.updateBackground(background, _id);
-        mediaService.addMedia(_id, background, "image");
+        await userService.updateAvatar(avatar, _id);
+        await mediaService.addMedia(_id, avatar, "image");
+      } else if (background) {
+        await userService.updateBackground(background, _id);
+        await mediaService.addMedia(_id, background, "image");
       }
       return res.status(200).json({
         message: "success",
       });
     } catch (e) {
-      res.status(404).json({ error: e.message });
+      res.status(status || 404).json({ error: e.message });
     }
   }
 
@@ -50,10 +50,7 @@ class UserController extends Controller {
         throw new ServerException("No id found");
       }
       const { name, bio } = req.body.data;
-      console.log("Updating profile with data:", { name, bio });
-      
-
-      userService.updateProfile(name, bio, _id);
+      await userService.updateProfile(name, bio, _id);
 
       return res.status(200).json({
         message: "success",

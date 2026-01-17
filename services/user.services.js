@@ -6,7 +6,6 @@ const sendEmailHandler = require("../utils/sendEmailOptions");
 const { confirmTokenEmail, confirmResetPass } = require("../utils/emailTemplate");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
-const sendEmailHandlerEnhance = require("../utils/sendEmailOptions");
 class UserService extends Service {
   async getAllUser() {
     const users = await User.find({});
@@ -26,7 +25,7 @@ class UserService extends Service {
         email;
       const passwordEncrypt = await bcrypt.hash(password, 10);
       ConsoleLogger.info(email)
-      const isSendEmailSuccess = await sendEmailHandlerEnhance({
+      const isSendEmailSuccess = await sendEmailHandler({
         to: email,
         subject: "Please enter this code to confirm register account",
         html: confirmTokenEmail(numberTokenGenerate, randomLink),
@@ -43,13 +42,13 @@ class UserService extends Service {
           avatar: makeRandomAvatar(),
           background: "https://codetheweb.blog/assets/img/posts/css-advanced-background-images/cover.jpg",
         });
-        newUser.save();
+        await newUser.save();
       } else {
         throw new ServerException("Cannot send email");
       }
 
     } catch (e) {
-      throw new ServerException("Error", e.message);
+      throw new ServerException(e.message || "Error during registration");
     }
   }
 
@@ -72,13 +71,12 @@ class UserService extends Service {
       });
 
       const userUpdate = await User.findOne({ email: email });
+      if (!userUpdate) throw new NotFoundException("User not found");
       userUpdate.token_reset_pass = tokenGenerate;
-      // set minute
-
       userUpdate.token_reset_pass_expired = Date.now() + 30 * 60 * 1000
-      userUpdate.save();
+      await userUpdate.save();
     } catch (e) {
-      throw new ServerException("Error", e.message);
+      throw new ServerException(e.message || "Error during password reset email");
     }
   }
 
@@ -172,14 +170,14 @@ class UserService extends Service {
   }
 
   async isFollowed(userId, authorId) {
-    if(userId.toString() === authorId.toString()) {
+    if (userId.toString() === authorId.toString()) {
       return null;
     }
     const user = await User.findById(userId);
     if (!user) {
       throw new NotFoundException("User not found");
     }
-    if(!user.followers) {
+    if (!user.followers) {
       return false
     }
     return user.followers.includes(authorId);
@@ -190,16 +188,17 @@ class UserService extends Service {
     if (!user) {
       throw new NotFoundException("User not found");
     }
-    if (user.followers.includes(authorId)) {
-      // Unfollow the author
-      user.followers = user.followers.filter(follower => follower.toString() !== authorId.toString());
+
+    const isFollowing = user.followers.some(f => f.toString() === authorId.toString());
+
+    if (isFollowing) {
+      await User.findByIdAndUpdate(userId, { $pull: { followers: authorId } });
+    } else {
+      await User.findByIdAndUpdate(userId, { $addToSet: { followers: authorId } });
     }
-    else {
-      // Follow the author
-      user.followers.push(authorId);
-    }
-    await user.save();
-    return user.followers.includes(authorId);
+
+    const updatedUser = await User.findById(userId);
+    return updatedUser.followers.some(f => f.toString() === authorId.toString());
   }
 }
 
