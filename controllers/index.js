@@ -9,6 +9,7 @@ const SeriesController = require("./series.controller");
 const SubController = require("./sub.controller");
 const TagController = require("./tag.controller");
 const UserController = require("./user.controller");
+const CourseController = require("./course.controller");
 
 module.exports = {
   UserController,
@@ -22,4 +23,5 @@ module.exports = {
   SubController,
   TagController,
   AuthController,
+  CourseController,
 };

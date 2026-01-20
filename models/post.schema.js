@@ -21,6 +21,9 @@ const postSchema = new Schema(
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], // Users who liked the post
     marked: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], // Users who marked the post
     comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "comment" }],
+    isFreePreview: { type: Boolean, default: false },
+    lessonType: { type: String, enum: ["video", "file", "text"], default: "text" },
+    mediaContent: { type: mongoose.Schema.Types.ObjectId, ref: "media" },
     del_flag: {
       type: Number,
       default: 0

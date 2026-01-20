@@ -9,10 +9,10 @@ const {
   SubController,
   TagController,
   AuthController,
-  SeriesController,
+  CourseController,
+  SeriesController
 } = require("./controllers/index.js");
 const AppServer = require("./functions/appServer");
-const { Series } = require("./models/index.js");
 
 const app = new AppServer([
   new UserController(),
@@ -26,6 +26,7 @@ const app = new AppServer([
   new SubController(),
   new TagController(),
   new AuthController(),
+  new CourseController(),
 ]);
 
 app.startListening();

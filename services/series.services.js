@@ -123,6 +123,44 @@ class SeriesService extends Service {
         }
     }
 
+    async enroll(seriesId, userId) {
+        if (!seriesId || !userId) {
+            throw new BadRequestException("seriesId and userId are required");
+        }
+        try {
+            const series = await Series.findById(seriesId);
+            if (!series) {
+                throw new NotFoundException("Series not found");
+            }
+            if (!series.enrolledUsers.includes(userId)) {
+                series.enrolledUsers.push(userId);
+                await series.save();
+            }
+            return series;
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error enrolling user");
+        }
+    }
+
+    async updatePrice(seriesId, price) {
+        if (!seriesId || price === undefined) {
+            throw new BadRequestException("seriesId and price are required");
+        }
+        try {
+            const series = await Series.findById(seriesId);
+            if (!series) {
+                throw new NotFoundException("Series not found");
+            }
+            series.price = price;
+            await series.save();
+            return series;
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error updating price");
+        }
+    }
+
     async getAnotherSeriesBySlug(slug) {
         if (!slug) {
             throw new BadRequestException("Slug is required");

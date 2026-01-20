@@ -114,7 +114,7 @@ class SeriesController extends Controller {
             return res.status(500).json({ message: error.message });
         }
 
-    }); 
+    });
 
     update = asyncHandler(async (req, res) => {
         const { _id, title, slug, description } = req.body;
@@ -122,7 +122,7 @@ class SeriesController extends Controller {
         try {
             const series = await seriesService.updateSeries(_id, title, description);
             console.log('series', series);
-            
+
             res.status(200).json({
                 status: "success",
                 series: series,
@@ -159,6 +159,35 @@ class SeriesController extends Controller {
         }
     });
 
+    enroll = asyncHandler(async (req, res) => {
+        const { seriesId } = req.body;
+        const { _id } = req.userInfo;
+        console.log('Call function enroll series', seriesId, _id);
+        try {
+            const series = await seriesService.enroll(seriesId, _id);
+            res.status(200).json({
+                status: "success",
+                data: series,
+            });
+        } catch (error) {
+            return res.status(500).json({ message: error.message });
+        }
+    });
+
+    updatePrice = asyncHandler(async (req, res) => {
+        const { seriesId, price } = req.body;
+        console.log('Call function updatePrice series', seriesId, price);
+        try {
+            const series = await seriesService.updatePrice(seriesId, price);
+            res.status(200).json({
+                status: "success",
+                data: series,
+            });
+        } catch (error) {
+            return res.status(500).json({ message: error.message });
+        }
+    });
+
     initController = () => {
         this._router.get(`${this._rootPath}`, AuthMiddleware, this.getSeries);
         this._router.get(`${this._rootPath}/getByUser`, AuthMiddleware, this.getSeriesByUser);
@@ -171,6 +200,8 @@ class SeriesController extends Controller {
         this._router.patch(`${this._rootPath}/edit`, AuthMiddleware, this.editSeries);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);
         this._router.patch(`${this._rootPath}/markSeries`, AuthMiddleware, this.markSeries);
+        this._router.patch(`${this._rootPath}/updatePrice`, AuthMiddleware, this.updatePrice);
+        this._router.post(`${this._rootPath}/enroll`, AuthMiddleware, this.enroll);
         this._router.delete(`${this._rootPath}/delete`, AuthMiddleware, this.deleteSeries);
     };
 }

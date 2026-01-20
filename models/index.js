@@ -8,6 +8,8 @@ const Post = require("./post.schema");
 const Sub = require("./sub.schema");
 const Tag = require("./tag.schema");
 const Series = require("./series.schema");
+const Course = require("./course.schema");
+const Lesson = require("./lesson.schema");
 
 module.exports = {
   User,
@@ -20,4 +22,6 @@ module.exports = {
   Sub,
   Tag,
   Series,
+  Course,
+  Lesson,
 };
