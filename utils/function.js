@@ -1,53 +1,30 @@
+const crypto = require("crypto");
+
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:3000";
-const randomAvatar = [
-  `${BACKEND_URL}/icon/profile/cat.png`,
-  `${BACKEND_URL}/icon/profile/dog.png`,
-  `${BACKEND_URL}/icon/profile/dolphin.png`,
-  `${BACKEND_URL}/icon/profile/elephant.png`,
-  `${BACKEND_URL}/icon/profile/fish.png`,
-  `${BACKEND_URL}/icon/profile/hippo.png`,
-  `${BACKEND_URL}/icon/profile/lion.png`,
-  `${BACKEND_URL}/icon/profile/monkey.png`,
-  `${BACKEND_URL}/icon/profile/pengiun.png`,
-  `${BACKEND_URL}/icon/profile/shark.png`,
-  `${BACKEND_URL}/icon/profile/snake.png`,
-  `${BACKEND_URL}/icon/profile/tiger.png`,
+const randomAvatars = [
+  "cat.png", "dog.png", "dolphin.png", "elephant.png", "fish.png",
+  "hippo.png", "lion.png", "monkey.png", "pengiun.png", "shark.png",
+  "snake.png", "tiger.png",
 ];
 
 const makeRandomString = (length) => {
-  let result = "";
-  const characters =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  const charactersLength = characters.length;
-  let counter = 0;
-  while (counter < length) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-    counter += 1;
-  }
-  return result;
+  return crypto.randomBytes(Math.ceil(length / 2))
+    .toString("hex")
+    .slice(0, length);
 };
 
 const makeRandomNumber = (length) => {
   let result = "";
-  const characters = "0123456789";
-  const charactersLength = characters.length;
-  let counter = 0;
-  while (counter < length) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-    counter += 1;
+  for (let i = 0; i < length; i++) {
+    result += crypto.randomInt(0, 10).toString();
   }
   return result;
 };
 
 const makeRandomAvatar = () => {
-  const randomNumber = randomIntFromInterval(0, randomAvatar.length - 1);
-  return randomAvatar[randomNumber];
+  const randomIndex = crypto.randomInt(0, randomAvatars.length);
+  return `${BACKEND_URL}/icon/profile/${randomAvatars[randomIndex]}`;
 };
-
-function randomIntFromInterval(min, max) {
-  // min and max included
-  return Math.floor(Math.random() * (max - min + 1) + min);
-}
 
 // const slugify = (str) => {
 //   str = str.replace(/^\s+|\s+$/g, ''); // trim leading/trailing white space

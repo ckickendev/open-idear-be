@@ -98,6 +98,9 @@ class PostService extends Service {
             readtime: Math.ceil(readPost),
             published: false,
             del_flag: 0,
+            isFreePreview: post.isFreePreview || false,
+            lessonType: post.lessonType || "text",
+            mediaContent: post.mediaContent || null,
         });
         const returnPost = await Post.create(newPost);
         return returnPost;
@@ -108,7 +111,8 @@ class PostService extends Service {
             .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
-            .populate('image', 'url description');
+            .populate('image', 'url description')
+            .populate('mediaContent', 'url type description');
         if (!post) {
             return null;
         }
@@ -120,7 +124,8 @@ class PostService extends Service {
             .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
-            .populate('image', 'url description');
+            .populate('image', 'url description')
+            .populate('mediaContent', 'url type description');
 
         if (!post) {
             return null;

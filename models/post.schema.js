@@ -7,20 +7,35 @@ const postSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       required: true,
     },
-    image: { type: mongoose.Schema.Types.ObjectId, ref: "media" }, // Image URL for the post
-    title: { type: String, required: true },
-    slug: { type: String, required: true, unique: true },
-    description: { type: String, default: "" }, // Description for the post
+    image: { type: mongoose.Schema.Types.ObjectId, ref: "media" },
+    title: { type: String, required: true, trim: true },
+    slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    description: { type: String, default: "", trim: true },
     content: { type: String, required: true },
-    text: { type: String, required: true }, // Text content for search indexing
+    text: { type: String, required: true },
     author: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "category" },
-    tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "tag" }], // Array of tag names
+    tags: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "tag" }],
+      default: []
+    },
     published: { type: Boolean, default: false },
     views: { type: Number, default: 0 },
-    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], // Users who liked the post
-    marked: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], // Users who marked the post
-    comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "comment" }],
+    likes: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
+      default: []
+    },
+    marked: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
+      default: []
+    },
+    comments: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "comment" }],
+      default: []
+    },
+    isFreePreview: { type: Boolean, default: false },
+    lessonType: { type: String, enum: ["video", "file", "text"], default: "text" },
+    mediaContent: { type: mongoose.Schema.Types.ObjectId, ref: "media" },
     del_flag: {
       type: Number,
       default: 0

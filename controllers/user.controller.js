@@ -24,22 +24,25 @@ class UserController extends Controller {
     const { _id } = req.userInfo;
     try {
       if (!_id) {
-        throw new ServerException("No id found");
+        throw new ServerException("User ID not found in token");
       }
       const { avatar, background } = req.body;
 
       if (avatar) {
-        await userService.updateAvatar(avatar, _id);
+        await userService.updateUser(_id, { avatar });
         await mediaService.addMedia(_id, avatar, "image");
       } else if (background) {
-        await userService.updateBackground(background, _id);
+        await userService.updateUser(_id, { background });
         await mediaService.addMedia(_id, background, "image");
+      } else {
+        return res.status(400).json({ error: "No image data provided" });
       }
+
       return res.status(200).json({
-        message: "success",
+        message: "Image updated successfully",
       });
     } catch (e) {
-      res.status(status || 404).json({ error: e.message });
+      res.status(e.status || 500).json({ error: e.message });
     }
   }
 
@@ -47,16 +50,23 @@ class UserController extends Controller {
     const { _id } = req.userInfo;
     try {
       if (!_id) {
-        throw new ServerException("No id found");
+        throw new ServerException("User ID not found in token");
       }
-      const { name, bio } = req.body.data;
-      await userService.updateProfile(name, bio, _id);
+
+      const updateData = req.body.data || req.body;
+      const { name, bio } = updateData;
+
+      if (!name && !bio) {
+        return res.status(400).json({ error: "No profile data provided" });
+      }
+
+      await userService.updateUser(_id, { name, bio });
 
       return res.status(200).json({
-        message: "success",
+        message: "Profile updated successfully",
       });
     } catch (e) {
-      res.status(404).json({ error: e.message });
+      res.status(e.status || 500).json({ error: e.message });
     }
   }
 

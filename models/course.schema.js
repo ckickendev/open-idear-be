@@ -1,21 +1,21 @@
 const mongoose = require("mongoose");
 
 const { Schema } = mongoose;
-const seriesSchema = new Schema(
+const courseSchema = new Schema(
     {
         _id: {
             type: mongoose.Schema.Types.ObjectId,
             required: true,
         },
-        image: { type: mongoose.Schema.Types.ObjectId, ref: "media" },
         title: { type: String, required: true },
-        description: { type: String, default: "" },
         slug: { type: String, required: true, unique: true },
-        user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
-        posts: [{ type: mongoose.Schema.Types.ObjectId, ref: "post" }],
-        marked: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], // Users who marked the series
+        description: { type: String, default: "" },
+        thumbnail: { type: mongoose.Schema.Types.ObjectId, ref: "media" },
+        instructor: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
         price: { type: Number, default: 0 },
         enrolledUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
+        lessons: [{ type: mongoose.Schema.Types.ObjectId, ref: "lesson" }],
+        status: { type: String, enum: ["draft", "published"], default: "draft" },
         del_flag: {
             type: Number,
             default: 0
@@ -26,4 +26,4 @@ const seriesSchema = new Schema(
     }
 );
 
-module.exports = mongoose.model("series", seriesSchema);
+module.exports = mongoose.model("course", courseSchema);
