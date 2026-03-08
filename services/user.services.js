@@ -97,76 +97,68 @@ class UserService extends Service {
   }
 
   async confirmToken(token, email) {
-    // 0 => not authen, 1: ok, 2=> already
-    const user = await User.findOne({ email: email });
+    const user = await User.findOne({ email });
+    if (!user) throw new NotFoundException("User not found");
+
     if (user.activate) {
-      return 2;
+      return { status: "ALREADY_ACTIVATED", code: 2 };
     }
-    if (user.activate_code == token) {
+    if (user.activate_code === token) {
       user.activate = true;
       user.activate_code = "";
       await user.save();
-      return 1;
+      return { status: "SUCCESS", code: 1 };
     }
-    return 0;
+    return { status: "INVALID_TOKEN", code: 0 };
   }
 
   async confirmTokenAccess(access_token, email) {
-    const user = await User.findOne({ email: email });
+    const user = await User.findOne({ email });
+    if (!user) throw new NotFoundException("User not found");
+
     if (user.token_reset_pass === access_token) {
       if (user.token_reset_pass_expired <= Date.now()) {
         throw new ServerException("Your token is expired")
-      } else {
-        return user;
       }
-    } else {
-      return false;
+      return user;
     }
-
+    return false;
   }
 
   async confirmNewPassword(emailSent, password) {
     const user = await User.findOne({ email: emailSent });
+    if (!user) throw new NotFoundException("Cannot find your user");
+
     const newPassword = await bcrypt.hash(password, 10);
-    if (user) {
-      user.password = newPassword;
-      user.token_reset_pass = "";
-      user.token_reset_pass_expired = ""
-      await user.save();
-    } else {
-      throw new NotFoundException("Cannot find your username");
-    }
+    user.password = newPassword;
+    user.token_reset_pass = "";
+    user.token_reset_pass_expired = null;
+    await user.save();
   }
 
-  async updateAvatar(avatar, _id) {
-    const user = await User.findById(_id);
-    if (user) {
-      user.avatar = avatar;
-      await user.save();
-    } else {
-      throw new NotFoundException("Cannot find your user");
+  async updateUser(userId, updates) {
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+    if (!user) {
+      throw new NotFoundException("User not found");
     }
+    return user;
+  }
+
+  // Deprecated: keeping for backward compatibility if needed by other services, but should use updateUser
+  async updateAvatar(avatar, _id) {
+    return this.updateUser(_id, { avatar });
   }
 
   async updateBackground(background, _id) {
-    const user = await User.findById(_id);
-    if (user) {
-      user.background = background;
-      await user.save();
-    } else {
-      throw new NotFoundException("Cannot find your user");
-    }
+    return this.updateUser(_id, { background });
   }
 
   async updateProfile(name, bio, _id) {
-    const user = await User.findById(_id);
-    if (user) {
-      user.name = name;
-      user.bio = bio;
-      await user.save();
-    } else {
-      throw new NotFoundException("Cannot find your user");
-    }
+    return this.updateUser(_id, { name, bio });
   }
 
   async isFollowed(userId, authorId) {
@@ -177,28 +169,26 @@ class UserService extends Service {
     if (!user) {
       throw new NotFoundException("User not found");
     }
-    if (!user.followers) {
-      return false
-    }
-    return user.followers.includes(authorId);
+    return user.followers ? user.followers.some(f => f.toString() === authorId.toString()) : false;
   }
 
   async followUser(userId, authorId) {
-    const user = await User.findById(userId);
-    if (!user) {
-      throw new NotFoundException("User not found");
+    if (userId.toString() === authorId.toString()) {
+      throw new ServerException("You cannot follow yourself");
     }
+
+    const user = await User.findById(userId);
+    if (!user) throw new NotFoundException("User not found");
 
     const isFollowing = user.followers.some(f => f.toString() === authorId.toString());
 
     if (isFollowing) {
       await User.findByIdAndUpdate(userId, { $pull: { followers: authorId } });
+      return false;
     } else {
       await User.findByIdAndUpdate(userId, { $addToSet: { followers: authorId } });
+      return true;
     }
-
-    const updatedUser = await User.findById(userId);
-    return updatedUser.followers.some(f => f.toString() === authorId.toString());
   }
 }
 
