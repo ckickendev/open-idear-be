@@ -11,6 +11,7 @@ const courseSchema = new Schema(
         slug: { type: String, required: true, unique: true },
         description: { type: String, default: "" },
         thumbnail: { type: mongoose.Schema.Types.ObjectId, ref: "media" },
+        category: { type: mongoose.Schema.Types.ObjectId, ref: "category" },
         instructor: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
         price: { type: Number, default: 0 },
         enrolledUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],

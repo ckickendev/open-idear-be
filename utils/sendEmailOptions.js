@@ -1,9 +1,6 @@
 const nodemailer = require("nodemailer");
 const { ConsoleLogger } = require("../core");
 
-const nodemailer = require("nodemailer");
-const { ConsoleLogger } = require("../core");
-
 const sendEmailHandler = async (mailOptionsInfo) => {
   const ADMIN_EMAIL_ADDRESS = process.env.ADMIN_EMAIL_ADDRESS || "opentrashtech@gmail.com";
   try {

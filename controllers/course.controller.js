@@ -14,8 +14,18 @@ class CourseController extends Controller {
     }
 
     getCourses = asyncHandler(async (req, res) => {
-        const courses = await courseService.getAll();
-        res.status(200).json({ status: "success", data: courses });
+        const { keyword, category, status, minPrice, maxPrice, sort, page, limit } = req.query;
+        const result = await courseService.findCourses({
+            keyword,
+            category,
+            status,
+            minPrice,
+            maxPrice,
+            sort,
+            page,
+            limit
+        });
+        res.status(200).json({ status: "success", ...result });
     });
 
     getCourseBySlug = asyncHandler(async (req, res) => {

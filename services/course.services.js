@@ -5,8 +5,51 @@ const { Course, Lesson } = require("../models");
 const { default: slugify } = require("slugify");
 
 class CourseService extends Service {
+    async findCourses({ keyword, category, status, minPrice, maxPrice, sort, page = 1, limit = 10 }) {
+        const query = { del_flag: 0 };
+
+        if (keyword) {
+            query.$or = [
+                { title: { $regex: keyword, $options: "i" } },
+                { description: { $regex: keyword, $options: "i" } },
+            ];
+        }
+
+        if (category) query.category = category;
+        if (status) query.status = status;
+        if (minPrice !== undefined || maxPrice !== undefined) {
+            query.price = {};
+            if (minPrice !== undefined) query.price.$gte = Number(minPrice);
+            if (maxPrice !== undefined) query.price.$lte = Number(maxPrice);
+        }
+
+        const skip = (page - 1) * limit;
+        const sortOptions = sort ? sort.split(',').join(' ') : '-createdAt';
+
+        const [courses, total] = await Promise.all([
+            Course.find(query)
+                .populate('instructor', 'username name avatar')
+                .populate('category', 'name slug')
+                .populate('thumbnail', 'url')
+                .sort(sortOptions)
+                .skip(skip)
+                .limit(Number(limit)),
+            Course.countDocuments(query)
+        ]);
+
+        return {
+            courses,
+            pagination: {
+                totalItems: total,
+                totalPages: Math.ceil(total / limit),
+                currentPage: Number(page),
+                limit: Number(limit)
+            }
+        };
+    }
+
     async getAll() {
-        return Course.find({ del_flag: 0 }).populate('instructor', 'username name avatar');
+        return this.findCourses({});
     }
 
     async getCourseById(id) {
