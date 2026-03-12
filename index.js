@@ -10,7 +10,8 @@ const {
   TagController,
   AuthController,
   CourseController,
-  SeriesController
+  SeriesController,
+  SearchController
 } = require("./controllers/index.js");
 const AppServer = require("./functions/appServer");
 
@@ -27,6 +28,7 @@ const app = new AppServer([
   new TagController(),
   new AuthController(),
   new CourseController(),
+  new SearchController(),
 ]);
 
 app.startListening();

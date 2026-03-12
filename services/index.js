@@ -10,6 +10,7 @@ const seriesService = require("./series.services");
 const tagService = require("./tag.services");
 const notificationService = require("./notification.services");
 const courseService = require("./course.services");
+const searchService = require("./search.services");
 
 module.exports = {
   userService,
@@ -24,4 +25,5 @@ module.exports = {
   tagService,
   notificationService,
   courseService,
+  searchService,
 };
