@@ -45,6 +45,24 @@ class MediaController extends Controller {
         });
     });
 
+    getByUser = asyncHandler(async (req, res) => {
+        try {
+            const mediaList = await mediaService.getMediaByUser(req.userInfo._id);
+            res.json({
+                status: "success",
+                data: mediaList,
+            });
+        } catch (error) {
+            if (error.message === "No media found for this user") {
+                return res.json({
+                    status: "success",
+                    data: [],
+                });
+            }
+            res.status(500).json({ error: "Failed to fetch media", details: error.message });
+        }
+    });
+
     uploadImage = asyncHandler(async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: "No file uploaded" });
@@ -93,6 +111,7 @@ class MediaController extends Controller {
 
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
+        this._router.get(`${this._rootPath}/user`, AuthMiddleware, this.getByUser);
         this._router.post(`${this._rootPath}/uploadImage`, AuthMiddleware, upload.single("image"), this.uploadImage);
     };
 }
