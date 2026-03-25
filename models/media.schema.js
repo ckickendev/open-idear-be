@@ -10,6 +10,7 @@ const mediaSchema = new Schema(
         user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
         description: { type: String, default: "" },
         url: { type: String, required: true },
+        cloudflareId: { type: String },
         type: { type: String, enum: ["image", "video", "audio", "file"], required: true },
         del_flag: {
             type: Number,

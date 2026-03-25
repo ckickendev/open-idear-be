@@ -14,8 +14,9 @@ const courseSchema = new Schema(
         category: { type: mongoose.Schema.Types.ObjectId, ref: "category" },
         instructor: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
         price: { type: Number, default: 0 },
+        discountPrice: { type: Number, default: 0 },
         enrolledUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
-        lessons: [{ type: mongoose.Schema.Types.ObjectId, ref: "lesson" }],
+        chapters: [{ type: mongoose.Schema.Types.ObjectId, ref: "chapter" }],
         status: { type: String, enum: ["draft", "published"], default: "draft" },
         del_flag: {
             type: Number,

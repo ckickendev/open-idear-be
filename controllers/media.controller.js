@@ -1,5 +1,5 @@
 const express = require("express");
-const { Controller } = require("../core");
+const { Controller, ConsoleLogger } = require("../core");
 const { mediaService } = require("../services");
 const asyncHandler = require("../utils/asyncHandler");
 const multer = require("multer");
@@ -109,10 +109,54 @@ class MediaController extends Controller {
         }
     });
 
+    getCloudflareUploadUrl = asyncHandler(async (req, res) => {
+        ConsoleLogger.info("Start getCloudflareUploadUrl")
+        try {
+            const result = await mediaService.getCloudflareUploadUrl(req.userInfo._id);
+            res.json({
+                status: "success",
+                data: result
+            });
+        } catch (error) {
+            res.status(500).json({ error: "Failed to get upload URL", details: error.message });
+        }
+    });
+
+    saveCloudflareVideo = asyncHandler(async (req, res) => {
+        ConsoleLogger.info("start saveCloudflareVideo")
+        const { videoId, title, description } = req.body;
+        if (!videoId) {
+            return res.status(400).json({ error: "videoId is required" });
+        }
+
+        try {
+            // In Cloudflare Stream, the playback URL can be constructed from the videoId
+            const playbackUrl = `https://customer-<ACCOUNT_ID>.cloudflarestream.com/${videoId}/manifest/video.m3u8`;
+            // Note: <ACCOUNT_ID> should be replaced or handled in frontend/player
+
+            const newMedia = await mediaService.addMedia(
+                req.userInfo._id,
+                videoId, // Using videoId as the URL/identifier for now
+                "video",
+                description || title || "Cloudflare Video",
+                videoId
+            );
+
+            res.json({
+                status: "success",
+                data: newMedia
+            });
+        } catch (error) {
+            res.status(500).json({ error: "Failed to save media", details: error.message });
+        }
+    });
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/user`, AuthMiddleware, this.getByUser);
         this._router.post(`${this._rootPath}/uploadImage`, AuthMiddleware, upload.single("image"), this.uploadImage);
+        this._router.post(`${this._rootPath}/cloudflare/upload-url`, AuthMiddleware, this.getCloudflareUploadUrl);
+        this._router.post(`${this._rootPath}/cloudflare/save`, AuthMiddleware, this.saveCloudflareVideo);
     };
 }
 

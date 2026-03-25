@@ -1,7 +1,7 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { NotFoundException, BadRequestException, ServerException } = require("../exceptions");
-const { Course, Lesson } = require("../models");
+const { Course, Lesson, Chapter } = require("../models");
 const { default: slugify } = require("slugify");
 
 class CourseService extends Service {
@@ -56,10 +56,15 @@ class CourseService extends Service {
         const course = await Course.findById(id)
             .populate('instructor', 'username name avatar bio')
             .populate({
-                path: 'lessons',
+                path: 'chapters',
                 match: { del_flag: 0 },
                 options: { sort: { order: 1 } },
-                populate: { path: 'media', select: 'url type' }
+                populate: {
+                    path: 'lessons',
+                    match: { del_flag: 0 },
+                    options: { sort: { order: 1 } },
+                    populate: { path: 'media', select: 'url type' }
+                }
             })
             .populate('thumbnail', 'url');
 
@@ -71,10 +76,15 @@ class CourseService extends Service {
         const course = await Course.findOne({ slug, del_flag: 0 })
             .populate('instructor', 'username name avatar bio')
             .populate({
-                path: 'lessons',
+                path: 'chapters',
                 match: { del_flag: 0 },
                 options: { sort: { order: 1 } },
-                populate: { path: 'media', select: 'url type' }
+                populate: {
+                    path: 'lessons',
+                    match: { del_flag: 0 },
+                    options: { sort: { order: 1 } },
+                    populate: { path: 'media', select: 'url type' }
+                }
             })
             .populate('thumbnail', 'url');
 
@@ -96,20 +106,47 @@ class CourseService extends Service {
         if (updateData.title) {
             updateData.slug = slugify(updateData.title, { lower: true, strict: true });
         }
-        return Course.findByIdAndUpdate(id, updateData, { new: true });
+        return Course.findByIdAndUpdate(id, updateData, { new: true }).populate('thumbnail', 'url');;;
     }
 
-    async addLesson(courseId, lessonData) {
+    async updateThumbnailCourse(id, media) {
+        return Course.findByIdAndUpdate(id, { thumbnail: media }, { new: true }).populate('thumbnail', 'url');
+    }
+
+    async addChapter(courseId, chapterData) {
+        const chapterId = new mongoose.Types.ObjectId();
+        const chapter = await Chapter.create({
+            _id: chapterId,
+            ...chapterData,
+            course: courseId,
+        });
+
+        await Course.findByIdAndUpdate(courseId, {
+            $push: { chapters: chapterId }
+        });
+
+        return chapter;
+    }
+
+    async updateChapter(chapterId, updateData) {
+        return Chapter.findByIdAndUpdate(chapterId, updateData, { new: true });
+    }
+
+    async deleteChapter(chapterId) {
+        return Chapter.findByIdAndUpdate(chapterId, { del_flag: 1 }, { new: true });
+    }
+
+    async addLesson(chapterId, lessonData) {
         const lessonId = new mongoose.Types.ObjectId();
         const slug = slugify(lessonData.title, { lower: true, strict: true });
         const lesson = await Lesson.create({
             _id: lessonId,
             ...lessonData,
             slug,
-            course: courseId,
+            chapter: chapterId,
         });
 
-        await Course.findByIdAndUpdate(courseId, {
+        await Chapter.findByIdAndUpdate(chapterId, {
             $push: { lessons: lessonId }
         });
 
@@ -123,6 +160,25 @@ class CourseService extends Service {
         return Lesson.findByIdAndUpdate(lessonId, updateData, { new: true });
     }
 
+    async moveLesson(lessonId, sourceChapterId, targetChapterId) {
+        // Remove from source chapter
+        await Chapter.findByIdAndUpdate(sourceChapterId, {
+            $pull: { lessons: lessonId }
+        });
+        
+        // Add to target chapter
+        await Chapter.findByIdAndUpdate(targetChapterId, {
+            $push: { lessons: lessonId }
+        });
+
+        // Update lesson's chapter reference
+        return Lesson.findByIdAndUpdate(lessonId, { chapter: targetChapterId }, { new: true });
+    }
+
+    async deleteLesson(lessonId) {
+        return Lesson.findByIdAndUpdate(lessonId, { del_flag: 1 }, { new: true });
+    }
+
     async enroll(courseId, userId) {
         const course = await Course.findById(courseId);
         if (!course) throw new NotFoundException("Course not found");
@@ -132,6 +188,32 @@ class CourseService extends Service {
             await course.save();
         }
         return course;
+    }
+
+    async getMyCourses(instructorId) {
+        const courses = await Course.find({ instructor: instructorId, del_flag: 0 })
+            .populate('category', 'name slug')
+            .populate('thumbnail', 'url')
+            .sort('-createdAt');
+        return { courses };
+    }
+
+    async getEnrolledCourses(userId) {
+        const courses = await Course.find({ enrolledUsers: userId, del_flag: 0 })
+            .populate('instructor', 'username name avatar')
+            .populate('thumbnail', 'url')
+            .populate({
+                path: 'chapters',
+                match: { del_flag: 0 },
+                options: { sort: { order: 1 } },
+                populate: {
+                    path: 'lessons',
+                    match: { del_flag: 0 },
+                    options: { sort: { order: 1 } },
+                }
+            })
+            .sort('-createdAt');
+        return { courses };
     }
 }
 
