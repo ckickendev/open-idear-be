@@ -10,6 +10,7 @@ const SubController = require("./sub.controller");
 const TagController = require("./tag.controller");
 const UserController = require("./user.controller");
 const CourseController = require("./course.controller");
+const TopicController = require("./topic.controller");
 
 module.exports = {
   UserController,
@@ -24,4 +25,5 @@ module.exports = {
   TagController,
   AuthController,
   CourseController,
+  TopicController,
 };

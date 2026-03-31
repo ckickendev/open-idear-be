@@ -12,6 +12,7 @@ const courseSchema = new Schema(
         description: { type: String, default: "" },
         thumbnail: { type: mongoose.Schema.Types.ObjectId, ref: "media" },
         category: { type: mongoose.Schema.Types.ObjectId, ref: "category" },
+        topics: [{ type: mongoose.Schema.Types.ObjectId, ref: "topic" }],
         instructor: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
         price: { type: Number, default: 0 },
         discountPrice: { type: Number, default: 0 },

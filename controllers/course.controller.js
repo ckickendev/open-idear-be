@@ -42,8 +42,8 @@ class CourseController extends Controller {
 
     createCourse = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
-        const { title } = req.body;
-        const course = await courseService.createCourse({ title, instructorId: _id });
+        const { title, categoryIds, topicIds } = req.body;
+        const course = await courseService.createCourse({ title, instructorId: _id, categoryIds, topicIds });
         res.status(201).json({ status: "success", data: course });
     });
 

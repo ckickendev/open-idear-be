@@ -66,7 +66,8 @@ class CourseService extends Service {
                     populate: { path: 'media', select: 'url type' }
                 }
             })
-            .populate('thumbnail', 'url');
+            .populate('thumbnail', 'url')
+            .populate('topics', 'name slug');
 
         if (!course) throw new NotFoundException("Course not found");
         return course;
@@ -86,27 +87,59 @@ class CourseService extends Service {
                     populate: { path: 'media', select: 'url type' }
                 }
             })
-            .populate('thumbnail', 'url');
+            .populate('thumbnail', 'url')
+            .populate('topics', 'name slug');
 
         if (!course) throw new NotFoundException("Course not found");
         return course;
     }
 
-    async createCourse({ title, instructorId }) {
+    async createCourse({ title, instructorId, categoryIds, topicIds }) {
         const slug = slugify(title, { lower: true, strict: true });
-        return Course.create({
+        const course = await Course.create({
             _id: new mongoose.Types.ObjectId(),
             title,
             slug,
             instructor: instructorId,
+            topics: topicIds || [],
         });
+
+        if (categoryIds && categoryIds.length > 0) {
+            const CategoryCourse = mongoose.model("categoryCourse");
+            const links = categoryIds.map(categoryId => ({
+                _id: new mongoose.Types.ObjectId(),
+                courseId: course._id,
+                categoryId
+            }));
+            await CategoryCourse.insertMany(links);
+        }
+
+        return course;
     }
 
     async updateCourse(id, updateData) {
-        if (updateData.title) {
-            updateData.slug = slugify(updateData.title, { lower: true, strict: true });
+        const { categoryIds, topicIds, ...restUpdateData } = updateData;
+        if (restUpdateData.title) {
+            restUpdateData.slug = slugify(restUpdateData.title, { lower: true, strict: true });
         }
-        return Course.findByIdAndUpdate(id, updateData, { new: true }).populate('thumbnail', 'url');;;
+        if (topicIds !== undefined) {
+            restUpdateData.topics = topicIds;
+        }
+        const course = await Course.findByIdAndUpdate(id, restUpdateData, { new: true }).populate('thumbnail', 'url').populate('topics', 'name slug');
+
+        if (categoryIds !== undefined) {
+            const CategoryCourse = mongoose.model("categoryCourse");
+            await CategoryCourse.deleteMany({ courseId: id });
+            if (categoryIds.length > 0) {
+                const links = categoryIds.map(categoryId => ({
+                    _id: new mongoose.Types.ObjectId(),
+                    courseId: id,
+                    categoryId
+                }));
+                await CategoryCourse.insertMany(links);
+            }
+        }
+        return course;
     }
 
     async updateThumbnailCourse(id, media) {
@@ -191,10 +224,18 @@ class CourseService extends Service {
     }
 
     async getMyCourses(instructorId) {
-        const courses = await Course.find({ instructor: instructorId, del_flag: 0 })
-            .populate('category', 'name slug')
+        let courses = await Course.find({ instructor: instructorId, del_flag: 0 })
+            .lean()
             .populate('thumbnail', 'url')
+            .populate('topics', 'name slug')
             .sort('-createdAt');
+            
+        const CategoryCourse = mongoose.model("categoryCourse");
+        for (let course of courses) {
+            const categoryCourses = await CategoryCourse.find({ courseId: course._id }).populate('categoryId', 'name slug');
+            course.categories = categoryCourses.map(cc => cc.categoryId);
+            course.categoryIds = categoryCourses.map(cc => cc.categoryId?._id);
+        }
         return { courses };
     }
 
