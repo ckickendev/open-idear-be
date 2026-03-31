@@ -78,7 +78,7 @@ class AuthController extends Controller {
     console.log("userId", userId);
 
     const userLogin = req.userInfo._id;
-    
+
     const userInfo = await userServices.findUserById(userId);
     const isFollowed = await userServices.isFollowed(userLogin, userId);
     if (!userInfo) throw new NotFoundException("User not found !");
@@ -241,7 +241,7 @@ class AuthController extends Controller {
       },
       {
         method: "post",
-        path: "/confirm-new-password",
+        path: "/reset-password-confirm",
         handler: this.confirmNewPassword,
       },
     ];
