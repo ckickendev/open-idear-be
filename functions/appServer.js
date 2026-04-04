@@ -50,25 +50,26 @@ class AppServer {
   initMiddleWares() {
     const corsOptions = this.loadCorsOption();
 
+    // CORS must be first to ensure it's applied even for early responses from other middlewares
+    this._app.use(cors(corsOptions));
+    this._app.options("*", cors(corsOptions)); // handle all preflights
+
     // Security headers
     this._app.use(helmet());
 
-    // Rate limiting
+    // add Vary: Origin to prevent cache poisoning
+    this._app.use((req, res, next) => { res.header("Vary", "Origin"); next(); });
+
+    // Rate limiting – use RATE_LIMIT_MAX env var, default 1000 for dev
+    const rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX, 10) || 1000;
     const limiter = rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // Limit each IP to 100 requests per `window`
+      max: rateLimitMax,
       standardHeaders: true,
       legacyHeaders: false,
       message: "Too many requests from this IP, please try again after 15 minutes"
     });
     this._app.use(limiter);
-
-    // add Vary: Origin to prevent cache poisoning
-    this._app.use((req, res, next) => { res.header("Vary", "Origin"); next(); });
-
-    // must be before any routes
-    this._app.use(cors(corsOptions));
-    this._app.options("*", cors(corsOptions)); // handle all preflights
 
     this._app.use(express.json()); // bodyParser.json() replacement
     this._app.use(express.urlencoded({ extended: true }));
