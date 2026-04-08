@@ -71,4 +71,29 @@ async function LoginMiddleware(req, res, next) {
   }
 }
 
-module.exports = { AuthMiddleware, AdminMiddleware, LoginMiddleware };
+// Like AuthMiddleware but does NOT block unauthenticated requests.
+// Sets req.userInfo if a valid token is present, otherwise continues silently.
+async function OptionalAuthMiddleware(req, res, next) {
+  try {
+    const headersToken =
+      req?.headers["authorization"] || req?.body?.headers?.["Authorization"];
+    if (!headersToken) return next();
+
+    const tokenClient = headersToken.split(" ")[1];
+    if (!tokenClient) return next();
+
+    const validToken = jwt.verify(tokenClient, "SECRET_KEY", {
+      algorithms: ["HS256"],
+    });
+    const checkingUser = await User.findOne({ email: validToken.email });
+    if (checkingUser) {
+      req.userInfo = { _id: checkingUser._id };
+    }
+    next();
+  } catch (error) {
+    // Token invalid or expired — continue without auth
+    next();
+  }
+}
+
+module.exports = { AuthMiddleware, AdminMiddleware, LoginMiddleware, OptionalAuthMiddleware };
