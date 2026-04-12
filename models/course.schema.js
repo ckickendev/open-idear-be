@@ -19,6 +19,8 @@ const courseSchema = new Schema(
         enrolledUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
         chapters: [{ type: mongoose.Schema.Types.ObjectId, ref: "chapter" }],
         status: { type: String, enum: ["draft", "published"], default: "draft" },
+        averageRating: { type: Number, default: 0 },
+        ratingCount: { type: Number, default: 0 },
         del_flag: {
             type: Number,
             default: 0

@@ -13,6 +13,7 @@ const Lesson = require("./lesson.schema");
 const Chapter = require("./chapter.schema");
 const CategoryCourse = require("./categoryCourse.schema");
 const Topic = require("./topic.schema");
+const Review = require("./review.schema");
 
 module.exports = {
   User,
@@ -30,4 +31,5 @@ module.exports = {
   Chapter,
   CategoryCourse,
   Topic,
+  Review,
 };

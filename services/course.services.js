@@ -1,7 +1,7 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { NotFoundException, BadRequestException, ServerException } = require("../exceptions");
-const { Course, Lesson, Chapter } = require("../models");
+const { Course, Lesson, Chapter, Review } = require("../models");
 const { default: slugify } = require("slugify");
 
 class CourseService extends Service {
@@ -255,6 +255,70 @@ class CourseService extends Service {
             })
             .sort('-createdAt');
         return { courses };
+    }
+
+    async rateCourse(courseId, userId, score, comment) {
+        const course = await Course.findById(courseId);
+        if (!course) throw new NotFoundException("Course not found");
+
+        if (score < 1 || score > 5) {
+            throw new BadRequestException("Score must be between 1 and 5");
+        }
+
+        let review = await Review.findOne({ course: courseId, user: userId, del_flag: 0 });
+        if (review) {
+            review.score = score;
+            review.comment = comment;
+            await review.save();
+        } else {
+            review = await Review.create({
+                _id: new mongoose.Types.ObjectId(),
+                course: courseId,
+                user: userId,
+                score,
+                comment
+            });
+        }
+
+        // Recalculate average
+        const aggregate = await Review.aggregate([
+            { $match: { course: new mongoose.Types.ObjectId(courseId), del_flag: 0 } },
+            { $group: { _id: "$course", averageRating: { $avg: "$score" }, count: { $sum: 1 } } }
+        ]);
+
+        if (aggregate.length > 0) {
+            course.averageRating = Number(aggregate[0].averageRating.toFixed(1));
+            course.ratingCount = aggregate[0].count;
+        } else {
+            course.averageRating = 0;
+            course.ratingCount = 0;
+        }
+
+        await course.save();
+        return review;
+    }
+
+    async getCourseReviews(courseId, page = 1, limit = 10) {
+        const skip = (page - 1) * limit;
+
+        const [reviews, total] = await Promise.all([
+            Review.find({ course: courseId, del_flag: 0 })
+                .populate('user', 'username name avatar')
+                .sort('-createdAt')
+                .skip(skip)
+                .limit(Number(limit)),
+            Review.countDocuments({ course: courseId, del_flag: 0 })
+        ]);
+
+        return {
+            reviews,
+            pagination: {
+                totalItems: total,
+                totalPages: Math.ceil(total / limit),
+                currentPage: Number(page),
+                limit: Number(limit)
+            }
+        };
     }
 }
 
