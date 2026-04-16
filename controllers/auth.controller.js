@@ -11,7 +11,7 @@ const {
 const { User } = require("../models");
 const userServices = require("../services/user.services");
 const authServices = require("../services/auth.services");
-const { AuthMiddleware } = require("../middlewares/auth.middleware");
+const { AuthMiddleware, OptionalAuthMiddleware } = require("../middlewares/auth.middleware");
 
 // Wrapper để tránh lặp try/catch
 const asyncHandler = fn => (req, res, next) =>
@@ -78,7 +78,7 @@ class AuthController extends Controller {
     console.log("userId", userId);
 
     const userLogin = req.userInfo._id;
-    
+
     const userInfo = await userServices.findUserById(userId);
     const isFollowed = await userServices.isFollowed(userLogin, userId);
     if (!userInfo) throw new NotFoundException("User not found !");
@@ -94,6 +94,43 @@ class AuthController extends Controller {
       bio: userInfo.bio,
       avatar: userInfo.avatar,
       background: userInfo.background,
+      isFollowed: isFollowed,
+    };
+
+    return res.status(200).json({ message: "success", userInfo: userFilter });
+  }
+
+  async getProfileByUsername(req, res) {
+    const { username } = req.query;
+    if (!username || typeof username !== "string" || username.trim().length === 0) {
+      throw new BadRequestException("Invalid username format");
+    }
+
+    const userInfo = await userServices.findUserByUsername(username);
+    if (!userInfo) throw new NotFoundException("User not found");
+
+    // Determine follow status if caller is authenticated
+    let isFollowed = null;
+    if (req.userInfo && req.userInfo._id) {
+      try {
+        isFollowed = await userServices.isFollowed(req.userInfo._id, userInfo._id);
+      } catch (e) {
+        isFollowed = null;
+      }
+    }
+
+    const userFilter = {
+      _id: userInfo._id,
+      username: userInfo.username,
+      name: userInfo.name,
+      email: userInfo.email,
+      role: userInfo.role,
+      activate: userInfo.activate,
+      createdAt: userInfo.createdAt,
+      bio: userInfo.bio,
+      avatar: userInfo.avatar,
+      background: userInfo.background,
+      followers: userInfo.followers?.length || 0,
       isFollowed: isFollowed,
     };
 
@@ -213,6 +250,12 @@ class AuthController extends Controller {
         handler: this.getProfileById,
       },
       {
+        method: "get",
+        path: "/getProfileByUsername",
+        middlewares: [OptionalAuthMiddleware],
+        handler: this.getProfileByUsername,
+      },
+      {
         method: "post",
         path: "/confirmSignup",
         handler: this.confirmSignup,
@@ -241,7 +284,7 @@ class AuthController extends Controller {
       },
       {
         method: "post",
-        path: "/confirm-new-password",
+        path: "/reset-password-confirm",
         handler: this.confirmNewPassword,
       },
     ];

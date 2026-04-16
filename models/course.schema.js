@@ -11,11 +11,16 @@ const courseSchema = new Schema(
         slug: { type: String, required: true, unique: true },
         description: { type: String, default: "" },
         thumbnail: { type: mongoose.Schema.Types.ObjectId, ref: "media" },
+        category: { type: mongoose.Schema.Types.ObjectId, ref: "category" },
+        topics: [{ type: mongoose.Schema.Types.ObjectId, ref: "topic" }],
         instructor: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
         price: { type: Number, default: 0 },
+        discountPrice: { type: Number, default: 0 },
         enrolledUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
-        lessons: [{ type: mongoose.Schema.Types.ObjectId, ref: "lesson" }],
+        chapters: [{ type: mongoose.Schema.Types.ObjectId, ref: "chapter" }],
         status: { type: String, enum: ["draft", "published"], default: "draft" },
+        averageRating: { type: Number, default: 0 },
+        ratingCount: { type: Number, default: 0 },
         del_flag: {
             type: Number,
             default: 0

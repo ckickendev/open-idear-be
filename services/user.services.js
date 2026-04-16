@@ -96,6 +96,15 @@ class UserService extends Service {
     return user;
   }
 
+  async findUserByUsername(username) {
+    const user = await User.findOne({ username: username.toLowerCase() })
+      .select("-password -activate_code -token_reset_pass -token_reset_pass_expired -del_flag");
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+    return user;
+  }
+
   async confirmToken(token, email) {
     const user = await User.findOne({ email });
     if (!user) throw new NotFoundException("User not found");

@@ -1,17 +1,16 @@
 const mongoose = require("mongoose");
 
 const { Schema } = mongoose;
-const mediaSchema = new Schema(
+const reviewSchema = new Schema(
     {
         _id: {
             type: mongoose.Schema.Types.ObjectId,
             required: true,
         },
+        course: { type: mongoose.Schema.Types.ObjectId, ref: "course", required: true },
         user: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
-        description: { type: String, default: "" },
-        url: { type: String, required: true },
-        cloudflareId: { type: String },
-        type: { type: String, enum: ["image", "video", "audio", "file"], required: true },
+        score: { type: Number, required: true, min: 1, max: 5 },
+        comment: { type: String, default: "" },
         del_flag: {
             type: Number,
             default: 0
@@ -22,4 +21,4 @@ const mediaSchema = new Schema(
     }
 );
 
-module.exports = mongoose.model("media", mediaSchema);
+module.exports = mongoose.model("review", reviewSchema);

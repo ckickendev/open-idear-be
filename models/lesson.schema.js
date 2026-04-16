@@ -15,7 +15,7 @@ const lessonSchema = new Schema(
         type: { type: String, enum: ["video", "file", "text"], default: "text" },
         isFreePreview: { type: Boolean, default: false },
         order: { type: Number, default: 0 },
-        course: { type: mongoose.Schema.Types.ObjectId, ref: "course", required: true },
+        chapter: { type: mongoose.Schema.Types.ObjectId, ref: "chapter", required: true },
         del_flag: {
             type: Number,
             default: 0
