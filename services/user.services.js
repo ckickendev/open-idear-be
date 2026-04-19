@@ -199,6 +199,40 @@ class UserService extends Service {
       return true;
     }
   }
+  async deleteUser(userId) {
+    const user = await User.findByIdAndUpdate(userId, { del_flag: 1 }, { new: true });
+    if (!user) throw new NotFoundException("User not found");
+    return user;
+  }
+
+  async toggleUserStatus(userId) {
+    const user = await User.findById(userId);
+    if (!user) throw new NotFoundException("User not found");
+    user.activate = !user.activate;
+    await user.save();
+    return user;
+  }
+
+  async createUser(data) {
+    const { email, username, name, password, role } = data;
+    const existing = await User.findOne({ $or: [{ email }, { username }] });
+    if (existing) throw new ServerException("User with this email or username already exists");
+
+    const passwordEncrypt = await bcrypt.hash(password || "defaultpassword", 10);
+    const newUser = new User({
+      _id: new mongoose.Types.ObjectId(),
+      name: name || username,
+      username: username,
+      password: passwordEncrypt,
+      email: email,
+      role: role !== undefined ? role : 0,
+      activate: true,
+      avatar: makeRandomAvatar(),
+      background: "https://codetheweb.blog/assets/img/posts/css-advanced-background-images/cover.jpg",
+    });
+    await newUser.save();
+    return newUser;
+  }
 }
 
 module.exports = new UserService();

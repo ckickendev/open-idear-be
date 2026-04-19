@@ -318,6 +318,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getMarkedByUser`, this.getMarkedByUser);
         this._router.get(`${this._rootPath}/getSideInformation`, AuthMiddleware, this.getSideInformation);
         this._router.get(`${this._rootPath}/getRecentlyData`, this.getRecentlyData);
+        this._router.get(`${this._rootPath}/getRecentlyPosts`, this.getRecentlyData);
         this._router.get(`${this._rootPath}/getRecentlyDataByFeatures`, this.getRecentlyDataByFeatures);
         this._router.get(`${this._rootPath}/getAllPosts`, this.getAllPosts);
         this._router.get(`${this._rootPath}/getAllPostLikeByUser/:id`, AuthMiddleware, this.getAllPostLikeByUser);
