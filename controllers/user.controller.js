@@ -14,7 +14,8 @@ class UserController extends Controller {
   }
 
   async getAll(req, res, next) {
-    const users = await userService.getAllUser();
+    const { status } = req.query;
+    const users = await userService.getAllUser(status);
     res.json({
       users
     })
@@ -119,6 +120,16 @@ class UserController extends Controller {
     }
   }
 
+  async restoreUser(req, res, next) {
+    try {
+      const { id } = req.params;
+      await userService.restoreUser(id);
+      return res.status(200).json({ message: "User restored successfully" });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  }
+
   async toggleStatus(req, res, next) {
     try {
       const { id } = req.params;
@@ -142,6 +153,7 @@ class UserController extends Controller {
     this._router.post(`${this._rootPath}/create`, AdminMiddleware, this.createUser);
     this._router.patch(`${this._rootPath}/update/:id`, AdminMiddleware, this.updateUser);
     this._router.delete(`${this._rootPath}/delete/:id`, AdminMiddleware, this.deleteUser);
+    this._router.patch(`${this._rootPath}/restore/:id`, AdminMiddleware, this.restoreUser);
     this._router.patch(`${this._rootPath}/toggle-status/:id`, AdminMiddleware, this.toggleStatus);
   };
 

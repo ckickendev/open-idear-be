@@ -223,8 +223,11 @@ class CourseService extends Service {
         return course;
     }
 
-    async getMyCourses(instructorId) {
-        let courses = await Course.find({ instructor: instructorId, del_flag: 0 })
+    async getMyCourses(instructorId, status) {
+        const query = { instructor: instructorId };
+        query.del_flag = status === 'trash' ? 1 : 0;
+        
+        let courses = await Course.find(query)
             .lean()
             .populate('thumbnail', 'url')
             .populate('topics', 'name slug')
@@ -323,6 +326,12 @@ class CourseService extends Service {
 
     async deleteCourse(courseId) {
         const course = await Course.findByIdAndUpdate(courseId, { del_flag: 1 }, { new: true });
+        if (!course) throw new NotFoundException("Course not found");
+        return course;
+    }
+
+    async restoreCourse(courseId) {
+        const course = await Course.findByIdAndUpdate(courseId, { del_flag: 0 }, { new: true });
         if (!course) throw new NotFoundException("Course not found");
         return course;
     }

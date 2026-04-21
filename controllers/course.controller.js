@@ -104,7 +104,8 @@ class CourseController extends Controller {
 
     getMyCourses = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
-        const result = await courseService.getMyCourses(_id);
+        const { status } = req.query;
+        const result = await courseService.getMyCourses(_id, status);
         res.status(200).json({ status: "success", ...result });
     });
 
@@ -139,6 +140,12 @@ class CourseController extends Controller {
         res.status(200).json({ status: "success", data: course });
     });
 
+    restoreCourse = asyncHandler(async (req, res) => {
+        const { courseId } = req.query;
+        const course = await courseService.restoreCourse(courseId);
+        res.status(200).json({ status: "success", data: course });
+    });
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getCourses);
         this._router.get(`${this._rootPath}/me`, AuthMiddleware, this.getMyCourses);
@@ -163,6 +170,7 @@ class CourseController extends Controller {
 
         this._router.patch(`${this._rootPath}/curriculum`, AuthMiddleware, this.updateCurriculum);
         this._router.delete(`${this._rootPath}`, AuthMiddleware, this.deleteCourse);
+        this._router.patch(`${this._rootPath}/restore`, AuthMiddleware, this.restoreCourse);
         this._router.post(`${this._rootPath}/enroll`, AuthMiddleware, this.enroll);
     };
 }

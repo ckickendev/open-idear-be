@@ -5,10 +5,11 @@ const { NotFoundException, ServerException } = require("../exceptions");
 const { default: slugify } = require("slugify");
 
 class PostService extends Service {
-    async getAll() {
-        const posts = await Post.find({ del_flag: 0 })
+    async getAll(status) {
+        const query = status === 'trash' ? { del_flag: 1 } : { del_flag: 0 };
+        const posts = await Post.find(query)
             .populate('category', "name")
-            .populate('author', 'username email')
+            .populate('author', 'username email name')
             .populate('image', 'url description');
         return posts;
     }
@@ -95,12 +96,16 @@ class PostService extends Service {
             category: post.category,
             tags: post.tags,
             slug,
-            readtime: Math.ceil(readPost),
             published: false,
-            del_flag: 0,
+            views: 0,
+            likes: [],
+            marked: [],
+            comments: [],
             isFreePreview: post.isFreePreview || false,
             lessonType: post.lessonType || "text",
             mediaContent: post.mediaContent || null,
+            del_flag: 0,
+            readtime: Math.ceil(readPost),
         });
         const returnPost = await Post.create(newPost);
         return returnPost;
@@ -565,6 +570,34 @@ class PostService extends Service {
             return {
                 likePosts,
             };
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+    };
+
+    deletePost = async (postId) => {
+        try {
+            const post = await Post.findById(postId);
+            console.log('post to delete', post);
+
+            if (!post) throw new ServerException("Post not found");
+            post.del_flag = 1;
+            await post.save();
+            return { success: true };
+        } catch (error) {
+            console.log('error', error);
+            throw new ServerException("error");
+        }
+    };
+
+    restorePost = async (postId) => {
+        try {
+            const post = await Post.findById(postId);
+            if (!post) throw new ServerException("Post not found");
+            post.del_flag = 0;
+            await post.save();
+            return { success: true };
         } catch (error) {
             console.log('error', error);
             throw new ServerException("error");

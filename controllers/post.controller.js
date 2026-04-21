@@ -16,8 +16,9 @@ class PostController extends Controller {
 
     getAll = asyncHandler(async (req, res) => {
         console.log('Call function get all');
+        const { status } = req.query;
 
-        const posts = await postService.getAll();
+        const posts = await postService.getAll(status);
         res.status(200).json({ posts });
     });
 
@@ -195,7 +196,7 @@ class PostController extends Controller {
     });
 
     deletePost = asyncHandler(async (req, res) => {
-        console.log('Call function deletePost');
+        console.log('Call function deletePost: post id', req.body.postId);
         const { postId } = req.body;
         const { _id } = req.userInfo;
 
@@ -207,6 +208,17 @@ class PostController extends Controller {
 
         await postService.deletePost(postId);
         res.status(200).json({ message: "Post deleted successfully" });
+    });
+
+    restorePost = asyncHandler(async (req, res) => {
+        console.log('Call function restorePost: post id', req.body.postId);
+        const { postId } = req.body;
+        const { _id } = req.userInfo;
+
+        // Note: For admins restoring posts, you might skip checking author depending on requirements,
+        // but for now keeping it simple. We may need to verify AdminMiddleware instead.
+        await postService.restorePost(postId);
+        res.status(200).json({ message: "Post restored successfully" });
     });
 
     public = asyncHandler(async (req, res) => {
@@ -325,6 +337,7 @@ class PostController extends Controller {
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
+        this._router.post(`${this._rootPath}/restorePost`, AuthMiddleware, this.restorePost);
         this._router.post(`${this._rootPath}/public`, AuthMiddleware, this.public);
         this._router.patch(`${this._rootPath}/changePublicManager`, AuthMiddleware, this.changePublicManager);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);

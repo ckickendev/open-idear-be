@@ -7,8 +7,9 @@ const { confirmTokenEmail, confirmResetPass } = require("../utils/emailTemplate"
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
 class UserService extends Service {
-  async getAllUser() {
-    const users = await User.find({});
+  async getAllUser(status) {
+    const query = status === 'trash' ? { del_flag: 1 } : { del_flag: 0 };
+    const users = await User.find(query);
     return users;
   }
 
@@ -201,6 +202,12 @@ class UserService extends Service {
   }
   async deleteUser(userId) {
     const user = await User.findByIdAndUpdate(userId, { del_flag: 1 }, { new: true });
+    if (!user) throw new NotFoundException("User not found");
+    return user;
+  }
+
+  async restoreUser(userId) {
+    const user = await User.findByIdAndUpdate(userId, { del_flag: 0 }, { new: true });
     if (!user) throw new NotFoundException("User not found");
     return user;
   }
