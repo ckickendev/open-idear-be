@@ -320,6 +320,19 @@ class CourseService extends Service {
             }
         };
     }
+
+    async deleteCourse(courseId) {
+        const course = await Course.findByIdAndUpdate(courseId, { del_flag: 1 }, { new: true });
+        if (!course) throw new NotFoundException("Course not found");
+        return course;
+    }
+
+    async updateCurriculum(courseId, curriculumData) {
+        // Generic placeholder for curriculum restructuring
+        const course = await Course.findById(courseId);
+        if (!course) throw new NotFoundException("Course not found");
+        return course;
+    }
 }
 
 module.exports = new CourseService();
