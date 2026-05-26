@@ -11,6 +11,9 @@ const TagController = require("./tag.controller");
 const UserController = require("./user.controller");
 const CourseController = require("./course.controller");
 const TopicController = require("./topic.controller");
+const CartController = require("./cart.controller");
+const PaymentController = require("./payment.controller");
+const EnrollmentController = require("./enrollment.controller");
 
 module.exports = {
   UserController,
@@ -26,4 +29,7 @@ module.exports = {
   AuthController,
   CourseController,
   TopicController,
+  CartController,
+  PaymentController,
+  EnrollmentController,
 };

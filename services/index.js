@@ -11,6 +11,9 @@ const tagService = require("./tag.services");
 const notificationService = require("./notification.services");
 const courseService = require("./course.services");
 const topicService = require("./topic.services");
+const cartService = require("./cart.services");
+const paymentService = require("./payment.services");
+const enrollmentService = require("./enrollment.services");
 
 module.exports = {
   userService,
@@ -26,4 +29,7 @@ module.exports = {
   notificationService,
   courseService,
   topicService,
+  cartService,
+  paymentService,
+  enrollmentService,
 };

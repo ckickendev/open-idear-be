@@ -12,6 +12,9 @@ const {
   CourseController,
   SeriesController,
   TopicController,
+  CartController,
+  PaymentController,
+  EnrollmentController,
 } = require("./controllers/index.js");
 const AppServer = require("./functions/appServer");
 
@@ -29,6 +32,9 @@ const app = new AppServer([
   new AuthController(),
   new CourseController(),
   new TopicController(),
+  new CartController(),
+  new PaymentController(),
+  new EnrollmentController(),
 ]);
 
 app.startListening();
