@@ -1,6 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
-const { ServerException, BadRequestException } = require("../exceptions");
+const { ServerException, BadRequestException, NotFoundException } = require("../exceptions");
 const { Series, Post } = require("../models");
 const { default: slugify } = require("slugify");
 
@@ -51,32 +51,37 @@ class SeriesService extends Service {
             // Get posts from this week
             const now = new Date();
             const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 30); // 10 days ago from now
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7); // 7 days ago
+
             const series = await Series.find({
                 del_flag: 0,
                 updatedAt: {
                     $gte: sevenDaysAgo,
                     $lte: now
                 }
-            }).populate('user', 'username name email avatar')
-                .populate('posts', 'title slug')
-                .populate('image', 'url description');;
+            })
+                .populate('user', 'username name email avatar')
+                .populate({
+                    path: 'posts',
+                    match: {
+                        del_flag: 0,
+                        updatedAt: {
+                            $gte: sevenDaysAgo,
+                            $lte: now
+                        }
+                    },
+                    select: 'views likes comments'
+                })
+                .populate('image', 'url description')
+                .lean();
 
             for (const serie of series) {
-                const posts = await Post.find({
-                    _id: { $in: serie.posts },
-                    del_flag: 0,
-                    updatedAt: {
-                        $gte: sevenDaysAgo,
-                        $lte: now
-                    }
-                });
-
                 let hotScore = 0;
-                posts.forEach(post => {
-                    hotScore += post.views + (post.likes ? post.likes.length * 2 : 0) + (post.comments ? post.comments.length * 3 : 0);
-                });
-
+                if (serie.posts) {
+                    serie.posts.forEach(post => {
+                        hotScore += (post.views || 0) + (post.likes ? post.likes.length * 2 : 0) + (post.comments ? post.comments.length * 3 : 0);
+                    });
+                }
                 hotSeries.push({ series: serie, hotScore });
             }
 

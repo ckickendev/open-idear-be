@@ -33,6 +33,18 @@ const userSchema = new Schema(
     activate_code: String,
     token_reset_pass: String,
     token_reset_pass_expired: Date,
+    cart: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "course" }],
+      default: [],
+    },
+    enrolledCourses: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "course" }],
+      default: [],
+    },
+    purchasedCourses: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "course" }],
+      default: [],
+    },
     del_flag: {
       type: Number,
       default: 0

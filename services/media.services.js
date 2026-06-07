@@ -52,6 +52,8 @@ class MediaService extends Service {
             throw new Error("Cloudflare credentials are not configured in .env");
         }
 
+        console.log("accountId, apiToken", accountId, apiToken);
+
         try {
             const response = await axios.post(
                 `https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/direct_upload`,

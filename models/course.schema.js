@@ -17,6 +17,7 @@ const courseSchema = new Schema(
         price: { type: Number, default: 0 },
         discountPrice: { type: Number, default: 0 },
         enrolledUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
+        studentsCount: { type: Number, default: 0 },
         chapters: [{ type: mongoose.Schema.Types.ObjectId, ref: "chapter" }],
         status: { type: String, enum: ["draft", "published"], default: "draft" },
         averageRating: { type: Number, default: 0 },
@@ -30,5 +31,8 @@ const courseSchema = new Schema(
         timestamps: true,
     }
 );
+
+courseSchema.index({ instructor: 1 });
+courseSchema.index({ del_flag: 1, status: 1 });
 
 module.exports = mongoose.model("course", courseSchema);

@@ -14,7 +14,8 @@ class CategoryController extends Controller {
     }
 
     getAll = asyncHandler(async (req, res) => {
-        const categories = await categorieService.getAll();
+        const { status } = req.query;
+        const categories = await categorieService.getAll(status);
         res.json({ categories });
     });
 
@@ -123,6 +124,20 @@ class CategoryController extends Controller {
         });
     });
 
+    restoreCategory = asyncHandler(async (req, res) => {
+        const { id } = req.params;
+        const category = await categorieService.restoreCategory(id);
+
+        if (!category) {
+            return res.status(404).json({ message: "Category not found" });
+        }
+
+        res.json({
+            message: "Category restored successfully",
+            category,
+        });
+    });
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/getRandomTopic`, this.getRandomTopic);
@@ -131,6 +146,7 @@ class CategoryController extends Controller {
         this._router.get(`${this._rootPath}/getPostsInAnotherCategorySlug/:slug/:number`, this.getPostsInAnotherCategorySlug);
         this._router.post(`${this._rootPath}/create`, AdminMiddleware, this.createCategory);
         this._router.patch(`${this._rootPath}/update/:id`, AdminMiddleware, this.updateCategory);
+        this._router.patch(`${this._rootPath}/restore/:id`, AdminMiddleware, this.restoreCategory);
         this._router.delete(`${this._rootPath}/delete/:id`, AdminMiddleware, this.deleteCategory);
     };
 }

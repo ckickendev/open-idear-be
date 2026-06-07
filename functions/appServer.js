@@ -71,7 +71,7 @@ class AppServer {
     });
     this._app.use(limiter);
 
-    this._app.use(express.json()); // bodyParser.json() replacement
+    this._app.use(express.json({ limit: '10mb' })); // bodyParser.json() replacement
     this._app.use(express.urlencoded({ extended: true }));
   }
 
@@ -82,11 +82,6 @@ class AppServer {
     });
 
     // Global error handler
-    this._app._router.stack.forEach((layer) => {
-      if (layer.route) {
-        // This is a bit hacky for Express, usually we add it at the end
-      }
-    });
 
     this._app.use((err, req, res, next) => {
       ConsoleLogger.error(`Error: ${err.message}`);
@@ -118,9 +113,23 @@ class AppServer {
 
   startListening() {
     const PORT = process.env.PORT || this._port;
-    this._app.listen(PORT, () => {
+    const server = this._app.listen(PORT, () => {
       ConsoleLogger.info(`Server start on ${PORT}!`);
     });
+
+    // Graceful shutdown
+    const shutdown = () => {
+      ConsoleLogger.info("Shutting down gracefully...");
+      server.close(() => {
+        ConsoleLogger.info("HTTP server closed.");
+        mongoose.connection.close(false).then(() => {
+          ConsoleLogger.info("MongoDB connection closed.");
+          process.exit(0);
+        });
+      });
+    };
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
   }
 }
 

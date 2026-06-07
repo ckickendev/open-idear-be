@@ -2,10 +2,12 @@ const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { Category, Post } = require("../models");
 const { default: slugify } = require("slugify");
+const { NotFoundException } = require("../exceptions");
 
 class CategoryService extends Service {
-    async getAll() {
-        const categories = await Category.find({});
+    async getAll(status) {
+        const query = status === 'trash' ? { del_flag: 1 } : { del_flag: { $ne: 1 } };
+        const categories = await Category.find(query);
         return categories;
     }
 
@@ -16,7 +18,10 @@ class CategoryService extends Service {
 
     async getCategoryBySlug(slug) {
         const category = await Category.findOne({ slug, del_flag: 0 });
-        const countData = (await Post.find({ category: category._id })).length;
+        if (!category) {
+            throw new NotFoundException("Category not found");
+        }
+        const countData = await Post.countDocuments({ category: category._id });
         return { ...category._doc, countData };
     }
 
@@ -86,6 +91,14 @@ class CategoryService extends Service {
 
     async deleteCategory(id) {
         const category = await Category.findByIdAndUpdate(id, { del_flag: 1 }, { new: true });
+        if (!category) {
+            throw new NotFoundException("Category not found");
+        }
+        return category;
+    }
+
+    async restoreCategory(id) {
+        const category = await Category.findByIdAndUpdate(id, { del_flag: 0 }, { new: true });
         if (!category) {
             throw new NotFoundException("Category not found");
         }

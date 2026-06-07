@@ -223,18 +223,28 @@ class CourseService extends Service {
         return course;
     }
 
-    async getMyCourses(instructorId) {
-        let courses = await Course.find({ instructor: instructorId, del_flag: 0 })
-            .lean()
+    async getMyCourses(instructorId, status) {
+        const query = { instructor: instructorId };
+        query.del_flag = status === 'trash' ? 1 : 0;
+        
+        let courses = await Course.find(query)
             .populate('thumbnail', 'url')
             .populate('topics', 'name slug')
-            .sort('-createdAt');
+            .sort('-createdAt')
+            .lean();
             
         const CategoryCourse = mongoose.model("categoryCourse");
+        const courseIds = courses.map(c => c._id);
+        const allCategoryCourses = await CategoryCourse.find({ courseId: { $in: courseIds } }).populate('categoryId', 'name slug');
+        const categoryMap = {};
+        allCategoryCourses.forEach(cc => {
+            if (!categoryMap[cc.courseId]) categoryMap[cc.courseId] = [];
+            categoryMap[cc.courseId].push(cc);
+        });
         for (let course of courses) {
-            const categoryCourses = await CategoryCourse.find({ courseId: course._id }).populate('categoryId', 'name slug');
-            course.categories = categoryCourses.map(cc => cc.categoryId);
-            course.categoryIds = categoryCourses.map(cc => cc.categoryId?._id);
+            const ccs = categoryMap[course._id] || [];
+            course.categories = ccs.map(cc => cc.categoryId);
+            course.categoryIds = ccs.map(cc => cc.categoryId?._id);
         }
         return { courses };
     }
@@ -323,6 +333,12 @@ class CourseService extends Service {
 
     async deleteCourse(courseId) {
         const course = await Course.findByIdAndUpdate(courseId, { del_flag: 1 }, { new: true });
+        if (!course) throw new NotFoundException("Course not found");
+        return course;
+    }
+
+    async restoreCourse(courseId) {
+        const course = await Course.findByIdAndUpdate(courseId, { del_flag: 0 }, { new: true });
         if (!course) throw new NotFoundException("Course not found");
         return course;
     }

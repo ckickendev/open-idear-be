@@ -15,7 +15,6 @@ class SeriesController extends Controller {
     }
 
     getSeries = asyncHandler(async (req, res) => {
-        console.log('Call function get series');
         const series = await seriesService.getAll();
         res.status(200).json({
             series: series,
@@ -24,7 +23,6 @@ class SeriesController extends Controller {
 
     getSeriesByUser = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
-        console.log('getSeriesByUser', _id);
         const series = await seriesService.getSeriesByUser(_id);
         res.status(200).json({
             status: "success",
@@ -34,20 +32,14 @@ class SeriesController extends Controller {
 
     getMarkedByUser = asyncHandler(async (req, res) => {
         const { profileId } = req.query;
-        console.log('getMarkedByUser', profileId);
-        try {
-            const markedSeries = await seriesService.getMarkedByUser(profileId);
-            res.status(200).json({
-                status: "success",
-                markedSeries: markedSeries,
-            });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const markedSeries = await seriesService.getMarkedByUser(profileId);
+        res.status(200).json({
+            status: "success",
+            markedSeries: markedSeries,
+        });
     });
 
     getSeriesByAuthorId = asyncHandler(async (req, res) => {
-        console.log('getSeriesByAuthorId');
         const profileId = req.query.profileId;
         const series = await seriesService.getSeriesByUser(profileId);
 
@@ -55,7 +47,6 @@ class SeriesController extends Controller {
     });
 
     getHotSeries = asyncHandler(async (req, res) => {
-        console.log('Call function getHotSeries');
         const series = await seriesService.getHotSeries();
         res.status(200).json({
             status: "success",
@@ -73,16 +64,11 @@ class SeriesController extends Controller {
 
     getAnotherSeriesBySlug = asyncHandler(async (req, res) => {
         const { slug } = req.query;
-        console.log('Call function getAnotherSeriesBySlug', slug);
-        try {
-            const anotherSeries = await seriesService.getAnotherSeriesBySlug(slug);
-            res.status(200).json({
-                status: "success",
-                anotherSeries: anotherSeries,
-            });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const anotherSeries = await seriesService.getAnotherSeriesBySlug(slug);
+        res.status(200).json({
+            status: "success",
+            anotherSeries: anotherSeries,
+        });
     });
 
     createSeries = asyncHandler(async (req, res) => {
@@ -103,89 +89,56 @@ class SeriesController extends Controller {
 
     editSeries = asyncHandler(async (req, res) => {
         const { seriesId, title, description, image } = req.body;
-        console.log('Call function editSeries', seriesId, title, description, image);
-        try {
-            const series = await seriesService.editSeries(seriesId, { title, description, image });
-            res.status(200).json({
-                status: "success",
-                data: series,
-            });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
-
+        const series = await seriesService.editSeries(seriesId, { title, description, image });
+        res.status(200).json({
+            status: "success",
+            data: series,
+        });
     });
 
     update = asyncHandler(async (req, res) => {
         const { _id, title, slug, description } = req.body;
-        console.log('Call function update series', _id, title, description, slug);
-        try {
-            const series = await seriesService.updateSeries(_id, title, description);
-            console.log('series', series);
-
-            res.status(200).json({
-                status: "success",
-                series: series,
-            });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const series = await seriesService.updateSeries(_id, title, description);
+        res.status(200).json({
+            status: "success",
+            series: series,
+        });
     });
 
     markSeries = asyncHandler(async (req, res) => {
-        console.log('Call function markedSeries');
         const { seriesId } = req.body;
         const { _id } = req.userInfo;
-        try {
-            const isMarked = await seriesService.markedSeries(seriesId, _id);
-            return res.status(200).json({ isMarked });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const isMarked = await seriesService.markedSeries(seriesId, _id);
+        return res.status(200).json({ isMarked });
     });
 
     deleteSeries = asyncHandler(async (req, res) => {
         const { seriesId } = req.body;
-        console.log('Call function deleteSeries', seriesId);
-        try {
-            await seriesService.deleteSeries(seriesId);
+        await seriesService.deleteSeries(seriesId);
 
-            res.status(200).json({
-                status: "success",
-                message: "Series deleted successfully",
-            });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        res.status(200).json({
+            status: "success",
+            message: "Series deleted successfully",
+        });
     });
 
     enroll = asyncHandler(async (req, res) => {
         const { seriesId } = req.body;
         const { _id } = req.userInfo;
-        console.log('Call function enroll series', seriesId, _id);
-        try {
-            const series = await seriesService.enroll(seriesId, _id);
-            res.status(200).json({
-                status: "success",
-                data: series,
-            });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const series = await seriesService.enroll(seriesId, _id);
+        res.status(200).json({
+            status: "success",
+            data: series,
+        });
     });
 
     updatePrice = asyncHandler(async (req, res) => {
         const { seriesId, price } = req.body;
-        console.log('Call function updatePrice series', seriesId, price);
-        try {
-            const series = await seriesService.updatePrice(seriesId, price);
-            res.status(200).json({
-                status: "success",
-                data: series,
-            });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const series = await seriesService.updatePrice(seriesId, price);
+        res.status(200).json({
+            status: "success",
+            data: series,
+        });
     });
 
     initController = () => {

@@ -5,11 +5,16 @@ const { NotFoundException, ServerException } = require("../exceptions");
 const { default: slugify } = require("slugify");
 
 class PostService extends Service {
-    async getAll() {
-        const posts = await Post.find({ del_flag: 0 })
+    async getAll(status, page = 1, limit = 20) {
+        const query = status === 'trash' ? { del_flag: 1 } : { del_flag: 0 };
+        const posts = await Post.find(query)
             .populate('category', "name")
-            .populate('author', 'username email')
-            .populate('image', 'url description');
+            .populate('author', 'username email name')
+            .populate('image', 'url description')
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .lean();
         return posts;
     }
 
@@ -27,7 +32,6 @@ class PostService extends Service {
                 .sort({ createdAt: -1 })
                 .populate('category', 'name slug')
                 .populate('tags')
-                .populate('likes')
                 .populate('author', 'username email avatar name')
                 .populate('image', 'url description');
 
@@ -95,12 +99,16 @@ class PostService extends Service {
             category: post.category,
             tags: post.tags,
             slug,
-            readtime: Math.ceil(readPost),
             published: false,
-            del_flag: 0,
+            views: 0,
+            likes: [],
+            marked: [],
+            comments: [],
             isFreePreview: post.isFreePreview || false,
             lessonType: post.lessonType || "text",
             mediaContent: post.mediaContent || null,
+            del_flag: 0,
+            readtime: Math.ceil(readPost),
         });
         const returnPost = await Post.create(newPost);
         return returnPost;
@@ -246,7 +254,7 @@ class PostService extends Service {
 
     }
 
-    async calculateHotScore(post) {
+    calculateHotScore(post) {
         const now = new Date();
         const postAge = (now - post.createdAt) / (1000 * 60 * 60); // age in hours
 
@@ -312,7 +320,7 @@ class PostService extends Service {
             // Get posts from this week
             const now = new Date();
             const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 30); // 10 days ago from now
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7); // 7 days ago from now
 
             const posts = await Post.find({
                 published: true,
@@ -330,7 +338,7 @@ class PostService extends Service {
 
             // Calculate hot scores and sort
             for (const post of posts) {
-                const score = await this.calculateHotScore(post);
+                const score = this.calculateHotScore(post);
                 post.hotScore = score;
             }
 
@@ -345,11 +353,7 @@ class PostService extends Service {
             return paginatedPosts;
         } catch (error) {
             console.error('Error fetching hot posts this week:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Error fetching hot posts',
-                error: error.message
-            });
+            throw new ServerException(error.message || 'Error fetching hot posts');
         }
     };
 
@@ -569,6 +573,18 @@ class PostService extends Service {
             console.log('error', error);
             throw new ServerException("error");
         }
+    };
+
+    deletePost = async (postId) => {
+        const post = await Post.findByIdAndUpdate(postId, { del_flag: 1 }, { new: true });
+        if (!post) throw new NotFoundException("Post not found");
+        return { success: true };
+    };
+
+    restorePost = async (postId) => {
+        const post = await Post.findByIdAndUpdate(postId, { del_flag: 0 }, { new: true });
+        if (!post) throw new NotFoundException("Post not found");
+        return { success: true };
     };
 };
 
