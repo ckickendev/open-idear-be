@@ -15,15 +15,12 @@ class PostController extends Controller {
     }
 
     getAll = asyncHandler(async (req, res) => {
-        console.log('Call function get all');
-        const { status } = req.query;
-
-        const posts = await postService.getAll(status);
+        const { status, page = 1, limit = 20 } = req.query;
+        const posts = await postService.getAll(status, parseInt(page), parseInt(limit));
         res.status(200).json({ posts });
     });
 
     getPostToEdit = asyncHandler(async (req, res) => {
-        console.log('Call function get post');
         const { postId } = req.query;
         const { _id } = req.userInfo;
 
@@ -38,7 +35,6 @@ class PostController extends Controller {
     });
 
     getPostByID = asyncHandler(async (req, res) => {
-        console.log('Call function get post by ID');
         const { id } = req.params;
 
         const post = await postService.getPostById(id);
@@ -48,7 +44,6 @@ class PostController extends Controller {
     });
 
     getPostBySlug = asyncHandler(async (req, res) => {
-        console.log('Call function get post by Slug');
         const { slug } = req.params;
 
         const post = await postService.getPostBySlug(slug);
@@ -58,7 +53,6 @@ class PostController extends Controller {
     });
 
     getHotTopics = asyncHandler(async (req, res) => {
-        console.log('Call function get hot topics');
         const { limit = 10, page = 1 } = req.query;
         const posts = await postService.getHotPostsToday(limit, page);
         if (posts.length === 0) return res.status(404).json({ message: "No hot topics found" });
@@ -76,7 +70,6 @@ class PostController extends Controller {
     });
 
     getHotPostsWeek = asyncHandler(async (req, res) => {
-        console.log('Call function get hot getHotPostsWeek this week');
         const { limit = 10, page = 1 } = req.query;
         const posts = await postService.getHotPostsThisWeek(limit, page);
 
@@ -93,7 +86,6 @@ class PostController extends Controller {
     });
 
     getPostByAuthor = asyncHandler(async (req, res) => {
-        console.log('getPostByAuthor');
         const _id = req.query.profileId || req.userInfo._id;
         const posts = await postService.getPostByUser(_id);
 
@@ -101,7 +93,6 @@ class PostController extends Controller {
     });
 
     getPostByAuthorId = asyncHandler(async (req, res) => {
-        console.log('getPostByAuthorId');
         const profileId = req.query.profileId;
         const posts = await postService.getPostByUser(profileId);
 
@@ -109,72 +100,46 @@ class PostController extends Controller {
     });
 
     getLastestPostByUser = asyncHandler(async (req, res) => {
-        console.log('Call function get lastest post by user');
         const { userId } = req.body;
         const posts = await postService.getLastestPostByUser(userId);
         res.status(200).json({ posts });
     });
 
-
     getSideInformation = asyncHandler(async (req, res) => {
-        console.log('Call function getSideInformation');
         const { _id } = req.userInfo;
         const postId = req.query.postId;
 
         const post = await postService.getPostById(postId);
-        const isFollowed = await userService.isFollowed(_id, post.author._id);
         if (!post) return res.status(404).json({ message: "Post not found" });
+        const isFollowed = await userService.isFollowed(_id, post.author._id);
         res.status(200).json({ isLiked: post.likes.includes(_id), isBookmarked: post.marked.includes(_id), isFollowed: isFollowed });
     });
 
     getRecentlyData = asyncHandler(async (req, res) => {
-        console.log('Call function getRecentlyData');
-        try {
-            const recentlyData = await postService.getRecentlyData();
-            res.status(200).json({ recentlyData });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const recentlyData = await postService.getRecentlyData();
+        res.status(200).json({ recentlyData });
     });
 
     getRecentlyDataByFeatures = asyncHandler(async (req, res) => {
-        console.log('Call function getRecentlyDataByFeatures');
-        try {
-            const features = req.query.feature ? req.query.feature : null;
-            const recentlyData = await postService.getRecentlyDataByFeatures(features);
-            res.status(200).json({ recentlyData });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const features = req.query.feature ? req.query.feature : null;
+        const recentlyData = await postService.getRecentlyDataByFeatures(features);
+        res.status(200).json({ recentlyData });
     });
 
     getAllPosts = asyncHandler(async (req, res) => {
         const { limit, page } = req.query;
-        console.log('Call function getAllPosts with data', limit, page);
-
-        try {
-            const postData = await postService.getAllPosts(limit, page);
-            res.status(200).json({ posts: postData.posts, countData: postData.countData });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const postData = await postService.getAllPosts(limit, page);
+        res.status(200).json({ posts: postData.posts, countData: postData.countData });
     });
 
     getAllPostLikeByUser = asyncHandler(async (req, res) => {
-        console.log('Call function getAllPostLikeByUser');
         const { id } = req.params;
         const { page } = req.body;
-
-        try {
-            const postData = await postService.getAllPostLikeByUser(id, page);
-            res.status(200).json({ posts: postData.posts });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const postData = await postService.getAllPostLikeByUser(id, page);
+        res.status(200).json({ posts: postData.posts });
     });
 
     create = asyncHandler(async (req, res) => {
-        console.log('Call function create Post');
         const { _id } = req.userInfo;
         const { title, content, text } = req.body;
 
@@ -188,7 +153,6 @@ class PostController extends Controller {
     });
 
     marked = asyncHandler(async (req, res) => {
-        console.log('Call function marked post');
         const { postId } = req.query;
         const { _id } = req.userInfo;
         const isMarked = await postService.markedPost(postId, _id);
@@ -196,7 +160,6 @@ class PostController extends Controller {
     });
 
     deletePost = asyncHandler(async (req, res) => {
-        console.log('Call function deletePost: post id', req.body.postId);
         const { postId } = req.body;
         const { _id } = req.userInfo;
 
@@ -211,18 +174,12 @@ class PostController extends Controller {
     });
 
     restorePost = asyncHandler(async (req, res) => {
-        console.log('Call function restorePost: post id', req.body.postId);
         const { postId } = req.body;
-        const { _id } = req.userInfo;
-
-        // Note: For admins restoring posts, you might skip checking author depending on requirements,
-        // but for now keeping it simple. We may need to verify AdminMiddleware instead.
         await postService.restorePost(postId);
         res.status(200).json({ message: "Post restored successfully" });
     });
 
     public = asyncHandler(async (req, res) => {
-        console.log('Call function public post with data');
         const publicInfo = req.body.publicInfo;
         const { _id } = req.userInfo;
         const post = await postService.getPostById(publicInfo.postId);
@@ -237,7 +194,6 @@ class PostController extends Controller {
     });
 
     changePublicManager = asyncHandler(async (req, res) => {
-        console.log('Call function change public manager');
         const { id } = req.query;
         const { published } = req.body;
         const post = await postService.getPostById(id);
@@ -250,7 +206,6 @@ class PostController extends Controller {
 
     update = asyncHandler(async (req, res) => {
         const { postId, title, content, text } = req.body;
-
         const { _id } = req.userInfo;
 
         const post = await postService.getPostById(postId);
@@ -273,7 +228,6 @@ class PostController extends Controller {
     });
 
     getLikeByUser = asyncHandler(async (req, res) => {
-        console.log('Call function getLikeByUser');
         const _id = req.query.profileId;
         const likePost = await postService.getPostLikeById(_id);
 
@@ -281,14 +235,12 @@ class PostController extends Controller {
     });
 
     getMarkedByUser = asyncHandler(async (req, res) => {
-        console.log('Call function getMarkedByUser');
         const _id = req.query.profileId;
         const markedPost = await postService.getPostMarkedById(_id);
         res.status(200).json({ markedPost, message: "Get marked success" });
     });
 
     followUser = asyncHandler(async (req, res) => {
-        console.log('Call function followUser');
         let isFollowed;
         const { postId } = req.query;
         if (postId) {
@@ -304,15 +256,10 @@ class PostController extends Controller {
     });
 
     markedPost = asyncHandler(async (req, res) => {
-        console.log('Call function markedPost');
         const { postId } = req.body;
         const { _id } = req.userInfo;
-        try {
-            const isMarked = await postService.markedPost(postId, _id);
-            return res.status(200).json({ isMarked });
-        } catch (error) {
-            return res.status(500).json({ message: error.message });
-        }
+        const isMarked = await postService.markedPost(postId, _id);
+        return res.status(200).json({ isMarked });
     });
 
     initController = () => {
@@ -321,7 +268,6 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getPostByID/:id`, this.getPostByID);
         this._router.get(`${this._rootPath}/getPostBySlug/:slug`, this.getPostBySlug);
         this._router.get(`${this._rootPath}/getHotTopics`, this.getHotTopics);
-        this._router.get(`${this._rootPath}/getHotPostsToday`, this.getHotTopics);
         this._router.get(`${this._rootPath}/getHotPostsWeek`, this.getHotPostsWeek);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);
         this._router.get(`${this._rootPath}/getPostByAuthor`, AuthMiddleware, this.getPostByAuthor);
@@ -330,7 +276,6 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getMarkedByUser`, this.getMarkedByUser);
         this._router.get(`${this._rootPath}/getSideInformation`, AuthMiddleware, this.getSideInformation);
         this._router.get(`${this._rootPath}/getRecentlyData`, this.getRecentlyData);
-        this._router.get(`${this._rootPath}/getRecentlyPosts`, this.getRecentlyData);
         this._router.get(`${this._rootPath}/getRecentlyDataByFeatures`, this.getRecentlyDataByFeatures);
         this._router.get(`${this._rootPath}/getAllPosts`, this.getAllPosts);
         this._router.get(`${this._rootPath}/getAllPostLikeByUser/:id`, AuthMiddleware, this.getAllPostLikeByUser);

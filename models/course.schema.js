@@ -32,4 +32,7 @@ const courseSchema = new Schema(
     }
 );
 
+courseSchema.index({ instructor: 1 });
+courseSchema.index({ del_flag: 1, status: 1 });
+
 module.exports = mongoose.model("course", courseSchema);

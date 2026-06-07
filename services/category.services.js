@@ -2,6 +2,7 @@ const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { Category, Post } = require("../models");
 const { default: slugify } = require("slugify");
+const { NotFoundException } = require("../exceptions");
 
 class CategoryService extends Service {
     async getAll(status) {
@@ -17,7 +18,10 @@ class CategoryService extends Service {
 
     async getCategoryBySlug(slug) {
         const category = await Category.findOne({ slug, del_flag: 0 });
-        const countData = (await Post.find({ category: category._id })).length;
+        if (!category) {
+            throw new NotFoundException("Category not found");
+        }
+        const countData = await Post.countDocuments({ category: category._id });
         return { ...category._doc, countData };
     }
 

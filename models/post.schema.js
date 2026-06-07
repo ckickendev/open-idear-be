@@ -54,6 +54,7 @@ const postSchema = new Schema(
 // Indexes for performance
 postSchema.index({ author: 1, createdAt: -1 });
 postSchema.index({ category: 1, createdAt: -1 });
+postSchema.index({ published: 1, del_flag: 1, createdAt: -1 });
 postSchema.index({ text: "text" }); // Full text search index
 
 module.exports = mongoose.model("post", postSchema);

@@ -1,5 +1,1 @@
-{
-    "presets": [
-      "@babel/preset-env"
-    ]
-  }
+// Deprecated: Babel is no longer used in this project.

@@ -140,34 +140,7 @@ class CommentController extends Controller {
     }
   }
 
-  // Helper function to get replies recursively
-  async getRepliesRecursively(commentId, maxDepth = 3, currentDepth = 0) {
-    if (currentDepth >= maxDepth) return [];
 
-    const replies = await Comment.find({
-      parentComment: commentId,
-      del_flag: 0,
-    })
-      .populate("author", "username avatar")
-      .sort({ createdAt: 1 }); // Replies sorted chronologically
-
-    // Get nested replies for each reply
-    const repliesWithNested = await Promise.all(
-      replies.map(async (reply) => {
-        const nestedReplies = await getRepliesRecursively(
-          reply._id,
-          maxDepth,
-          currentDepth + 1
-        );
-        return {
-          ...reply.toObject(),
-          replies: nestedReplies,
-        };
-      })
-    );
-
-    return repliesWithNested;
-  }
 
   // 3. Vote on a comment
   async voteComment(req, res) {
@@ -222,16 +195,16 @@ class CommentController extends Controller {
   // 4. Delete a comment (soft delete)
   async deleteComment(req, res) {
     try {
-      const { commentId } = req.params;
-      const userId = req.user.id;
+      const commentId = req.params.commentId || req.body.commentId || req.query.commentId;
+      const userId = req.userInfo._id;
 
       const comment = await Comment.findById(commentId);
       if (!comment) {
         return res.status(404).json({ error: "Comment not found" });
       }
 
-      // Check if user owns the comment or is admin
-      if (comment.author.toString() !== userId && !req.user.isAdmin) {
+      // Check if user owns the comment
+      if (comment.author.toString() !== userId.toString()) {
         return res.status(403).json({ error: "Not authorized" });
       }
 
@@ -252,7 +225,7 @@ class CommentController extends Controller {
     this._router.post(`${this._rootPath}/createComment`, AuthMiddleware, this.createComment);
     this._router.post(`${this._rootPath}/vote/:commentId`, AuthMiddleware, this.voteComment);
     this._router.post(`${this._rootPath}/voteLike/:postId`, AuthMiddleware, this.voteLike);
-    this._router.delete(`${this._rootPath}/deleteComment`, this.deleteComment);
+    this._router.delete(`${this._rootPath}/deleteComment`, AuthMiddleware, this.deleteComment);
   };
 }
 

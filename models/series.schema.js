@@ -26,4 +26,7 @@ const seriesSchema = new Schema(
     }
 );
 
+seriesSchema.index({ user: 1 });
+seriesSchema.index({ del_flag: 1 });
+
 module.exports = mongoose.model("series", seriesSchema);

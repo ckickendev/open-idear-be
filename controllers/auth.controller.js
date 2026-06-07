@@ -13,9 +13,7 @@ const userServices = require("../services/user.services");
 const authServices = require("../services/auth.services");
 const { AuthMiddleware, OptionalAuthMiddleware } = require("../middlewares/auth.middleware");
 
-// Wrapper để tránh lặp try/catch
-const asyncHandler = fn => (req, res, next) =>
-  Promise.resolve(fn(req, res, next)).catch(next);
+const asyncHandler = require("../utils/asyncHandler");
 
 class AuthController extends Controller {
   _rootPath = "/auth";
@@ -172,13 +170,13 @@ class AuthController extends Controller {
 
     const result = await userServices.confirmToken(token, user_authen);
 
-    if (result === 1) {
+    if (result.code === 1) {
       return res.status(200).json({
         message:
           "Your account is registered successfully, redirecting to login!",
         user: user_authen,
       });
-    } else if (result === 0) {
+    } else if (result.code === 0) {
       throw new BadRequestException(
         "Your code/link is not correct, please check again."
       );

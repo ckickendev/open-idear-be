@@ -228,16 +228,23 @@ class CourseService extends Service {
         query.del_flag = status === 'trash' ? 1 : 0;
         
         let courses = await Course.find(query)
-            .lean()
             .populate('thumbnail', 'url')
             .populate('topics', 'name slug')
-            .sort('-createdAt');
+            .sort('-createdAt')
+            .lean();
             
         const CategoryCourse = mongoose.model("categoryCourse");
+        const courseIds = courses.map(c => c._id);
+        const allCategoryCourses = await CategoryCourse.find({ courseId: { $in: courseIds } }).populate('categoryId', 'name slug');
+        const categoryMap = {};
+        allCategoryCourses.forEach(cc => {
+            if (!categoryMap[cc.courseId]) categoryMap[cc.courseId] = [];
+            categoryMap[cc.courseId].push(cc);
+        });
         for (let course of courses) {
-            const categoryCourses = await CategoryCourse.find({ courseId: course._id }).populate('categoryId', 'name slug');
-            course.categories = categoryCourses.map(cc => cc.categoryId);
-            course.categoryIds = categoryCourses.map(cc => cc.categoryId?._id);
+            const ccs = categoryMap[course._id] || [];
+            course.categories = ccs.map(cc => cc.categoryId);
+            course.categoryIds = ccs.map(cc => cc.categoryId?._id);
         }
         return { courses };
     }

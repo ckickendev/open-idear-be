@@ -39,7 +39,7 @@ class CommentService extends Service {
       // For each top-level comment, get its replies recursively
       const commentsWithReplies = await Promise.all(
         topLevelComments.map(async (comment) => {
-          const replies = await getRepliesRecursively(comment._id, 3); // Limit depth
+          const replies = await this.getRepliesRecursively(comment._id, 3); // Limit depth
           return {
             ...comment.toObject(),
             replies,
@@ -110,7 +110,7 @@ class CommentService extends Service {
     // Get nested replies for each reply
     const repliesWithNested = await Promise.all(
       replies.map(async (reply) => {
-        const nestedReplies = await getRepliesRecursively(
+        const nestedReplies = await this.getRepliesRecursively(
           reply._id,
           maxDepth,
           currentDepth + 1
@@ -210,7 +210,7 @@ class CommentService extends Service {
         commentMap[comment._id] = {
           ...comment,
           replies: [],
-          timeAgo: getTimeAgo(comment.createdAt),
+          timeAgo: this.getTimeAgo(comment.createdAt),
           voteCount: comment.upvotes.length,
         };
       });
@@ -242,7 +242,7 @@ class CommentService extends Service {
     try {
       const comments = await Comment.aggregate([
         // Match comments for the post
-        { $match: { post: mongoose.Types.ObjectId(postId), del_flag: 0 } },
+        { $match: { post: new mongoose.Types.ObjectId(postId), del_flag: 0 } },
 
         // Lookup author details
         {
@@ -284,7 +284,7 @@ class CommentService extends Service {
       // Add time ago and format
       const formattedComments = comments.map((comment) => ({
         ...comment,
-        timeAgo: getTimeAgo(comment.createdAt),
+        timeAgo: this.getTimeAgo(comment.createdAt),
         canReply: comment.level < 10, // Max nesting depth
         indentLevel: Math.min(comment.level, 5), // Max visual indent
       }));
