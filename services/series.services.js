@@ -85,10 +85,21 @@ class SeriesService extends Service {
                 hotSeries.push({ series: serie, hotScore });
             }
 
-            return hotSeries
+            let result = hotSeries
                 .sort((a, b) => b.hotScore - a.hotScore)
                 .slice(0, MAX_HOT_SERIES)
                 .map(item => item.series);
+
+            if (result.length === 0) {
+                result = await Series.find({ del_flag: 0 })
+                    .sort({ updatedAt: -1 })
+                    .limit(5)
+                    .populate('user', 'username name email avatar')
+                    .populate('image', 'url description')
+                    .lean();
+            }
+
+            return result;
 
         } catch (error) {
             console.log('error', error);
