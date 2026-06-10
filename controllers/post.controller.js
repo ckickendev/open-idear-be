@@ -69,6 +69,15 @@ class PostController extends Controller {
         });
     });
 
+    getTop10IdeasOfMonth = asyncHandler(async (req, res) => {
+        const result = await postService.getTop10IdeasOfMonth();
+        res.json({
+            success: true,
+            posts: result.posts,
+            period: result.period
+        });
+    });
+
     getHotPostsWeek = asyncHandler(async (req, res) => {
         const { limit = 10, page = 1 } = req.query;
         const posts = await postService.getHotPostsThisWeek(limit, page);
@@ -267,6 +276,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getPostToEdit`, AuthMiddleware, this.getPostToEdit);
         this._router.get(`${this._rootPath}/getPostByID/:id`, this.getPostByID);
         this._router.get(`${this._rootPath}/getPostBySlug/:slug`, this.getPostBySlug);
+        this._router.get(`${this._rootPath}/getTop10IdeasMonth`, this.getTop10IdeasOfMonth);
         this._router.get(`${this._rootPath}/getHotTopics`, this.getHotTopics);
         this._router.get(`${this._rootPath}/getHotPostsWeek`, this.getHotPostsWeek);
         this._router.get(`${this._rootPath}/getLastestPostByUser`, AuthMiddleware, this.getLastestPostByUser);

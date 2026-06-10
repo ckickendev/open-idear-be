@@ -15,7 +15,9 @@ const {
   CartController,
   PaymentController,
   EnrollmentController,
+  SupportTicketController,
 } = require("./controllers/index.js");
+
 const AppServer = require("./functions/appServer");
 
 const app = new AppServer([
@@ -35,6 +37,7 @@ const app = new AppServer([
   new CartController(),
   new PaymentController(),
   new EnrollmentController(),
+  new SupportTicketController(),
 ]);
 
 app.startListening();

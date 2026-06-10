@@ -16,6 +16,7 @@ const Topic = require("./topic.schema");
 const Review = require("./review.schema");
 const Enrollment = require("./enrollment.schema");
 const Payment = require("./payment.schema");
+const SupportTicket = require("./supportTicket.schema");
 
 module.exports = {
   User,
@@ -36,4 +37,5 @@ module.exports = {
   Review,
   Enrollment,
   Payment,
+  SupportTicket,
 };
