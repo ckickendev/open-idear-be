@@ -290,7 +290,7 @@ class AuthController extends Controller {
     routes.forEach(({ method, path, middlewares = [], handler }) => {
       this._router[method](
         `${prefix}${path}`,
-        ...middlewares.map((m) => m.bind?.(this) || m),
+        ...middlewares.map((m) => asyncHandler(m.bind?.(this) || m)),
         asyncHandler(handler.bind(this))
       );
     });
