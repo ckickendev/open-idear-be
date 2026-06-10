@@ -49,6 +49,7 @@ class AppServer {
 
   initMiddleWares() {
     const corsOptions = this.loadCorsOption();
+    this._app.set("trust proxy", 1);
 
     // CORS must be first to ensure it's applied even for early responses from other middlewares
     this._app.use(cors(corsOptions));

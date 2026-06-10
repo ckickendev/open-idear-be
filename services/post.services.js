@@ -575,6 +575,114 @@ class PostService extends Service {
         }
     };
 
+    getTop10IdeasOfMonth = async () => {
+        try {
+            const now = new Date();
+
+            // Start of current calendar month
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+            const buildPipeline = (startDate) => [
+                {
+                    $match: {
+                        published: true,
+                        del_flag: 0,
+                        createdAt: { $gte: startDate, $lte: now }
+                    }
+                },
+                {
+                    $addFields: {
+                        likesCount: { $size: '$likes' },
+                        commentsCount: { $size: '$comments' },
+                        engagementScore: {
+                            $add: [
+                                { $multiply: [{ $size: '$likes' }, 3] },
+                                { $multiply: [{ $size: '$comments' }, 2] },
+                                { $multiply: ['$views', 0.1] }
+                            ]
+                        }
+                    }
+                },
+                { $sort: { engagementScore: -1 } },
+                { $limit: 10 },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'author',
+                        foreignField: '_id',
+                        as: 'author',
+                        pipeline: [{ $project: { name: 1, username: 1, avatar: 1 } }]
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'categories',
+                        localField: 'category',
+                        foreignField: '_id',
+                        as: 'category',
+                        pipeline: [{ $project: { name: 1, slug: 1 } }]
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'tags',
+                        localField: 'tags',
+                        foreignField: '_id',
+                        as: 'tags',
+                        pipeline: [{ $project: { name: 1, slug: 1 } }]
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'media',
+                        localField: 'image',
+                        foreignField: '_id',
+                        as: 'image',
+                        pipeline: [{ $project: { url: 1, description: 1 } }]
+                    }
+                },
+                {
+                    $unwind: { path: '$author', preserveNullAndEmptyArrays: true }
+                },
+                {
+                    $unwind: { path: '$category', preserveNullAndEmptyArrays: true }
+                },
+                {
+                    $unwind: { path: '$image', preserveNullAndEmptyArrays: true }
+                }
+            ];
+
+            // Try current month first
+            let posts = await Post.aggregate(buildPipeline(startOfMonth));
+
+            // Fallback: rolling 30-day window if current month has < 10 results
+            if (posts.length < 10) {
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                posts = await Post.aggregate(buildPipeline(thirtyDaysAgo));
+            }
+
+            // Calculate max score for relative progress bars
+            const maxScore = posts.length > 0 ? posts[0].engagementScore : 1;
+
+            return {
+                posts: posts.map((p, idx) => ({
+                    ...p,
+                    rank: idx + 1,
+                    relativeScore: maxScore > 0 ? Math.round((p.engagementScore / maxScore) * 100) : 0,
+                })),
+                period: {
+                    month: now.getMonth() + 1,
+                    year: now.getFullYear(),
+                    label: now.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+                }
+            };
+        } catch (error) {
+            console.error('Error fetching top10 ideas:', error);
+            throw new ServerException('Error fetching top 10 ideas of the month');
+        }
+    };
+
     deletePost = async (postId) => {
         const post = await Post.findByIdAndUpdate(postId, { del_flag: 1 }, { new: true });
         if (!post) throw new NotFoundException("Post not found");
