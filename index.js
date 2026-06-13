@@ -16,6 +16,7 @@ const {
   PaymentController,
   EnrollmentController,
   SupportTicketController,
+  ContributionController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -38,6 +39,7 @@ const app = new AppServer([
   new PaymentController(),
   new EnrollmentController(),
   new SupportTicketController(),
+  new ContributionController(),
 ]);
 
 app.startListening();

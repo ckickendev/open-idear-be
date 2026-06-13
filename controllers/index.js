@@ -15,6 +15,7 @@ const CartController = require("./cart.controller");
 const PaymentController = require("./payment.controller");
 const EnrollmentController = require("./enrollment.controller");
 const SupportTicketController = require("./supportTicket.controller");
+const ContributionController = require("./contribution.controller");
 
 
 module.exports = {
@@ -35,4 +36,5 @@ module.exports = {
   PaymentController,
   EnrollmentController,
   SupportTicketController,
+  ContributionController,
 };

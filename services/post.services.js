@@ -1,6 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
-const { Post, Like, Series, Category } = require("../models");
+const { Post, Like, Series, Category, Course } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 const { default: slugify } = require("slugify");
 
@@ -680,6 +680,61 @@ class PostService extends Service {
         } catch (error) {
             console.error('Error fetching top10 ideas:', error);
             throw new ServerException('Error fetching top 10 ideas of the month');
+        }
+    };
+
+    // Aggregate all discovery sidebar data in one call
+    getDiscoverySidebar = async () => {
+        try {
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+            const [trending, latestPosts, popularSeries, featuredCourses] = await Promise.all([
+                // 🔥 Trending: hottest posts from last 7 days, sorted by likes+comments
+                Post.find({
+                    published: true,
+                    del_flag: 0,
+                    createdAt: { $gte: sevenDaysAgo }
+                })
+                    .sort({ likes: -1, createdAt: -1 })
+                    .limit(5)
+                    .populate('author', 'name username avatar')
+                    .populate('image', 'url')
+                    .select('title slug author image readtime createdAt')
+                    .lean(),
+
+                // 📚 Latest Posts: most recently published
+                Post.find({ published: true, del_flag: 0 })
+                    .sort({ createdAt: -1 })
+                    .limit(5)
+                    .populate('author', 'name username avatar')
+                    .populate('image', 'url')
+                    .select('title slug author image readtime createdAt')
+                    .lean(),
+
+                // 🏆 Popular Series: hot series
+                Series.find({ del_flag: 0 })
+                    .sort({ updatedAt: -1 })
+                    .limit(4)
+                    .populate('user', 'name username avatar')
+                    .populate('image', 'url')
+                    .select('title slug user image description')
+                    .lean(),
+
+                // 🎓 Courses: most recent published courses
+                Course.find({ del_flag: 0 })
+                    .sort({ createdAt: -1 })
+                    .limit(4)
+                    .populate('instructor', 'name username avatar')
+                    .populate('thumbnail', 'url')
+                    .select('title slug instructor thumbnail price averageRating ratingCount description')
+                    .lean(),
+            ]);
+
+            return { trending, latestPosts, popularSeries, featuredCourses };
+        } catch (error) {
+            console.error('Error fetching discovery sidebar:', error);
+            throw new ServerException('Error fetching discovery sidebar data');
         }
     };
 

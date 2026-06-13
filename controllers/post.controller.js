@@ -124,6 +124,11 @@ class PostController extends Controller {
         res.status(200).json({ isLiked: post.likes.includes(_id), isBookmarked: post.marked.includes(_id), isFollowed: isFollowed });
     });
 
+    getDiscoverySidebar = asyncHandler(async (req, res) => {
+        const data = await postService.getDiscoverySidebar();
+        res.status(200).json({ success: true, ...data });
+    });
+
     getRecentlyData = asyncHandler(async (req, res) => {
         const recentlyData = await postService.getRecentlyData();
         res.status(200).json({ recentlyData });
@@ -285,6 +290,7 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getLikeByUser`, this.getLikeByUser);
         this._router.get(`${this._rootPath}/getMarkedByUser`, this.getMarkedByUser);
         this._router.get(`${this._rootPath}/getSideInformation`, AuthMiddleware, this.getSideInformation);
+        this._router.get(`${this._rootPath}/getDiscoverySidebar`, this.getDiscoverySidebar);
         this._router.get(`${this._rootPath}/getRecentlyData`, this.getRecentlyData);
         this._router.get(`${this._rootPath}/getRecentlyDataByFeatures`, this.getRecentlyDataByFeatures);
         this._router.get(`${this._rootPath}/getAllPosts`, this.getAllPosts);
