@@ -17,6 +17,7 @@ const {
   EnrollmentController,
   SupportTicketController,
   ContributionController,
+  MediaAssetController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -40,6 +41,7 @@ const app = new AppServer([
   new EnrollmentController(),
   new SupportTicketController(),
   new ContributionController(),
+  new MediaAssetController(),
 ]);
 
 app.startListening();
