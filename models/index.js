@@ -18,6 +18,8 @@ const Enrollment = require("./enrollment.schema");
 const Payment = require("./payment.schema");
 const SupportTicket = require("./supportTicket.schema");
 const Contribution = require("./contribution.schema");
+const MediaAsset = require("./mediaAsset.schema");
+const MediaFolder = require("./mediaFolder.schema");
 
 module.exports = {
   User,
@@ -40,4 +42,6 @@ module.exports = {
   Payment,
   SupportTicket,
   Contribution,
+  MediaAsset,
+  MediaFolder,
 };
