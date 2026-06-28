@@ -1,3 +1,5 @@
+require("ts-node/register");
+
 const {
   UserController,
   CategoryController,
@@ -18,6 +20,7 @@ const {
   SupportTicketController,
   ContributionController,
   MediaAssetController,
+  AIController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -42,6 +45,7 @@ const app = new AppServer([
   new SupportTicketController(),
   new ContributionController(),
   new MediaAssetController(),
+  new AIController(),
 ]);
 
 app.startListening();
