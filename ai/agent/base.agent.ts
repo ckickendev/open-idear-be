@@ -17,7 +17,8 @@ import { promptRegistry, PromptBuilder } from "../prompt";
 import { AIContextCollector } from "../context";
 import { aiLogger } from "../telemetry";
 import type { AgentOptions, AgentResult } from "./types";
-import type { AIMessage, CompletionOptions } from "../provider/types";
+import type { AIMessage, CompletionOptions, TokenUsage } from "../provider/types";
+import type { ZodSchema } from "zod";
 
 export abstract class BaseAgent<TInput extends Record<string, any> = Record<string, any>, TOutput = any> {
   /** Unique name of this agent (e.g., "PlannerAgent") */
@@ -28,6 +29,8 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
   protected abstract readonly promptName: string;
   /** Expected format of the model output */
   protected abstract readonly responseFormat: "text" | "json";
+  /** Optional Zod schema to validate generated output format */
+  protected readonly schema?: ZodSchema<TOutput>;
 
   /**
    * Run the agent execution flow.
@@ -95,10 +98,22 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
         tokenUsage = result.usage;
       }
 
-      // 6. Validate Output
+      // 6. Validate Output Format (Zod Schema Validation)
+      if (this.schema) {
+        const parseResult = this.schema.safeParse(parsedData);
+        if (!parseResult.success) {
+          console.error(
+            `[${this.name}] Schema validation failed:`,
+            JSON.stringify(parseResult.error.format())
+          );
+          throw new Error(`Validation failed for ${this.name} response output schema.`);
+        }
+      }
+
+      // 6b. Validate Output Semantics (Custom Hook Validation)
       const isValid = await this.validate(parsedData);
       if (!isValid) {
-        throw new Error(`Validation failed for ${this.name} response output.`);
+        throw new Error(`Validation failed for ${this.name} response output semantics.`);
       }
 
       const executionTimeMs = Date.now() - startTime;
@@ -148,5 +163,102 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
    */
   protected async validate(_data: TOutput): Promise<boolean> {
     return true;
+  }
+
+  /**
+   * Run the agent execution flow as a stream, yielding individual text chunks.
+   * Logs telemetry to aiLogger when the stream completes.
+   *
+   * @param input   Custom variables passed to fill the user prompt template.
+   * @param options Execution settings (prompt overrides, target context, signals).
+   */
+  async *executeStream(
+    input: TInput,
+    options: AgentOptions = {}
+  ): AsyncGenerator<string, TokenUsage, undefined> {
+    const startTime = Date.now();
+
+    // 1. Resolve Provider
+    const provider = providerRegistry.getDefault();
+
+    // 2. Load Prompt from filesystem version registry
+    const promptVersion = options.promptVersionOverride || promptRegistry.getActiveVersion(this.promptName);
+    const promptDef = await promptRegistry.get(this.promptName, promptVersion);
+
+    // 3. Build Context Block
+    const context = new AIContextCollector()
+      .fromObject(options.context || {})
+      .build();
+    const contextMarkdown = AIContextCollector.formatToMarkdown(context);
+
+    // 4. Assemble Prompt Payload via PromptBuilder
+    const builder = new PromptBuilder()
+      .role(promptDef.system || "You are a helpful AI assistant.")
+      .context(contextMarkdown)
+      .userInput(promptDef.user);
+
+    if (promptDef.metadata?.constraints) {
+      builder.constraint(promptDef.metadata.constraints);
+    }
+
+    const { system, user } = builder.build(input);
+    const messages: AIMessage[] = [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ];
+
+    const providerOptions: CompletionOptions = {
+      model: options.modelOverride || this.defaultModel,
+      ...(promptDef.metadata?.temperature !== undefined && { temperature: promptDef.metadata.temperature }),
+      ...(promptDef.metadata?.maxTokens !== undefined && { maxOutputTokens: promptDef.metadata.maxTokens }),
+      ...(options.signal !== undefined && { signal: options.signal }),
+    };
+
+    let totalText = "";
+    let usage: TokenUsage | undefined;
+
+    // 5. Call Provider stream
+    const iterator = provider.stream(messages, providerOptions);
+
+    try {
+      while (true) {
+        const { value, done } = await iterator.next();
+        if (done) {
+          usage = value as TokenUsage;
+          break;
+        }
+        totalText += value;
+        yield value;
+      }
+
+      const executionTimeMs = Date.now() - startTime;
+
+      // 6. Log Telemetry (Success)
+      await aiLogger.log(
+        provider.id,
+        providerOptions.model || this.defaultModel,
+        { system, messages: [{ role: "user", content: user }] },
+        executionTimeMs,
+        totalText,
+        usage
+      );
+
+      return usage!;
+    } catch (err: any) {
+      const executionTimeMs = Date.now() - startTime;
+
+      // Log Telemetry (Failure)
+      await aiLogger.log(
+        provider.id,
+        providerOptions.model || this.defaultModel,
+        { system, messages: [{ role: "user", content: user }] },
+        executionTimeMs,
+        undefined,
+        undefined,
+        err
+      );
+
+      throw err;
+    }
   }
 }

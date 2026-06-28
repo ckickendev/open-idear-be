@@ -12,3 +12,11 @@ export {
 export {
   Workflow,
 } from "./executor";
+
+export {
+  CreateArticlePlanningWorkflow,
+} from "./articlePlanning.workflow";
+
+export {
+  CreateArticleWorkflow,
+} from "./createArticle.workflow";

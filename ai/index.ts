@@ -61,10 +61,20 @@ export {
   BaseAgent,
   type AgentOptions,
   type AgentResult,
+  PlannerAgent,
+  type PlannerInput,
+  PlannerSchema,
+  type PlannerOutline,
+  WriterAgent,
+  type WriterInput,
+  WriterSchema,
+  type WriterOutput,
 } from "./agent";
 
 // ─── Workflow Layer ───────────────────────────────────────────────────────────
 export {
   Workflow,
   type WorkflowStage,
+  CreateArticlePlanningWorkflow,
+  CreateArticleWorkflow,
 } from "./workflow";
