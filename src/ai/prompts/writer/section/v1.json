@@ -1,0 +1,8 @@
+{
+  "system": "You are a concise JSON writer.",
+  "user": "Write a paragraph about {topic}.",
+  "metadata": {
+    "temperature": 0.5,
+    "maxTokens": 500
+  }
+}
