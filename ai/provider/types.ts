@@ -22,13 +22,26 @@
 /** Role names are provider-independent. GeminiProvider maps "assistant" → "model" internally. */
 export type MessageRole = "system" | "user" | "assistant";
 
+export interface AIImagePart {
+  readonly type: "image";
+  readonly mimeType: string;
+  readonly base64Data: string;
+}
+
+export interface AITextPart {
+  readonly type: "text";
+  readonly text: string;
+}
+
+export type AIMessagePart = AITextPart | AIImagePart;
+
 /**
  * A single message in a conversation turn.
  * This is the only message format the application ever constructs.
  */
 export interface AIMessage {
   readonly role: MessageRole;
-  readonly content: string;
+  readonly content: string | AIMessagePart[];
 }
 
 // ─── Options ─────────────────────────────────────────────────────────────────

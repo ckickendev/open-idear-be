@@ -9,6 +9,7 @@
  *   GENERATE_CAPTION    — given image + article context, produce a display caption
  *   GENERATE_IMG_PROMPT — given article section, produce an image search/gen prompt
  *   ANALYZE_IMAGE       — given image URL, describe its content for metadata
+ *   GENERATE_IMAGE_METADATA — given image, generate alt text, description, tags, confidence
  *
  * Why it exists:
  *   Image prompts are multimodal — they include image data, not just text.

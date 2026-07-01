@@ -279,14 +279,43 @@ export class GeminiProvider implements AIProvider {
 
     const systemInstruction =
       systemMessages.length > 0
-        ? systemMessages.map((m) => m.content).join("\n\n")
+        ? systemMessages
+            .map((m) => {
+              if (typeof m.content === "string") {
+                return m.content;
+              }
+              return m.content
+                .filter((p) => p.type === "text")
+                .map((p) => (p as any).text)
+                .join("\n");
+            })
+            .join("\n\n")
         : undefined;
 
-    const contents: Content[] = conversationMessages.map((m) => ({
-      // Gemini uses "model" where the industry standard is "assistant"
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content } as Part],
-    }));
+    const contents: Content[] = conversationMessages.map((m) => {
+      let parts: Part[] = [];
+      if (typeof m.content === "string") {
+        parts.push({ text: m.content } as Part);
+      } else {
+        parts = m.content.map((part) => {
+          if (part.type === "text") {
+            return { text: part.text } as Part;
+          } else {
+            return {
+              inlineData: {
+                mimeType: part.mimeType,
+                data: part.base64Data,
+              },
+            } as Part;
+          }
+        });
+      }
+
+      return {
+        role: m.role === "assistant" ? "model" : "user",
+        parts,
+      };
+    });
 
     const modelId = this._resolveModelAlias(options.model);
     const model = this.client.getGenerativeModel({ model: modelId });

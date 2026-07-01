@@ -18,6 +18,7 @@ const SupportTicketController = require("./supportTicket.controller");
 const ContributionController = require("./contribution.controller");
 const MediaAssetController = require("./mediaAsset.controller");
 const AIController = require("./ai.controller");
+const AssetController = require("./asset.controller");
 
 
 module.exports = {
@@ -41,4 +42,5 @@ module.exports = {
   ContributionController,
   MediaAssetController,
   AIController,
+  AssetController,
 };

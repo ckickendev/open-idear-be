@@ -20,6 +20,10 @@ const mediaAssetSchema = new Schema(
       required: true,
       index: true,
     },
+    pHash: {
+      type: String,
+      index: true,
+    },
     type: {
       type: String,
       enum: ["image", "video", "audio", "document"],
@@ -98,9 +102,41 @@ const mediaAssetSchema = new Schema(
       model: { type: String },
       confidence: { type: Number },
     },
+    aiStatus: {
+      type: String,
+      enum: ["pending", "processing", "completed", "failed"],
+      default: "pending",
+      index: true,
+    },
+    aiError: {
+      type: String,
+      default: null,
+    },
+    aiRetryCount: {
+      type: Number,
+      default: 0,
+    },
+    userEditedFields: {
+      type: [String],
+      default: [],
+    },
 
     // ─── Soft Delete ────────────────────────────────────────
     del_flag: { type: Number, default: 0 },
+
+    // ─── OCR Data ───────────────────────────────────────────
+    ocrText: { type: String, default: "" },
+    ocrBlocks: [
+      {
+        text: { type: String, required: true },
+        x: Number,
+        y: Number,
+        w: Number,
+        h: Number,
+      },
+    ],
+    ocrLanguage: { type: String, default: "" },
+    ocrConfidence: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -140,19 +176,21 @@ mediaAssetSchema.index(
   { name: "idx_user_tags" }
 );
 
-// Full-text search across filename, alt text, description, tags
+// Full-text search across filename, alt text, description, tags, OCR text
 mediaAssetSchema.index(
   {
     originalFilename: "text",
     altText: "text",
     description: "text",
     tags: "text",
+    ocrText: "text",
   },
   {
     name: "idx_fulltext_search",
     weights: {
       altText: 10,
       tags: 8,
+      ocrText: 6,
       originalFilename: 5,
       description: 3,
     },

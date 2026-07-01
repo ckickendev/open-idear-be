@@ -18,5 +18,10 @@ export {
 } from "./articlePlanning.workflow";
 
 export {
+  AssetUploadWorkflow,
+  type AssetUploadInput,
+} from "./assetUpload.workflow";
+
+export {
   CreateArticleWorkflow,
 } from "./createArticle.workflow";

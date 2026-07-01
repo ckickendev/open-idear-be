@@ -21,6 +21,7 @@ const {
   ContributionController,
   MediaAssetController,
   AIController,
+  AssetController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -46,6 +47,11 @@ const app = new AppServer([
   new ContributionController(),
   new MediaAssetController(),
   new AIController(),
+  new AssetController(),
 ]);
 
 app.startListening();
+
+// Start background AI metadata generation worker daemon
+const { aiWorker } = require("./services");
+aiWorker.start();
