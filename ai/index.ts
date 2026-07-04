@@ -77,4 +77,17 @@ export {
   type WorkflowStage,
   CreateArticlePlanningWorkflow,
   CreateArticleWorkflow,
+  AssetUploadWorkflow,
+  type AssetUploadInput,
 } from "./workflow";
+
+// ─── Vision Layer ─────────────────────────────────────────────────────────────
+export {
+  aiVisionService,
+  GeminiVisionProvider,
+  OpenAIVisionProvider,
+  ClaudeVisionProvider,
+  AzureVisionProvider,
+  type ImageAnalysisResult,
+  type ImageAIProvider,
+} from "./vision";

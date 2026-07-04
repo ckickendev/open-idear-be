@@ -14,6 +14,18 @@ const topicService = require("./topic.services");
 const cartService = require("./cart.services");
 const paymentService = require("./payment.services");
 const enrollmentService = require("./enrollment.services");
+const uploadService = require("./upload.services");
+const mediaAssetService = require("./mediaAsset.services");
+const mediaFolderService = require("./mediaFolder.services");
+const aiQueueService = require("./aiQueue.services");
+const aiAnalysisService = require("./aiAnalysis.services");
+const aiWorker = require("./aiWorker");
+const aiSuggestionService = require("./aiSuggestion.services");
+const unifiedSearchService = require("./unifiedSearch.services");
+const aiSemanticSearchService = require("./aiSemanticSearch.services");
+const externalMediaCacheService = require("./externalMediaCache.services");
+const ocrService = require("./ocr.services");
+const duplicateDetectionService = require("./duplicateDetection.services");
 
 module.exports = {
   userService,
@@ -32,4 +44,16 @@ module.exports = {
   cartService,
   paymentService,
   enrollmentService,
+  uploadService,
+  mediaAssetService,
+  mediaFolderService,
+  aiQueueService,
+  aiAnalysisService,
+  aiWorker,
+  aiSuggestionService,
+  unifiedSearchService,
+  aiSemanticSearchService,
+  externalMediaCacheService,
+  ocrService,
+  duplicateDetectionService,
 };

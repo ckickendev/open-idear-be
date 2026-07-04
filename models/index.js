@@ -20,6 +20,8 @@ const SupportTicket = require("./supportTicket.schema");
 const Contribution = require("./contribution.schema");
 const MediaAsset = require("./mediaAsset.schema");
 const MediaFolder = require("./mediaFolder.schema");
+const Asset = require("./asset.schema");
+const AIJob = require("./aiJob.schema");
 
 module.exports = {
   User,
@@ -44,4 +46,6 @@ module.exports = {
   Contribution,
   MediaAsset,
   MediaFolder,
+  Asset,
+  AIJob,
 };

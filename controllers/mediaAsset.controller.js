@@ -2,6 +2,7 @@ const express = require("express");
 const { Controller } = require("../core");
 const mediaAssetService = require("../services/mediaAsset.services");
 const mediaFolderService = require("../services/mediaFolder.services");
+const { unifiedSearchService, aiSemanticSearchService } = require("../services");
 const asyncHandler = require("../utils/asyncHandler");
 const multer = require("multer");
 const { AuthMiddleware } = require("../middlewares/auth.middleware");
@@ -76,6 +77,22 @@ class MediaAssetController extends Controller {
     res.json({ status: "success", data: result });
   });
 
+  // POST /media/v2/check-duplicates
+  checkDuplicates = asyncHandler(async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const { duplicateDetectionService } = require("../services/duplicateDetection.services");
+    const result = await duplicateDetectionService.checkDuplicates(
+      req.userInfo._id,
+      req.file.buffer,
+      req.file.originalname
+    );
+
+    res.json({ status: "success", data: result });
+  });
+
   // GET /media/v2
   browse = asyncHandler(async (req, res) => {
     const { page, limit, sort, folder, type, isFavorite, tag } = req.query;
@@ -95,7 +112,7 @@ class MediaAssetController extends Controller {
 
   // GET /media/v2/search
   search = asyncHandler(async (req, res) => {
-    const { q, page, limit } = req.query;
+    const { q, page, limit, sort } = req.query;
     if (!q || !q.trim()) {
       return res.status(400).json({ error: "Search query (q) is required" });
     }
@@ -103,6 +120,7 @@ class MediaAssetController extends Controller {
     const result = await mediaAssetService.searchMedia(req.userInfo._id, q, {
       page: parseInt(page) || 1,
       limit: Math.min(parseInt(limit) || 30, 100),
+      sort: sort || "-relevance",
     });
 
     res.json({ status: "success", data: result });
@@ -115,6 +133,24 @@ class MediaAssetController extends Controller {
       req.params.id
     );
     res.json({ status: "success", data: media });
+  });
+
+  // GET /media/v2/:id/duplicates
+  getDuplicates = asyncHandler(async (req, res) => {
+    const result = await mediaAssetService.getDuplicates(
+      req.userInfo._id,
+      req.params.id
+    );
+    res.json({ status: "success", data: result });
+  });
+
+  // GET /media/v2/:id/similar
+  getSimilar = asyncHandler(async (req, res) => {
+    const result = await mediaAssetService.getSimilarImages(
+      req.userInfo._id,
+      req.params.id
+    );
+    res.json({ status: "success", data: result });
   });
 
   // PATCH /media/v2/:id/metadata
@@ -135,6 +171,132 @@ class MediaAssetController extends Controller {
       req.body
     );
     res.json({ status: "success", data: media });
+  });
+
+  // POST /media/v2/:id/analyze/retry
+  retryAI = asyncHandler(async (req, res) => {
+    const result = await mediaAssetService.retryAI(
+      req.userInfo._id,
+      req.params.id
+    );
+    res.json({ status: "success", data: result });
+  });
+
+  // POST /media/v2/:id/analyze/regenerate
+  regenerateAI = asyncHandler(async (req, res) => {
+    const { forceOverwrite } = req.body;
+    const result = await mediaAssetService.regenerateAI(
+      req.userInfo._id,
+      req.params.id,
+      !!forceOverwrite
+    );
+    res.json({ status: "success", data: result });
+  });
+
+  // POST /media/v2/suggest-images
+  suggestImages = asyncHandler(async (req, res) => {
+    const { content } = req.body;
+    if (content === undefined) {
+      return res.status(400).json({ error: "content is required" });
+    }
+
+    const aiSuggestionService = require("../services/aiSuggestion.services");
+    const result = await aiSuggestionService.suggestImages(
+      req.userInfo._id,
+      content
+    );
+    res.json({ status: "success", data: result });
+  });
+
+  // GET /media/v2/search/images
+  unifiedSearch = asyncHandler(async (req, res) => {
+    const { q, page, limit } = req.query;
+    if (!q || q.trim() === "") {
+      return res.json({ status: "success", data: [] });
+    }
+
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+
+    const result = await unifiedSearchService.search(
+      req.userInfo._id,
+      q,
+      pageNum,
+      limitNum
+    );
+    res.json({ status: "success", data: result });
+  });
+
+  // POST /media/v2/import
+  importAsset = asyncHandler(async (req, res) => {
+    const { unifiedId } = req.body;
+    if (!unifiedId) {
+      return res.status(400).json({ error: "unifiedId is required" });
+    }
+
+    const result = await mediaAssetService.importAsset(
+      req.userInfo._id,
+      unifiedId
+    );
+    res.json({ status: "success", data: result });
+  });
+
+  // GET /media/v2/search/semantic
+  semanticSearch = asyncHandler(async (req, res) => {
+    const { q, page, limit, sort } = req.query;
+    if (!q || q.trim() === "") {
+      return res.json({ status: "success", data: [] });
+    }
+
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+
+    const result = await aiSemanticSearchService.search(
+      req.userInfo._id,
+      q,
+      pageNum,
+      limitNum,
+      sort || "-relevance"
+    );
+    res.json({ status: "success", data: result });
+  });
+
+  // GET /media/v2/external/proxy-thumbnail
+  proxyThumbnail = asyncHandler(async (req, res) => {
+    const { url } = req.query;
+    if (!url) {
+      return res.status(400).json({ error: "url parameter is required" });
+    }
+
+    const externalMediaCacheService = require("../services/externalMediaCache.services");
+
+    // 1. Check if thumbnail is already cached
+    const cached = await externalMediaCacheService.getThumbnail(url);
+    if (cached) {
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      return res.send(cached);
+    }
+
+    // 2. Fetch thumbnail from remote source and cache it
+    const axios = require("axios");
+    try {
+      const response = await axios.get(url, {
+        responseType: "arraybuffer",
+        timeout: 5000,
+      });
+
+      const buffer = Buffer.from(response.data, "binary");
+      await externalMediaCacheService.setThumbnail(url, buffer);
+
+      res.setHeader("Content-Type", response.headers["content-type"] || "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      return res.send(buffer);
+    } catch (err) {
+      console.error(`[ProxyThumbnail] Failed to proxy: ${url}`, err.message);
+      // Fallback redirection to avoid showing broken images
+      return res.redirect(url);
+    }
   });
 
   // ─── Usage Tracking ───────────────────────────────────────────────
@@ -339,10 +501,26 @@ class MediaAssetController extends Controller {
       upload.single("image"),
       this.uploadImage
     );
+    this._router.post(
+      `${r}/check-duplicates`,
+      AuthMiddleware,
+      upload.single("image"),
+      this.checkDuplicates
+    );
     this._router.get(
       `${r}/:id`,
       AuthMiddleware,
       this.getById
+    );
+    this._router.get(
+      `${r}/:id/duplicates`,
+      AuthMiddleware,
+      this.getDuplicates
+    );
+    this._router.get(
+      `${r}/:id/similar`,
+      AuthMiddleware,
+      this.getSimilar
     );
     this._router.patch(
       `${r}/:id/metadata`,
@@ -353,6 +531,43 @@ class MediaAssetController extends Controller {
       `${r}/:id/ai-metadata`,
       AuthMiddleware,
       this.saveAIMetadata
+    );
+    this._router.post(
+      `${r}/:id/analyze/retry`,
+      AuthMiddleware,
+      this.retryAI
+    );
+    this._router.post(
+      `${r}/:id/analyze/regenerate`,
+      AuthMiddleware,
+      this.regenerateAI
+    );
+    this._router.post(
+      `${r}/suggest-images`,
+      AuthMiddleware,
+      this.suggestImages
+    );
+    this._router.get(
+      `${r}/search/images`,
+      AuthMiddleware,
+      mediaSearchLimiter,
+      this.unifiedSearch
+    );
+    this._router.post(
+      `${r}/import`,
+      AuthMiddleware,
+      this.importAsset
+    );
+    this._router.get(
+      `${r}/search/semantic`,
+      AuthMiddleware,
+      mediaSearchLimiter,
+      this.semanticSearch
+    );
+    this._router.get(
+      `${r}/external/proxy-thumbnail`,
+      AuthMiddleware,
+      this.proxyThumbnail
     );
 
     // ── Usage ─────────────────────────────────────────────────────
