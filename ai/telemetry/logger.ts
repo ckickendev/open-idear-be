@@ -1,13 +1,13 @@
 // =============================================================================
-//  AI TELEMETRY — LOGGER LOGIC
+//  AI TELEMETRY — LOGGER
 //  ai/telemetry/logger.ts
 //
 //  Design Decisions:
-//  - Implements AILogger interface for multiple output sinks.
-//  - ConsoleAILogger provides colorized/styled text output for development.
-//  - FileAILogger writes structured logs to disk (e.g. log/ai.log) for backup.
-//  - TelemetryLoggerManager aggregates multiple sinks, letting the server log to
+//  - ConsoleAILogSink provides colorized/styled text output for development.
+//  - FileAILogSink writes structured JSON logs to disk for backup/auditing.
+//  - TelemetryLogger aggregates multiple sinks, letting the server log to
 //    both console and a database/external APM simultaneously.
+//  - Single unified `log()` method — no more split between log/logPlatform.
 //  - Every logger execution is safely wrapped. A failure in logging must never
 //    bubble up and crash the host application.
 // =============================================================================
@@ -15,20 +15,19 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { v4 as uuidv4 } from "uuid";
-import type { AILogEntry, AILogger, LoggedPrompt, LoggedError } from "./types";
-import type { TokenUsage } from "../provider/types";
+import type { AILogEntry, AILogSink, TelemetryLogParams, LoggedError } from "./types";
 import { calculateCost } from "./costCalculator";
 
 // =============================================================================
-//  CONSOLE LOGGER
+//  CONSOLE LOG SINK
 // =============================================================================
 
-export class ConsoleAILogger implements AILogger {
+export class ConsoleAILogSink implements AILogSink {
   readonly name = "console";
 
   async log(entry: AILogEntry): Promise<void> {
     const timestamp = entry.timestamp.toISOString();
-    const status = entry.error ? "FAILED" : "SUCCESS";
+    const status = entry.success ? "SUCCESS" : "FAILED";
     const duration = `${entry.executionTimeMs}ms`;
     const cost = entry.estimatedCost ? `$${entry.estimatedCost.toFixed(6)}` : "$0.000000";
 
@@ -44,10 +43,10 @@ export class ConsoleAILogger implements AILogger {
 }
 
 // =============================================================================
-//  FILE LOGGER
+//  FILE LOG SINK
 // =============================================================================
 
-export class FileAILogger implements AILogger {
+export class FileAILogSink implements AILogSink {
   readonly name = "file";
   private readonly filePath: string;
 
@@ -64,93 +63,92 @@ export class FileAILogger implements AILogger {
       await fs.appendFile(this.filePath, logLine, "utf-8");
     } catch (err) {
       // Fail silently to prevent crashing the host process
-      console.error(`[FileAILogger] Failed to write log line:`, err);
+      console.error(`[FileAILogSink] Failed to write log line:`, err);
     }
   }
 }
 
 // =============================================================================
-//  TELEMETRY LOGGER MANAGER (COORDINATOR)
+//  TELEMETRY LOGGER (COORDINATOR)
 // =============================================================================
 
-export class TelemetryLoggerManager {
-  private readonly sinks = new Map<string, AILogger>();
+export class TelemetryLogger {
+  private readonly sinks = new Map<string, AILogSink>();
 
   /**
    * Add a logging output sink.
    */
-  register(logger: AILogger): this {
-    this.sinks.set(logger.name, logger);
+  register(sink: AILogSink): this {
+    this.sinks.set(sink.name, sink);
     return this;
   }
 
   /**
    * Log an AI execution event.
-   * Compiles the entry metrics, calculates costs, and forwards the entry
-   * to all registered loggers asynchronously.
-   *
-   * @param providerId Target provider name (e.g. "gemini")
-   * @param model      Target model name (e.g. "gemini-2.0-flash")
-   * @param prompt     Raw system instruction and conversation array
-   * @param durationMs Duration of execution in milliseconds
-   * @param response   Successful model text response (if any)
-   * @param usage      Model token usage report (if any)
-   * @param error      Execution exception (if any)
+   * Compiles the entry, calculates costs, serializes errors, and forwards
+   * the structured entry to all registered sinks concurrently.
    */
-  async log(
-    providerId: string,
-    model: string,
-    prompt: LoggedPrompt,
-    durationMs: number,
-    response?: string,
-    usage?: TokenUsage,
-    error?: unknown
-  ): Promise<AILogEntry> {
-    let loggedError: LoggedError | undefined;
-
-    if (error) {
-      const errObj = error as any;
-      loggedError = {
-        message: errObj.message || String(error),
-        code: errObj.code,
-        stack: errObj.stack,
-        raw: error,
-      };
-    }
-
-    const estimatedCost = calculateCost(model, usage);
+  async log(params: TelemetryLogParams): Promise<AILogEntry> {
+    const loggedError = this.serializeError(params.error);
+    const estimatedCost = calculateCost(params.model, params.usage);
 
     const entry: AILogEntry = {
       id: uuidv4(),
       timestamp: new Date(),
-      providerId,
-      model,
-      prompt,
-      executionTimeMs: durationMs,
-      ...(response !== undefined && {
-        response,
-        responseLength: response.length,
+      providerId: params.providerId,
+      model: params.model,
+      prompt: params.prompt,
+      executionTimeMs: params.durationMs,
+      success: !params.error,
+      ...(params.response !== undefined && {
+        response: params.response,
+        responseLength: params.response.length,
       }),
-      ...(usage && { tokenUsage: usage }),
+      ...(params.usage && { tokenUsage: params.usage }),
       estimatedCost,
       ...(loggedError && { error: loggedError }),
+      ...(params.promptName && { promptName: params.promptName }),
+      ...(params.promptVersion && { promptVersion: params.promptVersion }),
+      ...(params.retryCount !== undefined && { retryCount: params.retryCount }),
+      ...(params.validationErrors && { validationErrors: params.validationErrors }),
+      ...(params.streamingDurationMs !== undefined && { streamingDurationMs: params.streamingDurationMs }),
     };
 
-    // Forward to all registered sinks concurrently
+    await this.forwardToSinks(entry);
+    return entry;
+  }
+
+  /**
+   * Serializes an error into a flat, JSON-safe structure.
+   */
+  private serializeError(error: unknown): LoggedError | undefined {
+    if (!error) return undefined;
+    const errObj = error as any;
+    return {
+      message: errObj.message || String(error),
+      code: errObj.code,
+      stack: errObj.stack,
+      raw: error,
+    };
+  }
+
+  /**
+   * Forwards a log entry to all registered sinks concurrently.
+   * Failures in individual sinks are caught and logged to stderr.
+   */
+  private async forwardToSinks(entry: AILogEntry): Promise<void> {
     const promises = Array.from(this.sinks.values()).map(async (sink) => {
       try {
         await sink.log(entry);
       } catch (err) {
-        console.error(`[TelemetryLoggerManager] Sink "${sink.name}" failed:`, err);
+        console.error(`[TelemetryLogger] Sink "${sink.name}" failed:`, err);
       }
     });
-
     await Promise.all(promises);
-    return entry;
   }
 }
 
-// Export default instance configured with Console and File logger
-export const aiLogger = new TelemetryLoggerManager()
-  .register(new ConsoleAILogger())
-  .register(new FileAILogger());
+// Export default instance configured with Console and File sinks
+export const aiLogger = new TelemetryLogger()
+  .register(new ConsoleAILogSink())
+  .register(new FileAILogSink());

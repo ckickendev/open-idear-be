@@ -10,6 +10,7 @@
 export { PromptBuilder, type BuiltPrompt } from "./builder";
 export { PromptLoader, FilePromptSource, promptLoader, type PromptDefinition, type PromptSource } from "./loader";
 export { PromptRegistry, promptRegistry } from "./registry";
+export { PromptVersionManager, promptVersionManager } from "./manager";
 // export { type PromptTemplate, type PromptVersion } from "./types.js";
 // export { compile } from "./renderer.js";
 // export { validateOutput } from "./validator.js";

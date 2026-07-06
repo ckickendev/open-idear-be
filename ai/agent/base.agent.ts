@@ -3,21 +3,17 @@
 //  ai/agent/base.agent.ts
 //
 //  Design Decisions:
-//  - Implements orchestrations (Load Prompt, Build Context, Call Provider,
-//    Validate Output, and Log Metrics) in a unified template method `execute()`.
-//  - Subclasses (Planner, Writer, SEO, etc.) inherit this execution pipeline and
-//    only need to define their prompt name, model defaults, and output format.
-//  - Provider-agnostic. Calls whatever provider is active in the providerRegistry.
-//  - Gracefully wraps error telemetry: every failure is logged to aiLogger
-//    before the error is propagated.
+//  - Implements orchestrations in a unified template method `execute()`.
+//  - Delegates all prompt loading, context markdown building, policy checks,
+//    LLM calls, pricing, retries, and telemetry to the AI Execution Platform.
+//  - Subclasses only need to define prompt name, output format, and validation.
+//  - Fully decoupled from AIRuntime, Telemetry, and Prompt registry.
 // =============================================================================
 
-import { providerRegistry } from "../provider";
-import { promptRegistry, PromptBuilder } from "../prompt";
-import { AIContextCollector } from "../context";
-import { aiLogger } from "../telemetry";
+import { aiExecutionFacade } from "../execution";
 import type { AgentOptions, AgentResult } from "./types";
-import type { AIMessage, CompletionOptions, TokenUsage } from "../provider/types";
+import type { TokenUsage } from "../provider/types";
+import type { AIConfigScope } from "../config";
 import type { ZodSchema } from "zod";
 
 export abstract class BaseAgent<TInput extends Record<string, any> = Record<string, any>, TOutput = any> {
@@ -30,7 +26,7 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
   /** Expected format of the model output */
   protected abstract readonly responseFormat: "text" | "json";
   /** Optional Zod schema to validate generated output format */
-  protected readonly schema?: ZodSchema<TOutput>;
+  protected readonly schema?: ZodSchema<TOutput> | undefined;
 
   /**
    * Run the agent execution flow.
@@ -39,119 +35,38 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
    * @param options Execution settings (prompt overrides, target context, signals).
    */
   async execute(input: TInput, options: AgentOptions = {}): Promise<AgentResult<TOutput>> {
-    const startTime = Date.now();
+    const scope = this.getScope();
 
-    // 1. Resolve Provider
-    const provider = providerRegistry.getDefault();
-
-    // 2. Load Prompt from filesystem version registry
-    const promptVersion = options.promptVersionOverride || promptRegistry.getActiveVersion(this.promptName);
-    const promptDef = await promptRegistry.get(this.promptName, promptVersion);
-
-    // 3. Build Context Block
-    const context = new AIContextCollector()
-      .fromObject(options.context || {})
-      .build();
-    const contextMarkdown = AIContextCollector.formatToMarkdown(context);
-
-    // 4. Assemble Prompt Payload via PromptBuilder
-    // System instructions are loaded from the registry template, enriched with target contexts.
-    const builder = new PromptBuilder()
-      .role(promptDef.system || "You are a helpful AI assistant.")
-      .context(contextMarkdown)
-      .userInput(promptDef.user);
-
-    // If metadata has custom constraints or rules, inject them into the builder
-    if (promptDef.metadata?.constraints) {
-      builder.constraint(promptDef.metadata.constraints);
-    }
-
-    const { system, user } = builder.build(input);
-    const messages: AIMessage[] = [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ];
-
-    const providerOptions: CompletionOptions = {
-      model: options.modelOverride || this.defaultModel,
-      ...(promptDef.metadata?.temperature !== undefined && { temperature: promptDef.metadata.temperature }),
-      ...(promptDef.metadata?.maxTokens !== undefined && { maxOutputTokens: promptDef.metadata.maxTokens }),
+    const facadeResult = await aiExecutionFacade.execute<TOutput>({
+      scope,
+      promptName: this.promptName,
+      ...(options.promptVersionOverride !== undefined && { promptVersion: options.promptVersionOverride }),
+      input,
+      ...(options.context !== undefined && { context: options.context }),
+      responseFormat: this.responseFormat,
+      defaultModel: this.defaultModel,
+      ...(this.schema !== undefined && { schema: this.schema }),
+      ...(options.modelOverride !== undefined && { modelOverride: options.modelOverride }),
       ...(options.signal !== undefined && { signal: options.signal }),
-    };
+    });
 
-    let resultText = "";
-    let parsedData: any;
-    let tokenUsage;
-    let loggedEntry;
-
-    try {
-      // 5. Call Provider
-      if (this.responseFormat === "json") {
-        const result = await provider.generateJSON<TOutput>(messages, providerOptions);
-        parsedData = result.data;
-        resultText = JSON.stringify(parsedData);
-        tokenUsage = result.usage;
-      } else {
-        const result = await provider.generate(messages, providerOptions);
-        resultText = result.text;
-        parsedData = resultText as unknown as TOutput;
-        tokenUsage = result.usage;
-      }
-
-      // 6. Validate Output Format (Zod Schema Validation)
-      if (this.schema) {
-        const parseResult = this.schema.safeParse(parsedData);
-        if (!parseResult.success) {
-          console.error(
-            `[${this.name}] Schema validation failed:`,
-            JSON.stringify(parseResult.error.format())
-          );
-          throw new Error(`Validation failed for ${this.name} response output schema.`);
-        }
-      }
-
-      // 6b. Validate Output Semantics (Custom Hook Validation)
-      const isValid = await this.validate(parsedData);
-      if (!isValid) {
-        throw new Error(`Validation failed for ${this.name} response output semantics.`);
-      }
-
-      const executionTimeMs = Date.now() - startTime;
-
-      // 7. Log Telemetry (Success)
-      loggedEntry = await aiLogger.log(
-        provider.id,
-        providerOptions.model || this.defaultModel,
-        { system, messages: [{ role: "user", content: user }] },
-        executionTimeMs,
-        resultText,
-        tokenUsage
-      );
-
-      return {
-        success: true,
-        data: parsedData,
-        tokenUsage,
-        executionTimeMs,
-        estimatedCost: loggedEntry.estimatedCost || 0,
-      };
-
-    } catch (err: any) {
-      const executionTimeMs = Date.now() - startTime;
-
-      // Log Telemetry (Failure)
-      loggedEntry = await aiLogger.log(
-        provider.id,
-        providerOptions.model || this.defaultModel,
-        { system, messages: [{ role: "user", content: user }] },
-        executionTimeMs,
-        undefined,
-        undefined,
-        err
-      );
-
-      throw err;
+    if (!facadeResult.success) {
+      throw facadeResult.error || new Error(`Agent execution failed.`);
     }
+
+    // Validate Output Semantics (Custom Hook Validation)
+    const isValid = await this.validate(facadeResult.data);
+    if (!isValid) {
+      throw new Error(`Validation failed for ${this.name} response output semantics.`);
+    }
+
+    return {
+      success: true,
+      data: facadeResult.data,
+      ...(facadeResult.tokenUsage !== undefined && { tokenUsage: facadeResult.tokenUsage }),
+      executionTimeMs: facadeResult.executionTimeMs,
+      estimatedCost: facadeResult.estimatedCost,
+    };
   }
 
   /**
@@ -167,7 +82,6 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
 
   /**
    * Run the agent execution flow as a stream, yielding individual text chunks.
-   * Logs telemetry to aiLogger when the stream completes.
    *
    * @param input   Custom variables passed to fill the user prompt template.
    * @param options Execution settings (prompt overrides, target context, signals).
@@ -176,89 +90,40 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
     input: TInput,
     options: AgentOptions = {}
   ): AsyncGenerator<string, TokenUsage, undefined> {
-    const startTime = Date.now();
+    const scope = this.getScope();
 
-    // 1. Resolve Provider
-    const provider = providerRegistry.getDefault();
-
-    // 2. Load Prompt from filesystem version registry
-    const promptVersion = options.promptVersionOverride || promptRegistry.getActiveVersion(this.promptName);
-    const promptDef = await promptRegistry.get(this.promptName, promptVersion);
-
-    // 3. Build Context Block
-    const context = new AIContextCollector()
-      .fromObject(options.context || {})
-      .build();
-    const contextMarkdown = AIContextCollector.formatToMarkdown(context);
-
-    // 4. Assemble Prompt Payload via PromptBuilder
-    const builder = new PromptBuilder()
-      .role(promptDef.system || "You are a helpful AI assistant.")
-      .context(contextMarkdown)
-      .userInput(promptDef.user);
-
-    if (promptDef.metadata?.constraints) {
-      builder.constraint(promptDef.metadata.constraints);
-    }
-
-    const { system, user } = builder.build(input);
-    const messages: AIMessage[] = [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ];
-
-    const providerOptions: CompletionOptions = {
-      model: options.modelOverride || this.defaultModel,
-      ...(promptDef.metadata?.temperature !== undefined && { temperature: promptDef.metadata.temperature }),
-      ...(promptDef.metadata?.maxTokens !== undefined && { maxOutputTokens: promptDef.metadata.maxTokens }),
+    return yield* aiExecutionFacade.executeStream({
+      scope,
+      promptName: this.promptName,
+      ...(options.promptVersionOverride !== undefined && { promptVersion: options.promptVersionOverride }),
+      input,
+      ...(options.context !== undefined && { context: options.context }),
+      defaultModel: this.defaultModel,
+      ...(options.modelOverride !== undefined && { modelOverride: options.modelOverride }),
       ...(options.signal !== undefined && { signal: options.signal }),
-    };
+    });
+  }
 
-    let totalText = "";
-    let usage: TokenUsage | undefined;
+  // ─── Private Helpers ──────────────────────────────────────────────────────
 
-    // 5. Call Provider stream
-    const iterator = provider.stream(messages, providerOptions);
-
-    try {
-      while (true) {
-        const { value, done } = await iterator.next();
-        if (done) {
-          usage = value as TokenUsage;
-          break;
-        }
-        totalText += value;
-        yield value;
-      }
-
-      const executionTimeMs = Date.now() - startTime;
-
-      // 6. Log Telemetry (Success)
-      await aiLogger.log(
-        provider.id,
-        providerOptions.model || this.defaultModel,
-        { system, messages: [{ role: "user", content: user }] },
-        executionTimeMs,
-        totalText,
-        usage
-      );
-
-      return usage!;
-    } catch (err: any) {
-      const executionTimeMs = Date.now() - startTime;
-
-      // Log Telemetry (Failure)
-      await aiLogger.log(
-        provider.id,
-        providerOptions.model || this.defaultModel,
-        { system, messages: [{ role: "user", content: user }] },
-        executionTimeMs,
-        undefined,
-        undefined,
-        err
-      );
-
-      throw err;
+  /**
+   * Automatically resolves the AIConfigScope based on agent class naming conventions.
+   */
+  private getScope(): AIConfigScope {
+    const nameLower = this.name.toLowerCase();
+    if (nameLower.includes("planner")) return "planner";
+    if (nameLower.includes("writer")) return "writer";
+    if (
+      nameLower.includes("copilot") ||
+      nameLower.includes("editor") ||
+      nameLower.includes("improve") ||
+      nameLower.includes("example") ||
+      nameLower.includes("review")
+    ) {
+      return "editor";
     }
+    if (nameLower.includes("publish")) return "publishing";
+    if (nameLower.includes("growth")) return "growth";
+    return "editor"; // Default fallback
   }
 }

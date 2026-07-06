@@ -1,6 +1,6 @@
 // =============================================================================
-//  AI CONTEXT MODULE
-//  ai/context.ts
+//  AI CONTEXT — BASE MODULE
+//  ai/context/ai.context.ts
 //
 //  Responsibilities:
 //  1. AIContext interface      — strongly-typed contract for execution context.

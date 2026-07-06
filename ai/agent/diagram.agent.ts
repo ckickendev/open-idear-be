@@ -1,4 +1,5 @@
-import { providerRegistry } from "../provider";
+import { aiExecutionFacade } from "../execution";
+import { z } from "zod";
 
 // ─── Supported diagram types ─────────────────────────────────────────────────
 
@@ -22,6 +23,13 @@ export interface DiagramResult {
   title: string;
   description: string;
 }
+
+const DiagramResultSchema = z.object({
+  mermaidCode: z.string(),
+  diagramType: z.enum(["flowchart", "sequence", "er", "class", "architecture", "auto"]),
+  title: z.string(),
+  description: z.string(),
+});
 
 // ─── Per-type generation instructions ────────────────────────────────────────
 
@@ -67,7 +75,6 @@ export class DiagramAgent {
       throw new Error("editorContent is required and cannot be empty.");
     }
 
-    const provider = providerRegistry.getDefault();
     const typeInstruction = TYPE_INSTRUCTIONS[diagramType];
 
     const systemPrompt = `You are an expert software diagram generator specializing in Mermaid.js syntax.
@@ -102,25 +109,22 @@ Return a JSON object with this exact schema:
   "description": "1-2 sentences explaining what this diagram shows"
 }`;
 
-    const response = await provider.complete(
-      [
+    const facadeResult = await aiExecutionFacade.execute<DiagramResult>({
+      scope: "editor",
+      responseFormat: "json",
+      defaultModel: "fast",
+      schema: DiagramResultSchema,
+      messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      { temperature: 0.3 }
-    );
+    });
 
-    // Parse and validate the JSON response
-    const cleaned = response.text
-      .replace(/```json\s*/g, "")
-      .replace(/```\s*/g, "")
-      .trim();
-
-    const parsed = JSON.parse(cleaned) as DiagramResult;
-
-    if (!parsed.mermaidCode || !parsed.mermaidCode.trim()) {
-      throw new Error("AI returned an empty diagram. Please try again with more detailed content.");
+    if (!facadeResult.success) {
+      throw facadeResult.error || new Error("Diagram generation failed.");
     }
+
+    const parsed = facadeResult.data;
 
     // Strip any accidental backtick fences from mermaidCode
     const cleanCode = parsed.mermaidCode
