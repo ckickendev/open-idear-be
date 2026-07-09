@@ -2,7 +2,7 @@ const express = require("express");
 const { Controller } = require("../core");
 const asyncHandler = require("../utils/asyncHandler");
 const { AuthMiddleware } = require("../middlewares/auth.middleware");
-const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent } = require("../ai");
+const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent } = require("../ai");
 const { aiImageGenerationOrchestratorService } = require("../services/aiImageGeneration.services");
 const { aiImageEditingOrchestratorService } = require("../services/aiImageEditing.services");
 
@@ -380,6 +380,41 @@ class AIController extends Controller {
     });
   });
 
+  /**
+   * POST /ai/v1/diagram/generate
+   * Generates a Mermaid diagram from editor content.
+   *
+   * Body:
+   *   editorContent           string  (required)
+   *   diagramType             string  (required) — flowchart | sequence | er | class | architecture | auto
+   *   additionalInstructions  string  (optional)
+   */
+  generateDiagram = asyncHandler(async (req, res) => {
+    const { editorContent, diagramType, additionalInstructions } = req.body;
+
+    if (!editorContent || !editorContent.trim()) {
+      return res.status(400).json({ error: "editorContent is required" });
+    }
+
+    const validTypes = ["flowchart", "sequence", "er", "class", "architecture", "auto"];
+    if (!diagramType || !validTypes.includes(diagramType)) {
+      return res.status(400).json({
+        error: `diagramType must be one of: ${validTypes.join(", ")}`
+      });
+    }
+
+    const result = await diagramAgent.generate({
+      editorContent,
+      diagramType,
+      additionalInstructions
+    });
+
+    res.json({
+      status: "success",
+      data: result
+    });
+  });
+
   initController = () => {
     this._router.post(`${this._rootPath}/planner`,       AuthMiddleware, this.planArticle);
     this._router.post(`${this._rootPath}/writer`,        AuthMiddleware, this.writeArticle);
@@ -387,6 +422,7 @@ class AIController extends Controller {
     this._router.get( `${this._rootPath}/image/providers`, AuthMiddleware, this.getImageProviders);
     this._router.post(`${this._rootPath}/image/generate`,  AuthMiddleware, this.generateImage);
     this._router.post(`${this._rootPath}/image/edit`,       AuthMiddleware, this.editImage);
+    this._router.post(`${this._rootPath}/diagram/generate`, AuthMiddleware, this.generateDiagram);
   };
 }
 

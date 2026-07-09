@@ -22,6 +22,9 @@ const {
   MediaAssetController,
   AIController,
   AssetController,
+  EditorController,
+  PublishingController,
+  GrowthController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -48,6 +51,9 @@ const app = new AppServer([
   new MediaAssetController(),
   new AIController(),
   new AssetController(),
+  new EditorController(),
+  new PublishingController(),
+  new GrowthController(),
 ]);
 
 app.startListening();

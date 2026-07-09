@@ -7,7 +7,7 @@
 //  - Prompt shape supports both multi-turn chat messages and simple text strings.
 //  - Errors are serialized into flat structures containing message, code, and
 //    stack trace (if available) to avoid saving circular references.
-//  - Decoupled `AILogger` interface lets developers implement custom sinks
+//  - Decoupled `AILogSink` interface lets developers implement custom sinks
 //    (Console, File, MongoDB, Datadog) without changing model call sites.
 // =============================================================================
 
@@ -26,7 +26,8 @@ export interface LoggedError {
 }
 
 /**
- * Clean data structure containing all metadata for an AI execution.
+ * Unified telemetry entry for every AI execution.
+ * Base fields are always present; platform-level dimensions are optional.
  */
 export interface AILogEntry {
   readonly id: string;
@@ -47,14 +48,42 @@ export interface AILogEntry {
   readonly tokenUsage?: TokenUsage;
   /** Calculated cost of this request in USD */
   readonly estimatedCost?: number;
+  /** Whether the execution succeeded */
+  readonly success: boolean;
   /** Serialization of any exception encountered during execution */
   readonly error?: LoggedError;
+
+  // ─── Platform-Level Dimensions (optional) ──────────────────────────
+  readonly promptName?: string;
+  readonly promptVersion?: string;
+  readonly retryCount?: number;
+  readonly validationErrors?: any;
+  readonly streamingDurationMs?: number;
 }
 
 /**
  * Interface representing an output sink for logs.
  */
-export interface AILogger {
+export interface AILogSink {
   readonly name: string;
   log(entry: AILogEntry): Promise<void>;
+}
+
+/**
+ * Parameters accepted by TelemetryLogger.log().
+ * All platform-level dimensions are optional — callers include only what they have.
+ */
+export interface TelemetryLogParams {
+  readonly providerId: string;
+  readonly model: string;
+  readonly prompt: LoggedPrompt;
+  readonly durationMs: number;
+  readonly response?: string;
+  readonly usage?: TokenUsage;
+  readonly error?: unknown;
+  readonly promptName?: string;
+  readonly promptVersion?: string;
+  readonly retryCount?: number;
+  readonly validationErrors?: any;
+  readonly streamingDurationMs?: number;
 }

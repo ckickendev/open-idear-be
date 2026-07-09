@@ -7,15 +7,16 @@
 
 export {
   type AILogEntry,
-  type AILogger,
+  type AILogSink,
   type LoggedPrompt,
   type LoggedError,
+  type TelemetryLogParams,
 } from "./types";
 
 export {
-  ConsoleAILogger,
-  FileAILogger,
-  TelemetryLoggerManager,
+  ConsoleAILogSink,
+  FileAILogSink,
+  TelemetryLogger,
   aiLogger,
 } from "./logger";
 

@@ -3,10 +3,6 @@
 //  ai/index.ts
 //
 //  Single point of access for all AI capabilities in the OpenIdear application.
-//  Exports:
-//  - Providers: providerRegistry, GeminiProvider, and AIProvider interfaces.
-//  - Prompts: PromptBuilder, PromptLoader, PromptRegistry, and version routing.
-//  - Context: AIContext and AIContextCollector.
 // =============================================================================
 
 // ─── Provider Layer ──────────────────────────────────────────────────────────
@@ -35,26 +31,104 @@ export {
   type PromptSource,
   PromptRegistry,
   promptRegistry,
+  PromptVersionManager,
+  promptVersionManager,
 } from "./prompt";
 
 // ─── Context Layer ────────────────────────────────────────────────────────────
 export {
   type AIContext,
   AIContextCollector,
+  type EditorContext,
+  EditorContextBuilder,
+  type PublishingContext,
+  PublishingContextBuilder,
+  type GrowthContext,
+  GrowthContextBuilder,
 } from "./context";
 
-// ─── Telemetry Layer (Logger) ──────────────────────────────────────────────────
+// ─── Telemetry Layer ──────────────────────────────────────────────────────────
 export {
   type AILogEntry,
-  type AILogger,
+  type AILogSink,
   type LoggedPrompt,
   type LoggedError,
-  ConsoleAILogger,
-  FileAILogger,
-  TelemetryLoggerManager,
+  type TelemetryLogParams,
+  ConsoleAILogSink,
+  FileAILogSink,
+  TelemetryLogger,
   aiLogger,
   calculateCost,
 } from "./telemetry";
+
+// ─── Configuration Layer ────────────────────────────────────────────────────────
+export {
+  type AIRetryConfig,
+  type AIConfig,
+  type AIConfigScope,
+  AIConfigCenter,
+  aiConfigCenter,
+} from "./config";
+
+// ─── Runtime Layer ────────────────────────────────────────────────────────────
+export {
+  AIRuntime,
+  type RuntimeRequestOptions,
+  aiRuntime,
+} from "./runtime";
+
+// ─── Execution Layer ──────────────────────────────────────────────────────────
+export {
+  type ExecutionPolicy,
+  type ExecutionContext,
+  type ExecutionResult,
+  type ExecutionMiddleware,
+  type ExecutionStage,
+  type UserContext,
+  type PromptContext,
+  type ArticleContext,
+  type SelectionContext,
+  type EditorContextState,
+  type PublishingContextState,
+  type TelemetryMetadata,
+  ExecutionContextContainer,
+  MetricsMiddleware,
+  TelemetryLoggingMiddleware,
+  CacheMiddleware,
+  BudgetMiddleware,
+  SafetyMiddleware,
+  JsonSelfHealingMiddleware,
+  RetryMiddleware,
+  ExecutionPipeline,
+  ExecutionFacade,
+  aiExecutionFacade,
+} from "./execution";
+
+// ─── Tool Layer ───────────────────────────────────────────────────────────────
+export {
+  type ToolPermission,
+  type ToolContext,
+  type ToolResult,
+  type AITool,
+  type ToolRegistryPlugin,
+  type ExecutorOptions,
+  type ToolUserContext,
+  type ToolArticleContext,
+  type ToolSelectionContext,
+  type ToolWorkspaceContext,
+  type ToolExecutionMetadata,
+  ToolContextContainer,
+  ToolRegistry,
+  toolRegistry,
+  ToolExecutor,
+  toolExecutor,
+  ReadPostTool,
+  SearchPostTool,
+  SearchMediaTool,
+  SuggestTagsTool,
+  GenerateSlugTool,
+  SearchCategoryTool,
+} from "./tool";
 
 // ─── Agent Layer ──────────────────────────────────────────────────────────────
 export {
@@ -69,6 +143,33 @@ export {
   type WriterInput,
   WriterSchema,
   type WriterOutput,
+  DiagramAgent,
+  diagramAgent,
+  type DiagramType,
+  type DiagramRequest,
+  type DiagramResult,
+  EditorCopilot,
+  editorCopilot,
+  copilotActionRegistry,
+  type CopilotAction,
+  type ContinueInput,
+  type ContinueOutput,
+  type ImproveInput,
+  type ImproveOutput,
+  type ExampleInput,
+  type ExampleOutput,
+  type ReviewInput,
+  type ReviewOutput,
+  ContinueSchema,
+  ImproveSchema,
+  ExampleSchema,
+  ReviewSchema,
+  ImproveAgent,
+  improveAgent,
+  ExampleAgent,
+  exampleAgent,
+  ReviewAgent,
+  reviewAgent,
 } from "./agent";
 
 // ─── Workflow Layer ───────────────────────────────────────────────────────────
@@ -79,6 +180,39 @@ export {
   CreateArticleWorkflow,
   AssetUploadWorkflow,
   type AssetUploadInput,
+  EditingWorkflow,
+  type EditingWorkflowInput,
+  publishTaskRegistry,
+  PublishingEngine,
+  publishingEngine,
+  MetadataResultSchema,
+  type MetadataResult,
+  ReviewResultSchema,
+  type ReviewResult,
+  SEOResultSchema,
+  type SEOResult,
+  CategoryResultSchema,
+  type CategoryResult,
+  PublishingWorkflow,
+  type PublishingWorkflowInput,
+  type PublishPreflightReport,
+  growthTaskRegistry,
+  GrowthEngine,
+  growthEngine,
+  FAQResultSchema,
+  type FAQResult,
+  InternalLinkResultSchema,
+  type InternalLinkResult,
+  ComparisonTableResultSchema,
+  type ComparisonTableResult,
+  SocialPostResultSchema,
+  type SocialPostResult,
+  AffiliateResultSchema,
+  type AffiliateResult,
+  ContentGapResultSchema,
+  type ContentGapResult,
+  GrowthWorkflow,
+  type GrowthWorkflowInput,
 } from "./workflow";
 
 // ─── Vision Layer ─────────────────────────────────────────────────────────────

@@ -19,6 +19,9 @@ const ContributionController = require("./contribution.controller");
 const MediaAssetController = require("./mediaAsset.controller");
 const AIController = require("./ai.controller");
 const AssetController = require("./asset.controller");
+const EditorController = require("./editor.controller");
+const PublishingController = require("./publishing.controller");
+const GrowthController = require("./growth.controller");
 
 
 module.exports = {
@@ -43,4 +46,7 @@ module.exports = {
   MediaAssetController,
   AIController,
   AssetController,
+  EditorController,
+  PublishingController,
+  GrowthController,
 };
