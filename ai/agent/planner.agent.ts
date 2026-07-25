@@ -35,8 +35,8 @@ export class PlannerAgent extends BaseAgent<PlannerInput, PlannerOutline> {
    */
   protected override async validate(data: PlannerOutline): Promise<boolean> {
     // 1. Minimum sections check
-    if (data.outline.length < 3) {
-      console.error("[PlannerAgent] Outline has too few sections (minimum 3 required).");
+    if (!data || !Array.isArray(data.outline) || data.outline.length < 3) {
+      console.error("[PlannerAgent] Outline is missing or has too few sections (minimum 3 required).");
       return false;
     }
 

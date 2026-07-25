@@ -160,49 +160,112 @@ export class FilePromptSource implements PromptSource {
   }
 
   /**
-   * Lightweight, robust YAML parser for key-value and nested metadata.
+   * Lightweight, robust YAML parser for key-value and nested metadata,
+   * supporting multiline block scalars (system: | or system: >).
    */
   private parseSimpleYaml(yamlStr: string): Record<string, any> {
     const result: Record<string, any> = {};
     const lines = yamlStr.split("\n");
-    let inMetadata = false;
 
-    for (const line of lines) {
+    let currentKey: string | null = null;
+    let inMetadata = false;
+    let inBlockScalar = false;
+    let blockScalarLines: string[] = [];
+    let blockScalarIndent = 0;
+
+    const flushBlockScalar = () => {
+      if (currentKey && inBlockScalar) {
+        const text = blockScalarLines.join("\n").trimEnd();
+        if (inMetadata && result.metadata) {
+          result.metadata[currentKey] = text;
+        } else {
+          result[currentKey] = text;
+        }
+        blockScalarLines = [];
+        inBlockScalar = false;
+        currentKey = null;
+      }
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const trimmed = line.trim();
+
+      if (inBlockScalar) {
+        const isBlank = trimmed === "";
+        const isIndented = line.startsWith(" ") || line.startsWith("\t");
+
+        // A top-level key (no leading whitespace, has a colon) ends the block scalar
+        const isTopLevelKey = !isIndented && !isBlank && line.includes(":") && !line.startsWith("#");
+
+        if (isTopLevelKey) {
+          flushBlockScalar();
+          // Fall through to process this line as a new key
+        } else {
+          let contentLine = line;
+          if (blockScalarIndent > 0) {
+            if (line.length >= blockScalarIndent && line.slice(0, blockScalarIndent).trim() === "") {
+              contentLine = line.slice(blockScalarIndent);
+            } else if (isIndented) {
+              contentLine = line.trimStart();
+            }
+          } else if (isIndented) {
+            const match = line.match(/^(\s+)/);
+            if (match) {
+              blockScalarIndent = match[1].length;
+              contentLine = line.slice(blockScalarIndent);
+            }
+          }
+          blockScalarLines.push(contentLine);
+          continue;
+        }
+      }
+
       if (!trimmed || trimmed.startsWith("#")) continue;
 
       // Handle metadata block entry
-      if (trimmed.startsWith("metadata:")) {
-        result.metadata = {};
+      if (trimmed === "metadata:" || trimmed.startsWith("metadata:")) {
+        result.metadata = result.metadata || {};
         inMetadata = true;
+        currentKey = null;
         continue;
       }
 
-      // Check indentation to determine if we are still in metadata
+      // Check indentation to determine if we are still in metadata block
       if (inMetadata && !line.startsWith(" ") && !line.startsWith("\t")) {
         inMetadata = false;
       }
 
-      const colonIdx = trimmed.indexOf(":");
+      const colonIdx = line.indexOf(":");
       if (colonIdx === -1) continue;
 
-      const key = trimmed.slice(0, colonIdx).trim();
-      let val = trimmed.slice(colonIdx + 1).trim();
+      const key = line.slice(0, colonIdx).trim();
+      let val = line.slice(colonIdx + 1).trim();
 
-      // Clean wrapped quotes
-      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-        val = val.slice(1, -1);
-      }
-
-      if (inMetadata && result.metadata) {
-        result.metadata[key] = this.coerceValue(val);
+      if (val === "|" || val === ">") {
+        currentKey = key;
+        inBlockScalar = true;
+        blockScalarLines = [];
+        blockScalarIndent = 0;
       } else {
-        result[key] = this.coerceValue(val);
+        // Clean wrapped quotes
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+
+        if (inMetadata && result.metadata) {
+          result.metadata[key] = this.coerceValue(val);
+        } else {
+          result[key] = this.coerceValue(val);
+        }
       }
     }
 
+    flushBlockScalar();
+
     return result;
   }
+
 
   private coerceValue(val: string): any {
     if (val === "true") return true;

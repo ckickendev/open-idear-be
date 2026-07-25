@@ -1,4 +1,10 @@
 require("ts-node/register");
+require("dotenv").config();
+
+const { providerRegistry, GeminiProvider } = require("./ai");
+if (process.env.GEMINI_API_KEY) {
+  providerRegistry.register(new GeminiProvider(process.env.GEMINI_API_KEY.trim()));
+}
 
 const {
   UserController,
@@ -61,3 +67,6 @@ app.startListening();
 // Start background AI metadata generation worker daemon
 const { aiWorker } = require("./services");
 aiWorker.start();
+// trigger restart nodemon clean - updated category middleware & models
+
+

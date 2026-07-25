@@ -2,6 +2,7 @@ import type { ExecutionContext, ExecutionMiddleware } from "./types";
 import { calculateCost, aiLogger } from "../telemetry";
 import { aiRuntime } from "../runtime";
 import { AIError } from "../provider/types";
+import { proactiveRateLimiter } from "./rateLimiter";
 
 // =============================================================================
 //  METRICS & COST MIDDLEWARE
@@ -265,5 +266,17 @@ export class RetryMiddleware implements ExecutionMiddleware {
       context.error = retryErr;
       return false;
     }
+  }
+}
+
+// =============================================================================
+//  PROACTIVE RATE LIMITER MIDDLEWARE
+// =============================================================================
+
+export class RateLimiterMiddleware implements ExecutionMiddleware {
+  readonly name = "RateLimiter";
+
+  async before(_context: ExecutionContext): Promise<void> {
+    await proactiveRateLimiter.throttle();
   }
 }

@@ -24,44 +24,57 @@ export class PolicyRegistry {
   }
 
   private registerDefaults(): void {
+    // ─── Shared model whitelist ──────────────────────────────────────────
+    // Semantic aliases ("fast", "quality", "vision", "default") are resolved
+    // to actual Gemini identifiers inside GeminiProvider.  Policies must
+    // whitelist BOTH the alias and the resolved identifier so that the
+    // facade's model-check passes regardless of which string is forwarded.
+    const sharedModels = [
+      "fast", "quality", "vision", "default",
+      "gemini-1.5-flash", "gemini-1.5-pro",
+      "gemini-2.0-flash", "gemini-2.5-pro",
+      "gemini-2.5-flash",
+    ];
+
+
     // 1. Planner Engine Policy
     this.register("planner", {
       name: "DefaultPlannerPolicy",
       scope: "planner",
-      allowedModels: ["fast", "gemini-2.0-flash"],
+      allowedModels: sharedModels,
       maxAttempts: 3,
       initialDelayMs: 1000,
       backoffMultiplier: 2,
       timeoutMs: 30000,
-      budgetCap: 0.10, // Max $0.10 USD
+      budgetCap: 0.10,
       allowStreaming: false,
-      temperatureOverride: 0.2, // Cold temperature for structured outputs
+      temperatureOverride: 0.2,
     });
 
     // 2. Writer Engine Policy
     this.register("writer", {
       name: "DefaultWriterPolicy",
       scope: "writer",
-      allowedModels: ["quality", "gemini-2.5-pro"],
+      allowedModels: sharedModels,
       maxAttempts: 2,
       initialDelayMs: 1500,
       backoffMultiplier: 2,
       timeoutMs: 120000,
-      budgetCap: 0.80, // High budget for reasoning drafts
+      budgetCap: 0.80,
       allowStreaming: true,
-      temperatureOverride: 0.7, // Warm temperature for creative drafts
+      temperatureOverride: 0.7,
     });
 
     // 3. Editor Copilot Engine Policy
     this.register("editor", {
       name: "DefaultEditorPolicy",
       scope: "editor",
-      allowedModels: ["fast", "gemini-2.0-flash"],
+      allowedModels: sharedModels,
       maxAttempts: 3,
       initialDelayMs: 1000,
       backoffMultiplier: 1.5,
       timeoutMs: 30000,
-      budgetCap: 0.05, // Fast low cost edits
+      budgetCap: 0.05,
       allowStreaming: false,
       temperatureOverride: 0.5,
     });
@@ -70,21 +83,21 @@ export class PolicyRegistry {
     this.register("publishing", {
       name: "DefaultPublishingPolicy",
       scope: "publishing",
-      allowedModels: ["quality", "gemini-2.5-pro"],
+      allowedModels: sharedModels,
       maxAttempts: 3,
       initialDelayMs: 1000,
       backoffMultiplier: 2,
       timeoutMs: 45000,
       budgetCap: 0.20,
       allowStreaming: false,
-      temperatureOverride: 0.1, // Strict structure checks
+      temperatureOverride: 0.1,
     });
 
     // 5. Growth Engine Policy
     this.register("growth", {
       name: "DefaultGrowthPolicy",
       scope: "growth",
-      allowedModels: ["fast", "gemini-2.0-flash", "quality"],
+      allowedModels: sharedModels,
       maxAttempts: 3,
       initialDelayMs: 1000,
       backoffMultiplier: 2,
