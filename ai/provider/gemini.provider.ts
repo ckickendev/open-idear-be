@@ -60,11 +60,12 @@ import { AIError } from "./types";
  *             so vision capability is explicitly declared at the call site)
  */
 const MODEL_ALIASES: Readonly<Record<string, string>> = {
-  fast: "gemini-2.0-flash",
-  quality: "gemini-2.5-pro",
-  vision: "gemini-2.0-flash",
-  default: "gemini-2.0-flash",
+  fast: "gemini-2.5-flash",
+  quality: "gemini-2.5-flash",
+  vision: "gemini-2.5-flash",
+  default: "gemini-2.5-flash",
 } as const;
+
 
 // ─── Retry Configuration ──────────────────────────────────────────────────────
 

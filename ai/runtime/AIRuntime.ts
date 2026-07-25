@@ -1,5 +1,5 @@
-import { providerRegistry } from "../provider";
-import { type AIMessage, type AICompletion, type AIJSONResult, type TokenUsage } from "../provider/types";
+import { fallbackStrategy } from "../provider";
+import { type AIMessage, type AICompletion, type AIJSONResult, type TokenUsage, AIError } from "../provider/types";
 import type { ZodSchema } from "zod";
 
 // =============================================================================
@@ -31,6 +31,21 @@ export class AIRuntime {
   ): Promise<{ data: T; text: string; usage?: TokenUsage | undefined }> {
     if (format === "json") {
       const res = await this.executeJSON<T>(messages, options);
+      if (options.schema) {
+        const parseResult = options.schema.safeParse(res.data);
+        if (!parseResult.success) {
+          throw new AIError(
+            `JSON output does not match schema: ${parseResult.error.message}`,
+            "parse_error",
+            false
+          );
+        }
+        return {
+          data: parseResult.data as T,
+          text: JSON.stringify(parseResult.data),
+          usage: res.usage,
+        };
+      }
       return {
         data: res.data,
         text: JSON.stringify(res.data),
@@ -53,7 +68,6 @@ export class AIRuntime {
     messages: AIMessage[],
     options: RuntimeRequestOptions = {}
   ): Promise<AICompletion> {
-    const provider = providerRegistry.getDefault();
     const providerOptions = this.toProviderOptions(options);
 
     let timeoutId: NodeJS.Timeout | undefined;
@@ -68,9 +82,11 @@ export class AIRuntime {
     }
 
     try {
-      const result = await provider.generate(messages, {
-        ...providerOptions,
-        signal: controller.signal,
+      const result = await fallbackStrategy.executeWithFallback(async (provider) => {
+        return await provider.generate(messages, {
+          ...providerOptions,
+          signal: controller.signal,
+        });
       });
       if (timeoutId) clearTimeout(timeoutId);
       return result;
@@ -87,7 +103,6 @@ export class AIRuntime {
     messages: AIMessage[],
     options: RuntimeRequestOptions = {}
   ): Promise<AIJSONResult<T>> {
-    const provider = providerRegistry.getDefault();
     const providerOptions = this.toProviderOptions(options);
 
     let timeoutId: NodeJS.Timeout | undefined;
@@ -102,9 +117,11 @@ export class AIRuntime {
     }
 
     try {
-      const result = await provider.generateJSON<T>(messages, {
-        ...providerOptions,
-        signal: controller.signal,
+      const result = await fallbackStrategy.executeWithFallback(async (provider) => {
+        return await provider.generateJSON<T>(messages, {
+          ...providerOptions,
+          signal: controller.signal,
+        });
       });
       if (timeoutId) clearTimeout(timeoutId);
       return result;

@@ -1,0 +1,8 @@
+{
+  "watch": [".", "ai", "src", "controllers", "services", "functions", "routes"],
+  "ext": "js,ts,json,md",
+  "ignore": ["node_modules", "logs", "*.test.ts", "*.spec.ts"],
+  "execMap": {
+    "js": "node"
+  }
+}

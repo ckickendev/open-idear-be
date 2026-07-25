@@ -5,6 +5,8 @@ const { AuthMiddleware } = require("../middlewares/auth.middleware");
 const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent } = require("../ai");
 const { aiImageGenerationOrchestratorService } = require("../services/aiImageGeneration.services");
 const { aiImageEditingOrchestratorService } = require("../services/aiImageEditing.services");
+const fs = require("fs").promises;
+const path = require("path");
 
 // =============================================================================
 //  AI CONTROLLER
@@ -415,6 +417,82 @@ class AIController extends Controller {
     });
   });
 
+  /**
+   * GET /ai/v1/telemetry
+   * Aggregates AI system stats from logs/ai.log.
+   */
+  getTelemetry = asyncHandler(async (req, res) => {
+    const logPath = path.resolve(process.cwd(), "logs/ai.log");
+    
+    let totalRequests = 0;
+    let successfulRequests = 0;
+    let failedRequests = 0;
+    let totalTokens = 0;
+    let totalCost = 0;
+    let totalDuration = 0;
+    const recentRequests = [];
+
+    try {
+      const content = await fs.readFile(logPath, "utf-8");
+      const lines = content.split("\n").filter(line => line.trim());
+      
+      lines.forEach((line) => {
+        try {
+          const entry = JSON.parse(line);
+          totalRequests++;
+          if (entry.success) {
+            successfulRequests++;
+          } else {
+            failedRequests++;
+          }
+          
+          if (entry.tokenUsage) {
+            totalTokens += (entry.tokenUsage.totalTokens || 0);
+          }
+          
+          totalCost += (entry.estimatedCost || 0);
+          totalDuration += (entry.executionTimeMs || 0);
+          
+          recentRequests.push({
+            id: entry.id,
+            timestamp: entry.timestamp,
+            model: entry.model,
+            success: entry.success,
+            durationMs: entry.executionTimeMs,
+            cost: entry.estimatedCost,
+            promptName: entry.promptName,
+            error: entry.error ? entry.error.message : null,
+          });
+        } catch (parseErr) {
+          // ignore malformed log lines
+        }
+      });
+    } catch (err) {
+      if (err.code !== "ENOENT") {
+        return res.status(500).json({ error: "Failed to read telemetry log." });
+      }
+    }
+
+    const averageDuration = totalRequests > 0 ? Math.round(totalDuration / totalRequests) : 0;
+    const errorRate = totalRequests > 0 ? Number(((failedRequests / totalRequests) * 100).toFixed(1)) : 0;
+
+    res.json({
+      status: "success",
+      data: {
+        metrics: {
+          totalRequests,
+          successfulRequests,
+          failedRequests,
+          errorRate,
+          totalTokens,
+          totalCost: Number(totalCost.toFixed(4)),
+          averageDuration,
+        },
+        recentRequests: recentRequests.reverse().slice(0, 10), // return last 10 requests
+      }
+    });
+  });
+
   initController = () => {
     this._router.post(`${this._rootPath}/planner`,       AuthMiddleware, this.planArticle);
     this._router.post(`${this._rootPath}/writer`,        AuthMiddleware, this.writeArticle);
@@ -423,6 +501,7 @@ class AIController extends Controller {
     this._router.post(`${this._rootPath}/image/generate`,  AuthMiddleware, this.generateImage);
     this._router.post(`${this._rootPath}/image/edit`,       AuthMiddleware, this.editImage);
     this._router.post(`${this._rootPath}/diagram/generate`, AuthMiddleware, this.generateDiagram);
+    this._router.get( `${this._rootPath}/telemetry`,        AuthMiddleware, this.getTelemetry);
   };
 }
 

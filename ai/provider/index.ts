@@ -41,5 +41,8 @@ export { AIError } from "./types";
 // ─── Gemini implementation ────────────────────────────────────────────────────
 export { GeminiProvider } from "./gemini.provider";
 
+// ─── Fallback & Failover strategy ─────────────────────────────────────────────
+export { FallbackStrategy, fallbackStrategy } from "./fallback.strategy";
+
 // ─── Registry singleton ───────────────────────────────────────────────────────
 export { ProviderRegistry, providerRegistry } from "./registry";

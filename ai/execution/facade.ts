@@ -1,6 +1,6 @@
 import type { ExecutionResult } from "./types";
 import { ExecutionPipeline } from "./pipeline";
-import { MetricsMiddleware, TelemetryLoggingMiddleware, JsonSelfHealingMiddleware } from "./middleware";
+import { MetricsMiddleware, TelemetryLoggingMiddleware, JsonSelfHealingMiddleware, RateLimiterMiddleware } from "./middleware";
 import { aiConfigCenter, type AIConfigScope } from "../config";
 import { policyRegistry } from "./policy";
 import { ExecutionContextContainer } from "./context";
@@ -18,6 +18,7 @@ import { v4 as uuidv4 } from "uuid";
  */
 export class ExecutionFacade {
   private readonly defaultPipeline = new ExecutionPipeline()
+    .use(new RateLimiterMiddleware())
     .use(new MetricsMiddleware())
     .use(new JsonSelfHealingMiddleware())
     .use(new TelemetryLoggingMiddleware());

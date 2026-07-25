@@ -17,4 +17,8 @@ export { EditorCopilot, editorCopilot, copilotActionRegistry, type CopilotAction
 export { ImproveAgent, improveAgent } from "./improve.agent";
 export { ExampleAgent, exampleAgent } from "./example.agent";
 export { ReviewAgent, reviewAgent } from "./review.agent";
+export { AffiliateAgent, affiliateAgent, type AffiliateInput, type AffiliateOutput } from "./affiliate.agent";
+export { ImageAgent, imageAgent, type ImageAgentInput, type ImageAgentOutput } from "./image.agent";
+export { PublisherAgent, publisherAgent, type PublisherAgentInput, type PublisherAgentOutput } from "./publisher.agent";
+export { SeoAgent, seoAgent, type SeoAgentInput, type SeoAgentOutput } from "./seo.agent";
 export * from "./copilot.schema";

@@ -13,12 +13,32 @@ import { z } from "zod";
 
 // ─── Metadata Task Result Schema ─────────────────────────────────────────────
 export const MetadataResultSchema = z.object({
-  /** Indicates whether the draft post has a valid, non-blank title string. */
-  titlePresent: z.boolean(),
-  /** The total character count of the draft body content. */
-  contentLength: z.number(),
-  /** True if the draft content length meets or exceeds the minimum threshold of 50 characters. */
-  isMinLengthValid: z.boolean(),
+  /** True if the title exists and is within 5-60 characters. */
+  titleValid: z.boolean(),
+  /** True if the meta description exists and is within 20-160 characters. */
+  descriptionValid: z.boolean(),
+  /** True if the post category is specified. */
+  categoryPresent: z.boolean(),
+  /** True if at least one tag is specified. */
+  tagsPresent: z.boolean(),
+  /** True if the slug matches valid lowercase alphanumeric hyphenated format. */
+  slugValid: z.boolean(),
+  /** True if a post cover image is supplied. */
+  coverPresent: z.boolean(),
+  /** True if all images inside the post body contain ALT tags. */
+  imagesAltValid: z.boolean(),
+  /** True if headings hierarchy matches standard outlines (no H1, orderly H2/H3). */
+  headingsOrderValid: z.boolean(),
+  /** True if the post contains an FAQ block/section. */
+  faqBlockPresent: z.boolean(),
+  /** True if all external links in the content are secure (HTTPS). */
+  linksSecure: z.boolean(),
+  /** True if affiliate placements follow compliance guidelines. */
+  affiliateValid: z.boolean(),
+  /** Critical error messages blocking release. */
+  errors: z.array(z.string()),
+  /** Warnings that do not block release. */
+  warnings: z.array(z.string()),
 });
 
 export type MetadataResult = z.infer<typeof MetadataResultSchema>;

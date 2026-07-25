@@ -120,26 +120,140 @@ export const CategoryInputSchema = z.object({
 publishTaskRegistry.register({
   id: "metadata",
   name: "Metadata Validation",
-  description: "Validates that basic draft attributes (title and content bounds) exist.",
+  description: "Validates all pre-publish checklist parameters.",
   promptVersion: "v1",
   inputSchema: MetadataInputSchema,
   outputSchema: MetadataResultSchema,
   severity: "error",
   async run(post, _context) {
-    const contentLength = (post.content || "").length;
-    const isMinLengthValid = contentLength >= 50;
-    const success = !!post.title && isMinLengthValid;
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // 1. Title Audit
+    const title = (post.title || "").trim();
+    const titleValid = title.length >= 5 && title.length <= 60;
+    if (!post.title) {
+      errors.push("Post Title is missing.");
+    } else if (!titleValid) {
+      warnings.push(`Post Title should be between 5-60 characters (currently: ${title.length}).`);
+    }
+
+    // 2. Description Audit
+    const description = (post.description || "").trim();
+    const descriptionValid = description.length >= 20 && description.length <= 160;
+    if (!post.description) {
+      errors.push("Meta Description is missing.");
+    } else if (!descriptionValid) {
+      warnings.push(`Meta Description should be between 20-160 characters (currently: ${description.length}).`);
+    }
+
+    // 3. Category Audit
+    const categoryPresent = !!post.category;
+    if (!categoryPresent) {
+      errors.push("Post Category is not selected.");
+    }
+
+    // 4. Tags Audit
+    const tagsPresent = Array.isArray(post.tags) && post.tags.length > 0;
+    if (!tagsPresent) {
+      warnings.push("No tags are assigned to the article.");
+    }
+
+    // 5. Slug Audit
+    const slug = (post.slug || "").trim();
+    const slugValid = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
+    if (!post.slug) {
+      errors.push("SEO URL slug is missing.");
+    } else if (!slugValid) {
+      errors.push("Slug must contain only lowercase letters, numbers, and hyphens (no spaces/symbols).");
+    }
+
+    // 6. Cover Audit
+    const coverPresent = !!(post.coverImage || post.image);
+    if (!coverPresent) {
+      warnings.push("No cover banner image is specified for the article.");
+    }
+
+    // Parse draft content body
+    const content = post.content || "";
+
+    // 7. Images Alt Audit
+    let imagesAltValid = true;
+    const mdImageRegex = /!\[(.*?)\]\((.*?)\)/g;
+    let mdMatch;
+    while ((mdMatch = mdImageRegex.exec(content)) !== null) {
+      if (!mdMatch[1] || mdMatch[1].trim() === "") {
+        imagesAltValid = false;
+        warnings.push(`Found image with missing ALT descriptive tags: "${mdMatch[2]}".`);
+      }
+    }
+
+    const htmlImageRegex = /<img[^>]+alt=["'](.*?)["']/g;
+    let htmlMatch;
+    while ((htmlMatch = htmlImageRegex.exec(content)) !== null) {
+      if (!htmlMatch[1] || htmlMatch[1].trim() === "") {
+        imagesAltValid = false;
+        warnings.push("Found HTML image with missing ALT tag attribute.");
+      }
+    }
+
+    // 8. Headings Hierarchy Audit
+    let headingsOrderValid = true;
+    if (content.includes("# ") || content.includes("<h1>")) {
+      headingsOrderValid = false;
+      errors.push("H1 header tag is forbidden inside content body copy (reserved for article title).");
+    }
+    // Simple hierarchy rule: H3 should not exist without a prior H2
+    const h2Index = content.indexOf("## ");
+    const h3Index = content.indexOf("### ");
+    if (h3Index !== -1 && (h2Index === -1 || h3Index < h2Index)) {
+      headingsOrderValid = false;
+      warnings.push("Invalid heading nest hierarchy: H3 (###) used before main H2 (##) section.");
+    }
+
+    // 9. FAQ Section Audit
+    const faqBlockPresent = content.toLowerCase().includes("faq") || content.toLowerCase().includes("frequently asked questions");
+
+    // 10. Secure Links Audit
+    let linksSecure = true;
+    const unsecureLinkRegex = /\[.*?\]\(http:\/\/.*?\)/g;
+    if (unsecureLinkRegex.test(content) || content.includes("href=\"http://")) {
+      linksSecure = false;
+      warnings.push("Found unsecure external links (HTTP) in the article body. Use HTTPS instead.");
+    }
+
+    // 11. Affiliate Placements Audit
+    let affiliateValid = true;
+    if (content.includes("amzn.to/") || content.includes("amazon.com/dp/")) {
+      // Basic check for tracking ID presence
+      if (!content.includes("tag=") && !content.includes("ref=")) {
+        affiliateValid = false;
+        warnings.push("Amazon affiliate link detected missing a valid tracking parameters.");
+      }
+    }
+
+    const success = errors.length === 0;
 
     const result: PublishTaskResult = {
       taskId: "metadata",
       success,
       severity: "error",
       outputData: {
-        titlePresent: !!post.title,
-        contentLength,
-        isMinLengthValid,
+        titleValid,
+        descriptionValid,
+        categoryPresent,
+        tagsPresent,
+        slugValid,
+        coverPresent,
+        imagesAltValid,
+        headingsOrderValid,
+        faqBlockPresent,
+        linksSecure,
+        affiliateValid,
+        errors,
+        warnings,
       },
-      ...(!success && { message: "Post must have a title and at least 50 characters of content." }),
+      ...(!success && { message: `Checklist failed: ${errors[0]}` }),
     };
 
     return result;
