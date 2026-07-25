@@ -67,6 +67,6 @@ app.startListening();
 // Start background AI metadata generation worker daemon
 const { aiWorker } = require("./services");
 aiWorker.start();
-// trigger restart nodemon clean - updated models
+// trigger restart nodemon clean - updated category middleware & models
 
 

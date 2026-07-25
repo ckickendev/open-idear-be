@@ -79,13 +79,17 @@ class CategoryController extends Controller {
     });
 
     createCategory = asyncHandler(async (req, res) => {
-        const { name, description } = req.body;
+        const { name, description, background_image } = req.body;
 
-        if (!name || !description) {
-            return res.status(400).json({ message: "Name and description are required" });
+        if (!name || !name.trim()) {
+            return res.status(400).json({ message: "Name is required" });
         }
 
-        const category = await categorieService.createCategory({ name, description });
+        const category = await categorieService.createCategory({
+            name: name.trim(),
+            description: description ? description.trim() : "",
+            background_image,
+        });
         res.status(201).json({
             message: "Category created successfully",
             category,
@@ -94,12 +98,16 @@ class CategoryController extends Controller {
 
     updateCategory = asyncHandler(async (req, res) => {
         const { id } = req.params;
-        const { name, description } = req.body;
-        if (!name || !description) {
-            return res.status(400).json({ message: "Name and description are required" });
+        const { name, description, background_image } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ message: "Name is required" });
         }
 
-        const category = await categorieService.updateCategory(id, { name, description });
+        const category = await categorieService.updateCategory(id, {
+            name: name.trim(),
+            description: description ? description.trim() : "",
+            background_image,
+        });
         if (!category) {
             return res.status(404).json({ message: "Category not found" });
         }

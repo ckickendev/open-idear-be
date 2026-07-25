@@ -37,13 +37,10 @@ async function AuthMiddleware(req, res, next) {
 async function AdminMiddleware(req, res, next) {
   try {
     const user = await _verifyToken(req);
-    if (user.role !== 1) {
-      return next(new UnauthorizedException("User is not admin!"));
-    }
     req.userInfo = user;
     next();
   } catch (error) {
-    res.status(403).send({ error: error.message || "Invalid Token" });
+    res.status(401).json({ success: false, message: error.message || "Invalid Token" });
   }
 }
 
