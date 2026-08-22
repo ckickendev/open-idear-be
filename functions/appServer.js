@@ -114,8 +114,30 @@ class AppServer {
 
   startListening() {
     const PORT = process.env.PORT || this._port;
+    const { execSync } = require("child_process");
+
     const server = this._app.listen(PORT, () => {
       ConsoleLogger.info(`Server start on ${PORT}!`);
+    });
+
+    server.on("error", (err) => {
+      if (err.code === "EADDRINUSE") {
+        ConsoleLogger.warn(`Port ${PORT} is in use (EADDRINUSE). Clearing stale process...`);
+        try {
+          execSync(`lsof -ti:${PORT} | xargs kill -9 2>/dev/null || true`);
+          ConsoleLogger.info(`Port ${PORT} cleared. Retrying...`);
+          setTimeout(() => {
+            this._app.listen(PORT, () => {
+              ConsoleLogger.info(`Server start on ${PORT}!`);
+            });
+          }, 1000);
+        } catch (e) {
+          ConsoleLogger.error(`Failed to auto-clear port ${PORT}: ${e.message}`);
+          process.exit(1);
+        }
+      } else {
+        ConsoleLogger.error(`Server listen error: ${err.message}`);
+      }
     });
 
     // Graceful shutdown
@@ -129,8 +151,16 @@ class AppServer {
         });
       });
     };
+
     process.on("SIGTERM", shutdown);
     process.on("SIGINT", shutdown);
+
+    // Nodemon restart handling
+    process.once("SIGUSR2", () => {
+      server.close(() => {
+        process.kill(process.pid, "SIGUSR2");
+      });
+    });
   }
 }
 

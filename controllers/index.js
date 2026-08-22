@@ -22,6 +22,8 @@ const AssetController = require("./asset.controller");
 const EditorController = require("./editor.controller");
 const PublishingController = require("./publishing.controller");
 const GrowthController = require("./growth.controller");
+const CourseCategoryController = require("./courseCategory.controller");
+const SmartPublishController = require("./smartPublish.controller");
 
 
 module.exports = {
@@ -49,4 +51,6 @@ module.exports = {
   EditorController,
   PublishingController,
   GrowthController,
+  CourseCategoryController,
+  SmartPublishController,
 };

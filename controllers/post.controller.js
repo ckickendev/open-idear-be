@@ -28,8 +28,12 @@ class PostController extends Controller {
 
         if (!post) return res.status(404).json({ message: "Post not found" });
 
-        if (post.author._id.toString() !== _id.toString())
+        const authorId = post.author?._id ? post.author._id.toString() : (post.author ? post.author.toString() : "");
+        const userId = _id ? _id.toString() : "";
+
+        if (authorId && userId && authorId !== userId && req.userInfo.role !== 1) {
             return res.status(403).json({ message: "You are not the author of this post" });
+        }
 
         res.status(200).json({ post });
     });

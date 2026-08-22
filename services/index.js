@@ -26,6 +26,8 @@ const aiSemanticSearchService = require("./aiSemanticSearch.services");
 const externalMediaCacheService = require("./externalMediaCache.services");
 const ocrService = require("./ocr.services");
 const duplicateDetectionService = require("./duplicateDetection.services");
+const courseCategoryService = require("./courseCategory.services");
+const enhancementPipeline = require("./aiContentEnhancement/pipeline/ImageEnhancementPipeline");
 
 module.exports = {
   userService,
@@ -56,4 +58,6 @@ module.exports = {
   externalMediaCacheService,
   ocrService,
   duplicateDetectionService,
+  courseCategoryService,
+  enhancementPipeline,
 };

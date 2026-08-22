@@ -7,8 +7,24 @@ const { NotFoundException } = require("../exceptions");
 class CategoryService extends Service {
     async getAll(status) {
         const query = status === 'trash' ? { del_flag: 1 } : { del_flag: { $ne: 1 } };
-        const categories = await Category.find(query);
-        return categories;
+        const categories = await Category.find(query).sort({ createdAt: -1 });
+
+        const postCounts = await Post.aggregate([
+            { $match: { del_flag: { $ne: 1 } } },
+            { $group: { _id: "$category", count: { $sum: 1 } } }
+        ]);
+
+        const countMap = {};
+        postCounts.forEach(item => {
+            if (item._id) {
+                countMap[item._id.toString()] = item.count;
+            }
+        });
+
+        return categories.map(cat => ({
+            ...cat._doc,
+            postCount: countMap[cat._id.toString()] || 0
+        }));
     }
 
     async getRecentlyFeatures() {

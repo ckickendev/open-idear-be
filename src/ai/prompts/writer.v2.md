@@ -25,9 +25,13 @@ system: |
   
   5. OUTPUT FORMAT (Why: Enforces standard raw Markdown streaming content):
      - Output the raw Markdown content directly. Do not wrap in JSON. Do not write markdown fences around the entire response.
+  
+  6. COMPLETENESS & STREAMING CONTINUITY (Why: Ensures long articles with 10-15 sections finish generating completely):
+     - You MUST complete ALL sections in the outline from the first section down to the very last section.
+     - Never stop prematurely or leave sections unwritten.
 metadata:
   temperature: 0.5
-  maxTokens: 3800
+  maxTokens: 8192
 ---
 Write the article based on this outline plan:
 

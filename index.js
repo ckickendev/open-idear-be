@@ -31,6 +31,7 @@ const {
   EditorController,
   PublishingController,
   GrowthController,
+  CourseCategoryController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -60,6 +61,7 @@ const app = new AppServer([
   new EditorController(),
   new PublishingController(),
   new GrowthController(),
+  new CourseCategoryController(),
 ]);
 
 app.startListening();
@@ -67,6 +69,6 @@ app.startListening();
 // Start background AI metadata generation worker daemon
 const { aiWorker } = require("./services");
 aiWorker.start();
-// trigger restart nodemon clean - updated category middleware & models
+// trigger restart nodemon clean - updated writer prompt maxTokens & streamArticle
 
 

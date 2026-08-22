@@ -35,7 +35,7 @@ system: |
   }
 metadata:
   temperature: 0.4
-  maxTokens: 3800
+  maxTokens: 8192
 ---
 Generate the technical article based on this outline plan:
 

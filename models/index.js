@@ -12,6 +12,7 @@ const Course = require("./course.schema");
 const Lesson = require("./lesson.schema");
 const Chapter = require("./chapter.schema");
 const CategoryCourse = require("./categoryCourse.schema");
+const CourseCategory = require("./courseCategory.schema");
 const Topic = require("./topic.schema");
 const Review = require("./review.schema");
 const Enrollment = require("./enrollment.schema");
@@ -38,6 +39,7 @@ module.exports = {
   Lesson,
   Chapter,
   CategoryCourse,
+  CourseCategory,
   Topic,
   Review,
   Enrollment,

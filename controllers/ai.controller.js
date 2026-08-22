@@ -164,6 +164,7 @@ class AIController extends Controller {
         additionalInstructions: additionalInstructions || "",
       }, {
         promptVersionOverride: "v2", // Force text-only markdown prompt (writer.v2.md)
+        maxTokensOverride: 8192, // High token output cap for full 15-section articles
         signal: abortController.signal,
         context: {
           language: req.body.language || "en",
@@ -493,11 +494,66 @@ class AIController extends Controller {
     });
   });
 
+  /**
+   * POST /ai/v1/enhance
+   * Triggers the AI content enhancement pipeline.
+   */
+  enhanceContent = asyncHandler(async (req, res) => {
+    const { _id: userId } = req.userInfo;
+    const { markdown, options } = req.body;
+
+    if (!markdown || !markdown.trim()) {
+      return res.status(400).json({ error: "markdown content is required" });
+    }
+
+    const { enhancementPipeline } = require("../services");
+    const result = await enhancementPipeline.execute(userId, markdown, options);
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  });
+
+  /**
+   * POST /ai/v1/enhance-images
+   * Triggers the AI Image Enhancement Pipeline specifically for image review modal.
+   */
+  enhanceImages = asyncHandler(async (req, res) => {
+    const { _id: userId } = req.userInfo;
+    const { markdown, title, maxImages } = req.body;
+
+    if (!markdown || !markdown.trim()) {
+      return res.status(400).json({ error: "markdown content is required" });
+    }
+
+    const { enhancementPipeline } = require("../services");
+    const result = await enhancementPipeline.execute(userId, markdown, {
+      title,
+      maxImages: maxImages || 4,
+      enableImageEnhancement: true,
+    });
+
+    res.json({
+      status: "success",
+      data: {
+        enhancedMarkdown: result.enhancedMarkdown,
+        insertedAssets: result.insertedAssets || result.insertedImages || [],
+        unresolvedImages: result.unresolvedImages || [],
+        statistics: result.statistics || {},
+        warnings: result.warnings || [],
+        executionTimeMs: result.executionTimeMs,
+      },
+    });
+  });
+
   initController = () => {
-    this._router.post(`${this._rootPath}/planner`,       AuthMiddleware, this.planArticle);
-    this._router.post(`${this._rootPath}/writer`,        AuthMiddleware, this.writeArticle);
-    this._router.post(`${this._rootPath}/writer/stream`, AuthMiddleware, this.streamArticle);
-    this._router.get( `${this._rootPath}/image/providers`, AuthMiddleware, this.getImageProviders);
+    this._router.post(`${this._rootPath}/planner`,        AuthMiddleware, this.planArticle);
+    this._router.post(`${this._rootPath}/writer`,         AuthMiddleware, this.writeArticle);
+    this._router.post(`${this._rootPath}/writer/stream`,  AuthMiddleware, this.streamArticle);
+    this._router.post(`${this._rootPath}/enhance`,        AuthMiddleware, this.enhanceContent);
+    this._router.post(`${this._rootPath}/enhance-images`, AuthMiddleware, this.enhanceImages);
+    this._router.get( `${this._rootPath}/image/providers`,AuthMiddleware, this.getImageProviders);
     this._router.post(`${this._rootPath}/image/generate`,  AuthMiddleware, this.generateImage);
     this._router.post(`${this._rootPath}/image/edit`,       AuthMiddleware, this.editImage);
     this._router.post(`${this._rootPath}/diagram/generate`, AuthMiddleware, this.generateDiagram);
