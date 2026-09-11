@@ -28,6 +28,11 @@ const ocrService = require("./ocr.services");
 const duplicateDetectionService = require("./duplicateDetection.services");
 const courseCategoryService = require("./courseCategory.services");
 const enhancementPipeline = require("./aiContentEnhancement/pipeline/ImageEnhancementPipeline");
+const courseIntelligenceService = require("./courseIntelligence.services");
+const aiJobService = require("./aiJob.services");
+const knowledgeCheckService = require("./knowledgeCheck.services");
+const tutorService = require("./tutor.services");
+const masteryService = require("./mastery.services");
 
 module.exports = {
   userService,
@@ -60,4 +65,9 @@ module.exports = {
   duplicateDetectionService,
   courseCategoryService,
   enhancementPipeline,
+  courseIntelligenceService,
+  aiJobService,
+  knowledgeCheckService,
+  tutorService,
+  masteryService,
 };

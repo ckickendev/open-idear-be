@@ -1,6 +1,7 @@
 const { Service } = require("../core");
 const { MediaAsset } = require("../models");
-const { providerRegistry, promptRegistry } = require("../ai");
+const { providerRegistry } = require("../ai/provider");
+const { promptRegistry } = require("../ai/prompt");
 
 class AISuggestionService extends Service {
   /**

@@ -21,4 +21,6 @@ export { AffiliateAgent, affiliateAgent, type AffiliateInput, type AffiliateOutp
 export { ImageAgent, imageAgent, type ImageAgentInput, type ImageAgentOutput } from "./image.agent";
 export { PublisherAgent, publisherAgent, type PublisherAgentInput, type PublisherAgentOutput } from "./publisher.agent";
 export { SeoAgent, seoAgent, type SeoAgentInput, type SeoAgentOutput } from "./seo.agent";
+export { InternalLinkAgent, type InternalLinkInput } from "./internalLink.agent";
+export { InternalLinkSchema, type InternalLinkOutput } from "./internalLink.schema";
 export * from "./copilot.schema";

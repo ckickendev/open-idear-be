@@ -24,6 +24,8 @@ const PublishingController = require("./publishing.controller");
 const GrowthController = require("./growth.controller");
 const CourseCategoryController = require("./courseCategory.controller");
 const SmartPublishController = require("./smartPublish.controller");
+const CourseIntelligenceController = require("./courseIntelligence.controller");
+const MasteryController = require("./mastery.controller");
 
 
 module.exports = {
@@ -53,4 +55,6 @@ module.exports = {
   GrowthController,
   CourseCategoryController,
   SmartPublishController,
+  CourseIntelligenceController,
+  MasteryController,
 };

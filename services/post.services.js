@@ -3,6 +3,7 @@ const { Service } = require("../core");
 const { Post, Like, Series, Category, Course } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 const { default: slugify } = require("slugify");
+const { ContentStructureService } = require("../ai/content/contentStructure.service");
 
 class PostService extends Service {
     async getAll(status, page = 1, limit = 20) {
@@ -54,6 +55,11 @@ class PostService extends Service {
                     readtime: post.readtime,
                     createdAt: post.createdAt,
                     updatedAt: post.updatedAt,
+                    contentVersion: post.contentVersion || "html-v1",
+                    blocks: post.blocks || undefined,
+                    hero: post.hero || undefined,
+                    aiContext: post.aiContext || undefined,
+                    seo: post.seo || undefined,
                 }
             });
 
@@ -89,7 +95,26 @@ class PostService extends Service {
             lower: true,
             strict: true,
         });
-        const readPost = post.text.split(" ").length / 225;
+        const readPost = post.text ? post.text.split(" ").length / 225 : 0;
+
+        let contentVersion = post.contentVersion || "html-v1";
+        let blocks = post.blocks || undefined;
+
+        // If blocks are provided or if contentVersion is "blocks-v1" or if markdown/aiContext is provided
+        if (!blocks && (post.contentVersion === "blocks-v1" || post.markdown || post.aiContext)) {
+          const markdownSource = post.markdown || post.content || "";
+          if (markdownSource.trim()) {
+            const struct = ContentStructureService.buildArticleStructure({
+              markdown: markdownSource,
+              growthResults: post.aiContext?.growthResults || null,
+            });
+            blocks = struct.blocks;
+            contentVersion = "blocks-v1";
+          }
+        } else if (blocks && Array.isArray(blocks) && blocks.length > 0) {
+          contentVersion = "blocks-v1";
+        }
+
         const newPost = new Post({
             _id: new mongoose.Types.ObjectId(),
             title: post.title,
@@ -109,6 +134,11 @@ class PostService extends Service {
             mediaContent: post.mediaContent || null,
             del_flag: 0,
             readtime: Math.ceil(readPost),
+            contentVersion,
+            blocks,
+            hero: post.hero || undefined,
+            aiContext: post.aiContext || undefined,
+            seo: post.seo || undefined,
         });
         const returnPost = await Post.create(newPost);
         return returnPost;
@@ -165,8 +195,9 @@ class PostService extends Service {
     }
 
     async updatePost(postId, post) {
-        const readPost = post.text.split(" ").length / 225;
-        const updatedPost = await Post.findByIdAndUpdate(postId, {
+        const readPost = post.text ? post.text.split(" ").length / 225 : 0;
+
+        const updateObj = {
             title: post.title,
             content: post.content,
             text: post.text,
@@ -175,9 +206,31 @@ class PostService extends Service {
                 lower: true,
                 strict: true,
             }),
-        }, { new: true });
+        };
+
+        if (post.contentVersion) updateObj.contentVersion = post.contentVersion;
+        if (post.blocks !== undefined) updateObj.blocks = post.blocks;
+        if (post.hero !== undefined) updateObj.hero = post.hero;
+        if (post.aiContext !== undefined) updateObj.aiContext = post.aiContext;
+        if (post.seo !== undefined) updateObj.seo = post.seo;
+
+        // Auto build blocks if requested or if markdown/aiContext is supplied and blocks missing
+        if (!updateObj.blocks && (post.contentVersion === "blocks-v1" || post.markdown || (post.aiContext && post.contentVersion === "blocks-v1"))) {
+          const markdownSource = post.markdown || post.content || "";
+          if (markdownSource.trim()) {
+            const struct = ContentStructureService.buildArticleStructure({
+              markdown: markdownSource,
+              growthResults: post.aiContext?.growthResults || null,
+            });
+            updateObj.blocks = struct.blocks;
+            updateObj.contentVersion = "blocks-v1";
+          }
+        }
+
+        const updatedPost = await Post.findByIdAndUpdate(postId, updateObj, { new: true });
         return updatedPost;
     }
+
 
     async updateStatusPost(postId, published) {
         await Post.findByIdAndUpdate(postId, {

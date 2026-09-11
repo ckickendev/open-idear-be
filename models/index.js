@@ -23,6 +23,14 @@ const MediaAsset = require("./mediaAsset.schema");
 const MediaFolder = require("./mediaFolder.schema");
 const Asset = require("./asset.schema");
 const AIJob = require("./aiJob.schema");
+const BrandVoice = require("./brandVoice.schema");
+const LessonIntelligence = require("./lessonIntelligence.schema");
+const KnowledgeCheck = require("./knowledgeCheck.schema");
+const KnowledgeCheckAttempt = require("./knowledgeCheckAttempt.schema");
+const TutorSession = require("./tutorSession.schema");
+const TutorMessage = require("./tutorMessage.schema");
+const LearningEvidence = require("./learningEvidence.schema");
+const ObjectiveMastery = require("./objectiveMastery.schema");
 
 module.exports = {
   User,
@@ -50,4 +58,12 @@ module.exports = {
   MediaFolder,
   Asset,
   AIJob,
+  BrandVoice,
+  LessonIntelligence,
+  KnowledgeCheck,
+  KnowledgeCheckAttempt,
+  TutorSession,
+  TutorMessage,
+  LearningEvidence,
+  ObjectiveMastery,
 };
