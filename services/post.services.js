@@ -90,11 +90,36 @@ class PostService extends Service {
 
     }
 
+    async generateUniqueSlug(title, excludePostId = null) {
+        const rawTitle = title && typeof title === "string" && title.trim() ? title.trim() : "untitled";
+        const rawSlug = (slugify ? slugify(rawTitle, { lower: true, strict: true }) : rawTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")) || "post";
+        const baseSlug = rawSlug.replace(/^-+|-+$/g, "") || `post-${Date.now()}`;
+        let uniqueSlug = baseSlug;
+
+        const query = { slug: uniqueSlug };
+        if (excludePostId) {
+            query._id = { $ne: excludePostId };
+        }
+
+        const count = await Post.countDocuments(query);
+        if (count > 0) {
+            uniqueSlug = `${baseSlug}-${Date.now().toString(36)}`;
+            const secondQuery = { slug: uniqueSlug };
+            if (excludePostId) {
+                secondQuery._id = { $ne: excludePostId };
+            }
+            const secondCount = await Post.countDocuments(secondQuery);
+            if (secondCount > 0) {
+                uniqueSlug = `${baseSlug}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+            }
+        }
+
+        return uniqueSlug;
+    }
+
     async addPost(post) {
-        const slug = slugify(post.title, {
-            lower: true,
-            strict: true,
-        });
+        const title = post.title?.trim() || "Untitled";
+        const slug = await this.generateUniqueSlug(title);
         const readPost = post.text ? post.text.split(" ").length / 225 : 0;
 
         let contentVersion = post.contentVersion || "html-v1";
@@ -196,16 +221,22 @@ class PostService extends Service {
 
     async updatePost(postId, post) {
         const readPost = post.text ? post.text.split(" ").length / 225 : 0;
+        const existingPost = await Post.findById(postId);
+        if (!existingPost) {
+            throw new NotFoundException("Post not found");
+        }
+
+        let slug = existingPost.slug;
+        if (post.title && (post.title.trim() !== existingPost.title || !slug)) {
+            slug = await this.generateUniqueSlug(post.title.trim(), postId);
+        }
 
         const updateObj = {
             title: post.title,
             content: post.content,
             text: post.text,
             readtime: Math.ceil(readPost),
-            slug: slugify(post.title, {
-                lower: true,
-                strict: true,
-            }),
+            slug,
         };
 
         if (post.contentVersion) updateObj.contentVersion = post.contentVersion;

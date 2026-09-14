@@ -65,39 +65,51 @@ class AIImagePlannerService {
         suggestions: deduplicatedSuggestions,
       };
 
-      // 5. Telemetry Logging
-      const durationMs = Date.now() - startTime;
-      aiLogger.logRequest({
-        requestId: `img_plan_${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        userId,
-        featureId: "image_planner",
-        providerId: provider.providerId,
-        model: "gemini-2.5-flash",
-        prompt: userMessageContent,
-        response: JSON.stringify(finalPlan),
-        tokens: jsonResult.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        durationMs,
-        status: "success",
-      });
+      // 5. Telemetry Logging (safe execution)
+      try {
+        const durationMs = Date.now() - startTime;
+        if (aiLogger && typeof aiLogger.logRequest === "function") {
+          aiLogger.logRequest({
+            requestId: `img_plan_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            userId,
+            featureId: "image_planner",
+            providerId: provider.providerId,
+            model: "gemini-2.5-flash",
+            prompt: userMessageContent,
+            response: JSON.stringify(finalPlan),
+            tokens: jsonResult.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            durationMs,
+            status: "success",
+          });
+        }
+      } catch (telemetryErr) {
+        console.warn("[AIImagePlannerService] Telemetry logging failed:", telemetryErr.message);
+      }
 
       return finalPlan;
     } catch (err) {
-      const durationMs = Date.now() - startTime;
-      aiLogger.logRequest({
-        requestId: `img_plan_err_${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        userId,
-        featureId: "image_planner",
-        providerId: provider.providerId,
-        model: "gemini-2.5-flash",
-        prompt: userMessageContent,
-        response: "",
-        tokens: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        durationMs,
-        status: "error",
-        error: { code: "EXECUTION_ERROR", message: err.message },
-      });
+      try {
+        const durationMs = Date.now() - startTime;
+        if (aiLogger && typeof aiLogger.logRequest === "function") {
+          aiLogger.logRequest({
+            requestId: `img_plan_err_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            userId,
+            featureId: "image_planner",
+            providerId: provider?.providerId || "unknown",
+            model: "gemini-2.5-flash",
+            prompt: userMessageContent,
+            response: "",
+            tokens: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            durationMs,
+            status: "error",
+            error: { code: "EXECUTION_ERROR", message: err.message },
+          });
+        }
+      } catch (telemetryErr) {
+        console.warn("[AIImagePlannerService] Telemetry error logging failed:", telemetryErr.message);
+      }
 
       console.error("[AIImagePlannerService] Planning failed, executing fallback analysis:", err.message);
 

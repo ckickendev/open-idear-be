@@ -146,6 +146,56 @@ export class TelemetryLogger {
     });
     await Promise.all(promises);
   }
+
+  /**
+   * Compatibility adapter for callers using the legacy/pass logRequest schema.
+   */
+  async logRequest(params: {
+    requestId?: string;
+    timestamp?: string;
+    userId?: string;
+    featureId?: string;
+    providerId?: string;
+    model?: string;
+    prompt?: string | { messages?: any[] };
+    response?: string;
+    tokens?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+    durationMs?: number;
+    status?: string;
+    error?: { code?: string; message?: string } | null;
+  }): Promise<void> {
+    try {
+      const messages = typeof params.prompt === "string"
+        ? [{ role: "user" as const, content: params.prompt }]
+        : Array.isArray(params.prompt?.messages)
+        ? params.prompt.messages
+        : [{ role: "user" as const, content: String(params.prompt || "") }];
+
+      const logPayload: TelemetryLogParams = {
+        providerId: params.providerId || "default",
+        model: params.model || "gemini-2.5-flash",
+        prompt: { messages },
+        durationMs: params.durationMs || 0,
+        ...(params.response !== undefined ? { response: params.response } : {}),
+        ...(params.tokens
+          ? {
+              usage: {
+                promptTokens: params.tokens.promptTokens || 0,
+                completionTokens: params.tokens.completionTokens || 0,
+                totalTokens: params.tokens.totalTokens || 0,
+              },
+            }
+          : {}),
+        ...(params.error ? { error: new Error(params.error.message || "Unknown error") } : {}),
+        ...(params.featureId ? { promptName: params.featureId } : {}),
+      };
+
+      await this.log(logPayload);
+    } catch (err) {
+      // Telemetry must never crash the caller
+      console.error("[TelemetryLogger] logRequest adapter error:", err);
+    }
+  }
 }
 
 // Export default instance configured with Console and File sinks
