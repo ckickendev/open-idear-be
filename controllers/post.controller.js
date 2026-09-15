@@ -58,17 +58,18 @@ class PostController extends Controller {
 
     getHotTopics = asyncHandler(async (req, res) => {
         const { limit = 10, page = 1 } = req.query;
-        const posts = await postService.getHotPostsToday(limit, page);
-        if (posts.length === 0) return res.status(404).json({ message: "No hot topics found" });
+        const result = await postService.getHotPostsToday(limit, page);
+        if (!result.posts || result.posts.length === 0) return res.status(404).json({ message: "No hot topics found" });
 
         res.json({
             success: true,
-            data: posts,
+            data: result.posts,
             pagination: {
-                currentPage: parseInt(page),
-                totalPosts: posts.length,
-                totalPages: Math.ceil(posts.length / limit),
-                hasPrev: page > 1
+                currentPage: result.currentPage,
+                totalPosts: result.totalPosts,
+                totalPages: result.totalPages,
+                hasPrev: result.hasPrev,
+                hasNext: result.hasNext
             }
         });
     });
@@ -84,16 +85,17 @@ class PostController extends Controller {
 
     getHotPostsWeek = asyncHandler(async (req, res) => {
         const { limit = 10, page = 1 } = req.query;
-        const posts = await postService.getHotPostsThisWeek(limit, page);
+        const result = await postService.getHotPostsThisWeek(limit, page);
 
         res.json({
             success: true,
-            posts,
+            posts: result.posts,
             pagination: {
-                currentPage: parseInt(page),
-                totalPosts: posts.length,
-                totalPages: Math.ceil(posts.length / limit),
-                hasPrev: page > 1
+                currentPage: result.currentPage,
+                totalPosts: result.totalPosts,
+                totalPages: result.totalPages,
+                hasPrev: result.hasPrev,
+                hasNext: result.hasNext
             }
         });
     });

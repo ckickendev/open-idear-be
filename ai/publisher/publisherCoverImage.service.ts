@@ -54,9 +54,13 @@ export class PublisherCoverImageService {
     }
 
     // 2. Generate Image URL
-    // We construct a high quality 1200x630 AI banner prompt URL using Pollinations / Unsplash / Imagen facade
-    const encodedPrompt = encodeURIComponent(finalPrompt.trim());
-    const rawImageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1200&height=630&seed=${Date.now()}&nologo=true`;
+    // We construct a high quality 1200x630 AI banner prompt URL using Pollinations
+    // Note: Pollinations requires seed to be a 32-bit signed int (<= 2147483647).
+    // Using Date.now() caused seed overflow validation failure (HTTP 500).
+    const safeSeed = Math.floor(Math.random() * 2147483647);
+    const trimmedPrompt = finalPrompt.trim().slice(0, 350);
+    const encodedPrompt = encodeURIComponent(trimmedPrompt);
+    const rawImageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1200&height=630&seed=${safeSeed}&nologo=true`;
 
     // 3. Upload to Cloudinary if credentials configured, otherwise use high-availability CDN URL
     let cdnUrl = rawImageUrl;
@@ -88,6 +92,8 @@ export class PublisherCoverImageService {
       }
     } catch (err: any) {
       console.warn(`[PublisherCoverImageService] Cloudinary upload fallback to CDN URL: ${err.message}`);
+      // If Cloudinary couldn't fetch from the AI generator, use high-resolution Unsplash fallback banner
+      cdnUrl = `https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&h=630&q=80`;
     }
 
     // 4. Save to Media Library Database (MongoDB)
