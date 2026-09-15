@@ -15,6 +15,7 @@ import type { AgentOptions, AgentResult } from "./types";
 import type { TokenUsage } from "../provider/types";
 import type { AIConfigScope } from "../config";
 import type { ZodSchema } from "zod";
+import { BrandVoiceService } from "../brand-voice";
 
 export abstract class BaseAgent<TInput extends Record<string, any> = Record<string, any>, TOutput = any> {
   /** Unique name of this agent (e.g., "PlannerAgent") */
@@ -37,11 +38,19 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
   async execute(input: TInput, options: AgentOptions = {}): Promise<AgentResult<TOutput>> {
     const scope = this.getScope();
 
+    const brandVoiceInstructions = BrandVoiceService.formatPromptInstructions(
+      input?.brandVoice || input?.brandVoiceProfile
+    );
+    const enrichedInput = {
+      brandVoiceInstructions,
+      ...input,
+    };
+
     const facadeResult = await aiExecutionFacade.execute<TOutput>({
       scope,
       promptName: this.promptName,
       ...(options.promptVersionOverride !== undefined && { promptVersion: options.promptVersionOverride }),
-      input,
+      input: enrichedInput,
       ...(options.context !== undefined && { context: options.context }),
       responseFormat: this.responseFormat,
       defaultModel: this.defaultModel,
@@ -92,11 +101,19 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
   ): AsyncGenerator<string, TokenUsage, undefined> {
     const scope = this.getScope();
 
+    const brandVoiceInstructions = BrandVoiceService.formatPromptInstructions(
+      input?.brandVoice || input?.brandVoiceProfile
+    );
+    const enrichedInput = {
+      brandVoiceInstructions,
+      ...input,
+    };
+
     return yield* aiExecutionFacade.executeStream({
       scope,
       promptName: this.promptName,
       ...(options.promptVersionOverride !== undefined && { promptVersion: options.promptVersionOverride }),
-      input,
+      input: enrichedInput,
       ...(options.context !== undefined && { context: options.context }),
       defaultModel: this.defaultModel,
       ...(options.modelOverride !== undefined && { modelOverride: options.modelOverride }),

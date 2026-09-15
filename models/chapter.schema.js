@@ -21,4 +21,6 @@ const chapterSchema = new Schema(
     }
 );
 
+chapterSchema.index({ course: 1, del_flag: 1, order: 1 });
+
 module.exports = mongoose.model("chapter", chapterSchema);

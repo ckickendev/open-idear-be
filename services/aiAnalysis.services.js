@@ -1,4 +1,4 @@
-const { aiVisionService } = require("../ai");
+const { aiVisionService } = require("../ai/vision");
 const { Service } = require("../core");
 
 class AIAnalysisService extends Service {

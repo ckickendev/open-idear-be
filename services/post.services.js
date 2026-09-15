@@ -3,6 +3,8 @@ const { Service } = require("../core");
 const { Post, Like, Series, Category, Course } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 const { default: slugify } = require("slugify");
+const { ContentStructureService } = require("../ai/content/contentStructure.service");
+const { memoryCache } = require("../utils/cache");
 
 class PostService extends Service {
     async getAll(status, page = 1, limit = 20) {
@@ -54,6 +56,11 @@ class PostService extends Service {
                     readtime: post.readtime,
                     createdAt: post.createdAt,
                     updatedAt: post.updatedAt,
+                    contentVersion: post.contentVersion || "html-v1",
+                    blocks: post.blocks || undefined,
+                    hero: post.hero || undefined,
+                    aiContext: post.aiContext || undefined,
+                    seo: post.seo || undefined,
                 }
             });
 
@@ -84,12 +91,56 @@ class PostService extends Service {
 
     }
 
+    async generateUniqueSlug(title, excludePostId = null) {
+        const rawTitle = title && typeof title === "string" && title.trim() ? title.trim() : "untitled";
+        const rawSlug = (slugify ? slugify(rawTitle, { lower: true, strict: true }) : rawTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")) || "post";
+        const baseSlug = rawSlug.replace(/^-+|-+$/g, "") || `post-${Date.now()}`;
+        let uniqueSlug = baseSlug;
+
+        const query = { slug: uniqueSlug };
+        if (excludePostId) {
+            query._id = { $ne: excludePostId };
+        }
+
+        const count = await Post.countDocuments(query);
+        if (count > 0) {
+            uniqueSlug = `${baseSlug}-${Date.now().toString(36)}`;
+            const secondQuery = { slug: uniqueSlug };
+            if (excludePostId) {
+                secondQuery._id = { $ne: excludePostId };
+            }
+            const secondCount = await Post.countDocuments(secondQuery);
+            if (secondCount > 0) {
+                uniqueSlug = `${baseSlug}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+            }
+        }
+
+        return uniqueSlug;
+    }
+
     async addPost(post) {
-        const slug = slugify(post.title, {
-            lower: true,
-            strict: true,
-        });
-        const readPost = post.text.split(" ").length / 225;
+        const title = post.title?.trim() || "Untitled";
+        const slug = await this.generateUniqueSlug(title);
+        const readPost = post.text ? post.text.split(" ").length / 225 : 0;
+
+        let contentVersion = post.contentVersion || "html-v1";
+        let blocks = post.blocks || undefined;
+
+        // If blocks are provided or if contentVersion is "blocks-v1" or if markdown/aiContext is provided
+        if (!blocks && (post.contentVersion === "blocks-v1" || post.markdown || post.aiContext)) {
+          const markdownSource = post.markdown || post.content || "";
+          if (markdownSource.trim()) {
+            const struct = ContentStructureService.buildArticleStructure({
+              markdown: markdownSource,
+              growthResults: post.aiContext?.growthResults || null,
+            });
+            blocks = struct.blocks;
+            contentVersion = "blocks-v1";
+          }
+        } else if (blocks && Array.isArray(blocks) && blocks.length > 0) {
+          contentVersion = "blocks-v1";
+        }
+
         const newPost = new Post({
             _id: new mongoose.Types.ObjectId(),
             title: post.title,
@@ -109,6 +160,11 @@ class PostService extends Service {
             mediaContent: post.mediaContent || null,
             del_flag: 0,
             readtime: Math.ceil(readPost),
+            contentVersion,
+            blocks,
+            hero: post.hero || undefined,
+            aiContext: post.aiContext || undefined,
+            seo: post.seo || undefined,
         });
         const returnPost = await Post.create(newPost);
         return returnPost;
@@ -165,24 +221,55 @@ class PostService extends Service {
     }
 
     async updatePost(postId, post) {
-        const readPost = post.text.split(" ").length / 225;
-        const updatedPost = await Post.findByIdAndUpdate(postId, {
+        const readPost = post.text ? post.text.split(" ").length / 225 : 0;
+        const existingPost = await Post.findById(postId);
+        if (!existingPost) {
+            throw new NotFoundException("Post not found");
+        }
+
+        let slug = existingPost.slug;
+        if (post.title && (post.title.trim() !== existingPost.title || !slug)) {
+            slug = await this.generateUniqueSlug(post.title.trim(), postId);
+        }
+
+        const updateObj = {
             title: post.title,
             content: post.content,
             text: post.text,
             readtime: Math.ceil(readPost),
-            slug: slugify(post.title, {
-                lower: true,
-                strict: true,
-            }),
-        }, { new: true });
+            slug,
+        };
+
+        if (post.contentVersion) updateObj.contentVersion = post.contentVersion;
+        if (post.blocks !== undefined) updateObj.blocks = post.blocks;
+        if (post.hero !== undefined) updateObj.hero = post.hero;
+        if (post.aiContext !== undefined) updateObj.aiContext = post.aiContext;
+        if (post.seo !== undefined) updateObj.seo = post.seo;
+
+        // Auto build blocks if requested or if markdown/aiContext is supplied and blocks missing
+        if (!updateObj.blocks && (post.contentVersion === "blocks-v1" || post.markdown || (post.aiContext && post.contentVersion === "blocks-v1"))) {
+          const markdownSource = post.markdown || post.content || "";
+          if (markdownSource.trim()) {
+            const struct = ContentStructureService.buildArticleStructure({
+              markdown: markdownSource,
+              growthResults: post.aiContext?.growthResults || null,
+            });
+            updateObj.blocks = struct.blocks;
+            updateObj.contentVersion = "blocks-v1";
+          }
+        }
+
+        const updatedPost = await Post.findByIdAndUpdate(postId, updateObj, { new: true });
+        memoryCache.invalidate('hot_posts_');
         return updatedPost;
     }
+
 
     async updateStatusPost(postId, published) {
         await Post.findByIdAndUpdate(postId, {
             published: published
         }, { new: true });
+        memoryCache.invalidate('hot_posts_');
     }
 
     async getPostLikeById(userId) {
@@ -228,6 +315,7 @@ class PostService extends Service {
                 category: publicInfo.category,
                 published: true,
             }, { new: true });
+            memoryCache.invalidate('hot_posts_');
             return updatedPost;
         } catch (error) {
             console.error('Error publishing post:', error);
@@ -255,243 +343,266 @@ class PostService extends Service {
     }
 
     calculateHotScore(post) {
+        if (!post) return 0;
         const now = new Date();
-        const postAge = (now - post.createdAt) / (1000 * 60 * 60); // age in hours
+        const createdAt = post.createdAt ? new Date(post.createdAt) : now;
+        const postAge = Math.max(0, (now - createdAt) / (1000 * 60 * 60)); // age in hours
 
-        const likesCount = post.likes.length;
-        const commentsCount = post.comments.length;
-        const views = post.views;
+        const likesCount = Array.isArray(post.likes) ? post.likes.length : (typeof post.likes === 'number' ? post.likes : 0);
+        const commentsCount = Array.isArray(post.comments) ? post.comments.length : (typeof post.comments === 'number' ? post.comments : 0);
+        const views = typeof post.views === 'number' ? post.views : 0;
 
-        // Hot score formula (you can adjust weights)
-        const score = (likesCount * 3 + commentsCount * 2 + views * 0.1) / Math.pow(postAge + 1, 0.8);
-
-        console.log('Hot score for post', post._id, 'is', score);
-
-        return score;
+        // Hot score formula with gravity decay
+        const score = (likesCount * 3 + commentsCount * 2.5 + views * 0.1) / Math.pow(postAge + 2, 0.8);
+        return Math.round(score * 10000) / 10000;
     };
 
-
-    async getHotPostsToday(limit, page) {
+    /**
+     * Optimized Hot Posts query using MongoDB Aggregation Pipeline, Late Lookup,
+     * Field Projection, Smart Fallback window, and In-Memory TTL Caching.
+     */
+    async fetchHotPosts({ period = 'week', limit = 10, page = 1, fallbackIfFew = true } = {}) {
         try {
-            // Get posts from today
-            const startOfDay = new Date();
-            startOfDay.setHours(0, 0, 0, 0);
+            const limitNum = Math.max(1, parseInt(limit) || 10);
+            const pageNum = Math.max(1, parseInt(page) || 1);
+            const cacheKey = `hot_posts_${period}_${limitNum}_${pageNum}`;
 
-            const endOfDay = new Date();
-            endOfDay.setHours(23, 59, 59, 999);
-
-            const posts = await Post.find({
-                published: true,
-                del_flag: 0,
-                // createdAt: {
-                //     $gte: startOfDay,
-                //     $lte: endOfDay
-                // }
-            })
-                .populate('author', 'name username avatar')
-                .populate('category', 'name slug')
-                .populate('tags', 'name slug')
-                .populate('image', 'url description')
-                .lean();
-
-            // Calculate hot scores and sort
-            const postsWithScores = posts.map(post => ({
-                ...post,
-                hotScore: this.calculateHotScore(post)
-            }));
-
-            postsWithScores.sort((a, b) => b.hotScore - a.hotScore);
-
-            // Pagination
-            const skip = (page - 1) * limit;
-            const paginatedPosts = postsWithScores.slice(skip, skip + parseInt(limit));
-
-            return paginatedPosts;
-
-
-        } catch (error) {
-            throw new ServerException("Error fetching hot posts");
-        }
-    };
-
-    // Get hot posts for this week
-    async getHotPostsThisWeek(limit, page) {
-        try {
-            // Get posts from this week
-            const now = new Date();
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7); // 7 days ago from now
-
-            const posts = await Post.find({
-                published: true,
-                del_flag: 0,
-                createdAt: {
-                    $gte: sevenDaysAgo, // From 7 days ago
-                    $lte: now           // Until now
-                }
-            })
-                .populate('author', 'name username avatar')
-                .populate('category', 'name slug')
-                .populate('tags', 'name slug')
-                .populate('image', 'url description')
-                .lean();
-
-            // Calculate hot scores and sort
-            for (const post of posts) {
-                const score = this.calculateHotScore(post);
-                post.hotScore = score;
+            const cached = memoryCache.get(cacheKey);
+            if (cached) {
+                return cached;
             }
 
-            posts.sort((a, b) => b.hotScore - a.hotScore);
+            const now = new Date();
+            let startDate;
+            if (period === 'today' || period === 'day') {
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            } else if (period === 'month') {
+                startDate = new Date();
+                startDate.setDate(startDate.getDate() - 30);
+            } else { // default: 'week'
+                startDate = new Date();
+                startDate.setDate(startDate.getDate() - 7);
+            }
 
-            // Pagination
-            const skip = (page - 1) * limit;
-            const paginatedPosts = posts.slice(skip, skip + parseInt(limit));
-            // for (const post of paginatedPosts) {
-            //     console.log('Paginated Post ID:', post._id, 'Hot Score:', post.hotScore);
-            // }
-            return paginatedPosts;
+            const buildPipeline = (fromStartDate) => {
+                const skip = (pageNum - 1) * limitNum;
+                return [
+                    {
+                        $match: {
+                            published: true,
+                            del_flag: 0,
+                            createdAt: { $gte: fromStartDate, $lte: now }
+                        }
+                    },
+                    {
+                        $addFields: {
+                            likesCount: { $size: { $ifNull: ['$likes', []] } },
+                            commentsCount: { $size: { $ifNull: ['$comments', []] } },
+                            viewsCount: { $ifNull: ['$views', 0] },
+                            ageInHours: {
+                                $max: [
+                                    0,
+                                    {
+                                        $divide: [
+                                            { $subtract: [now, '$createdAt'] },
+                                            3600000 // 1000 * 60 * 60
+                                        ]
+                                    }
+                                ]
+                            },
+                            calculatedReadtime: {
+                                $cond: [
+                                    { $gt: [{ $ifNull: ['$readtime', 0] }, 0] },
+                                    '$readtime',
+                                    {
+                                        $max: [
+                                            1,
+                                            {
+                                                $ceil: {
+                                                    $divide: [
+                                                        { $strLenCP: { $ifNull: ['$text', ''] } },
+                                                        1000
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        $addFields: {
+                            hotScore: {
+                                $round: [
+                                    {
+                                        $divide: [
+                                            {
+                                                $add: [
+                                                    { $multiply: ['$likesCount', 3] },
+                                                    { $multiply: ['$commentsCount', 2.5] },
+                                                    { $multiply: ['$viewsCount', 0.1] }
+                                                ]
+                                            },
+                                            { $pow: [{ $add: ['$ageInHours', 2] }, 0.8] }
+                                        ]
+                                    },
+                                    4
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        $sort: {
+                            hotScore: -1,
+                            createdAt: -1
+                        }
+                    },
+                    {
+                        $facet: {
+                            metadata: [{ $count: 'total' }],
+                            items: [
+                                { $skip: skip },
+                                { $limit: limitNum },
+                                {
+                                    $lookup: {
+                                        from: 'users',
+                                        localField: 'author',
+                                        foreignField: '_id',
+                                        as: 'author',
+                                        pipeline: [{ $project: { name: 1, username: 1, avatar: 1 } }]
+                                    }
+                                },
+                                {
+                                    $lookup: {
+                                        from: 'categories',
+                                        localField: 'category',
+                                        foreignField: '_id',
+                                        as: 'category',
+                                        pipeline: [{ $project: { name: 1, slug: 1 } }]
+                                    }
+                                },
+                                {
+                                    $lookup: {
+                                        from: 'tags',
+                                        localField: 'tags',
+                                        foreignField: '_id',
+                                        as: 'tags',
+                                        pipeline: [{ $project: { name: 1, slug: 1 } }]
+                                    }
+                                },
+                                {
+                                    $lookup: {
+                                        from: 'media',
+                                        localField: 'image',
+                                        foreignField: '_id',
+                                        as: 'image',
+                                        pipeline: [{ $project: { url: 1, description: 1 } }]
+                                    }
+                                },
+                                {
+                                    $unwind: { path: '$author', preserveNullAndEmptyArrays: true }
+                                },
+                                {
+                                    $unwind: { path: '$category', preserveNullAndEmptyArrays: true }
+                                },
+                                {
+                                    $unwind: { path: '$image', preserveNullAndEmptyArrays: true }
+                                },
+                                {
+                                    $project: {
+                                        _id: 1,
+                                        title: 1,
+                                        slug: 1,
+                                        description: 1,
+                                        readtime: '$calculatedReadtime',
+                                        text: {
+                                            $ifNull: [
+                                                '$description',
+                                                { $substrCP: [{ $ifNull: ['$text', ''] }, 0, 250] }
+                                            ]
+                                        },
+                                        published: 1,
+                                        views: 1,
+                                        likes: 1,
+                                        comments: 1,
+                                        author: 1,
+                                        category: 1,
+                                        tags: 1,
+                                        image: 1,
+                                        hotScore: 1,
+                                        createdAt: 1,
+                                        updatedAt: 1
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ];
+            };
+
+            let [aggregateResult] = await Post.aggregate(buildPipeline(startDate));
+            let total = aggregateResult?.metadata[0]?.total || 0;
+            let posts = aggregateResult?.items || [];
+
+            // Fallback: If 'week' window has fewer than limitNum posts, expand to 30 days
+            if (fallbackIfFew && period === 'week' && posts.length < limitNum) {
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                const [fallbackResult] = await Post.aggregate(buildPipeline(thirtyDaysAgo));
+                const fallbackTotal = fallbackResult?.metadata[0]?.total || 0;
+                const fallbackPosts = fallbackResult?.items || [];
+                if (fallbackPosts.length > posts.length) {
+                    posts = fallbackPosts;
+                    total = fallbackTotal;
+                }
+            }
+
+            const totalPages = Math.ceil(total / limitNum) || 1;
+            const result = {
+                posts,
+                totalPosts: total,
+                totalPages,
+                currentPage: pageNum,
+                hasNext: pageNum < totalPages,
+                hasPrev: pageNum > 1,
+            };
+
+            // Cache for 3 minutes
+            memoryCache.set(cacheKey, result, 180000);
+            return result;
         } catch (error) {
-            console.error('Error fetching hot posts this week:', error);
+            console.error(`Error fetching hot posts (${period}):`, error);
             throw new ServerException(error.message || 'Error fetching hot posts');
         }
-    };
+    }
 
-    // Alternative: More efficient aggregation pipeline approach
+    async getHotPostsToday(limit, page) {
+        return this.fetchHotPosts({ period: 'today', limit, page, fallbackIfFew: false });
+    }
+
+    async getHotPostsThisWeek(limit, page) {
+        return this.fetchHotPosts({ period: 'week', limit, page, fallbackIfFew: true });
+    }
+
     async getHotPostsAggregation(req, res) {
         try {
             const { period = 'week', limit = 10, page = 1 } = req.query;
-
-            // Calculate date range
-            const now = new Date();
-            let startDate;
-
-            if (period === 'day') {
-                startDate = new Date();
-                startDate.setHours(0, 0, 0, 0);
-            } else if (period === 'week') {
-                startDate = new Date();
-                startDate.setDate(startDate.getDate() - 7);
-            } else {
-                startDate = new Date();
-                startDate.setDate(startDate.getDate() - 30); // month
-            }
-
-            const pipeline = [
-                // Match published posts within date range
-                {
-                    $match: {
-                        published: true,
-                        del_flag: 0,
-                        createdAt: { $gte: startDate }
-                    }
-                },
-
-                // Add calculated fields
-                {
-                    $addFields: {
-                        likesCount: { $size: '$likes' },
-                        commentsCount: { $size: '$comments' },
-                        ageInHours: {
-                            $divide: [
-                                { $subtract: [now, '$createdAt'] },
-                                1000 * 60 * 60 // Convert to hours
-                            ]
-                        }
-                    }
-                },
-
-                // Calculate hot score
-                {
-                    $addFields: {
-                        hotScore: {
-                            $divide: [
-                                {
-                                    $add: [
-                                        { $multiply: ['$likesCount', 3] },
-                                        { $multiply: ['$commentsCount', 2] },
-                                        { $multiply: ['$views', 0.1] }
-                                    ]
-                                },
-                                { $pow: [{ $add: ['$ageInHours', 1] }, 0.8] }
-                            ]
-                        }
-                    }
-                },
-
-                // Sort by hot score
-                { $sort: { hotScore: -1 } },
-
-                // Pagination
-                { $skip: (page - 1) * parseInt(limit) },
-                { $limit: parseInt(limit) },
-
-                // Populate references
-                {
-                    $lookup: {
-                        from: 'users',
-                        localField: 'author',
-                        foreignField: '_id',
-                        as: 'author',
-                        pipeline: [{ $project: { name: 1, username: 1, avatar: 1 } }]
-                    }
-                },
-                {
-                    $lookup: {
-                        from: 'categories',
-                        localField: 'category',
-                        foreignField: '_id',
-                        as: 'category',
-                        pipeline: [{ $project: { name: 1, slug: 1 } }]
-                    }
-                },
-                {
-                    $lookup: {
-                        from: 'tags',
-                        localField: 'tags',
-                        foreignField: '_id',
-                        as: 'tags',
-                        pipeline: [{ $project: { name: 1, slug: 1 } }]
-                    }
-                },
-
-                // Unwind author and category (single objects)
-                { $unwind: { path: '$author', preserveNullAndEmptyArrays: true } },
-                { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } }
-            ];
-
-            const posts = await Post.aggregate(pipeline);
-
-            // Get total count for pagination
-            const countPipeline = [
-                {
-                    $match: {
-                        published: true,
-                        del_flag: 0,
-                        createdAt: { $gte: startDate }
-                    }
-                },
-                { $count: 'total' }
-            ];
-
-            const countResult = await Post.aggregate(countPipeline);
-            const totalPosts = countResult[0]?.total || 0;
-
-            res.json({
+            const result = await this.fetchHotPosts({ period, limit, page });
+            return res.json({
                 success: true,
-                data: posts,
+                data: result.posts,
                 pagination: {
-                    currentPage: parseInt(page),
-                    totalPosts,
-                    totalPages: Math.ceil(totalPosts / limit),
-                    hasNext: page * limit < totalPosts,
-                    hasPrev: page > 1
+                    currentPage: result.currentPage,
+                    totalPosts: result.totalPosts,
+                    totalPages: result.totalPages,
+                    hasNext: result.hasNext,
+                    hasPrev: result.hasPrev
                 }
             });
-
         } catch (error) {
-            console.error('Error fetching hot posts:', error);
-            res.status(500).json({
+            console.error('Error in getHotPostsAggregation:', error);
+            return res.status(500).json({
                 success: false,
                 message: 'Error fetching hot posts',
                 error: error.message
@@ -741,12 +852,14 @@ class PostService extends Service {
     deletePost = async (postId) => {
         const post = await Post.findByIdAndUpdate(postId, { del_flag: 1 }, { new: true });
         if (!post) throw new NotFoundException("Post not found");
+        memoryCache.invalidate('hot_posts_');
         return { success: true };
     };
 
     restorePost = async (postId) => {
         const post = await Post.findByIdAndUpdate(postId, { del_flag: 0 }, { new: true });
         if (!post) throw new NotFoundException("Post not found");
+        memoryCache.invalidate('hot_posts_');
         return { success: true };
     };
 };

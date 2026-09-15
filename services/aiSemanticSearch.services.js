@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const { Service } = require("../core");
 const { MediaAsset } = require("../models");
 const { externalMediaService } = require("../external-media");
-const { providerRegistry } = require("../ai");
+const { providerRegistry } = require("../ai/provider");
 
 class AISemanticSearchService extends Service {
   /**

@@ -113,6 +113,7 @@ class EnrollmentService extends Service {
 
         // Add to completedLessons
         enrollment.completedLessons.push(lessonId);
+        enrollment.lastLesson = lessonId;
         enrollment.lastAccessedAt = new Date();
 
         // Recalculate progress
@@ -126,9 +127,40 @@ class EnrollmentService extends Service {
         // Mark as completed if 100%
         if (enrollment.progress >= 100) {
             enrollment.status = "completed";
+            if (!enrollment.completedAt) {
+                enrollment.completedAt = new Date();
+            }
         }
 
         await enrollment.save();
+
+        // Record idempotent engagement evidence for lesson objectives
+        try {
+            const masteryService = require("./mastery.services");
+            const intelligence = await require("../models").LessonIntelligence.findOne({ lesson: lessonId }).sort("-version");
+            const objectives = (intelligence?.learningObjectives?.length ? intelligence.learningObjectives : lesson.learningObjectives) || [];
+            
+            const targetObjectives = objectives.length > 0 ? objectives : ["Nắm vững nội dung bài học"];
+            for (let i = 0; i < targetObjectives.length; i++) {
+                const obj = targetObjectives[i];
+                await masteryService.recordEvidence({
+                    user: userId,
+                    course: courseId,
+                    lesson: lessonId,
+                    objective: obj,
+                    type: "lesson_completion",
+                    signal: "positive",
+                    strength: 1.0,
+                    sourceId: lessonId,
+                    idempotencyKey: `completion_${userId}_lesson_${lessonId}_obj_${i}`,
+                    metadata: {
+                        notes: "Hoàn thành theo dõi nội dung bài học",
+                    },
+                });
+            }
+        } catch (evErr) {
+            console.error("Engagement evidence recording failed on lesson completion:", evErr);
+        }
 
         return {
             completedLessons: enrollment.completedLessons,

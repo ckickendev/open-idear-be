@@ -2,9 +2,14 @@ const express = require("express");
 const { Controller } = require("../core");
 const asyncHandler = require("../utils/asyncHandler");
 const { AuthMiddleware } = require("../middlewares/auth.middleware");
-const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent } = require("../ai");
+const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent } = require("../ai");
+const { ContentStructureService } = require("../ai/content/contentStructure.service");
+const { PublisherPipelineWorkflow } = require("../ai/workflow/publisherPipeline.workflow");
 const { aiImageGenerationOrchestratorService } = require("../services/aiImageGeneration.services");
 const { aiImageEditingOrchestratorService } = require("../services/aiImageEditing.services");
+const { Post } = require("../models");
+const mongoose = require("mongoose");
+const { default: slugify } = require("slugify");
 const fs = require("fs").promises;
 const path = require("path");
 
@@ -164,6 +169,7 @@ class AIController extends Controller {
         additionalInstructions: additionalInstructions || "",
       }, {
         promptVersionOverride: "v2", // Force text-only markdown prompt (writer.v2.md)
+        maxTokensOverride: 8192, // High token output cap for full 15-section articles
         signal: abortController.signal,
         context: {
           language: req.body.language || "en",
@@ -493,16 +499,391 @@ class AIController extends Controller {
     });
   });
 
+  /**
+   * POST /ai/v1/enhance
+   * Triggers the AI content enhancement pipeline.
+   */
+  enhanceContent = asyncHandler(async (req, res) => {
+    const { _id: userId } = req.userInfo;
+    const { markdown, options } = req.body;
+
+    if (!markdown || !markdown.trim()) {
+      return res.status(400).json({ error: "markdown content is required" });
+    }
+
+    const { enhancementPipeline } = require("../services");
+    const result = await enhancementPipeline.execute(userId, markdown, options);
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  });
+
+  /**
+   * POST /ai/v1/enhance-images
+   * Triggers the AI Image Enhancement Pipeline specifically for image review modal.
+   */
+  enhanceImages = asyncHandler(async (req, res) => {
+    const { _id: userId } = req.userInfo;
+    const { markdown, title, maxImages } = req.body;
+
+    if (!markdown || !markdown.trim()) {
+      return res.status(400).json({ error: "markdown content is required" });
+    }
+
+    const { enhancementPipeline } = require("../services");
+    const result = await enhancementPipeline.execute(userId, markdown, {
+      title,
+      maxImages: maxImages || 4,
+      enableImageEnhancement: true,
+    });
+
+    res.json({
+      status: "success",
+      data: {
+        enhancedMarkdown: result.enhancedMarkdown,
+        insertedAssets: result.insertedAssets || result.insertedImages || [],
+        unresolvedImages: result.unresolvedImages || [],
+        statistics: result.statistics || {},
+        warnings: result.warnings || [],
+        executionTimeMs: result.executionTimeMs,
+      },
+    });
+  });
+
+  /**
+   * POST /ai/v1/structure
+   * Converts Markdown and Growth Results into structured ArticleBlock[].
+   */
+  structureArticle = asyncHandler(async (req, res) => {
+    const { markdown, growthResults } = req.body;
+
+    const result = ContentStructureService.buildArticleStructure({
+      markdown: markdown || "",
+      growthResults: growthResults || null,
+    });
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  });
+
+  /**
+   * POST /ai/v1/publisher/generate
+   * Full server-side Publish-by-AI pipeline:
+   *   Planner → Writer (non-streaming) → ContentStructure → SEO derivation.
+   * Returns a ready-to-use PublisherResponse (title, slug, blocks, SEO, tags).
+   */
+  publisherGenerate = asyncHandler(async (req, res) => {
+    const {
+      topic,
+      audience,
+      goal,
+      tone,
+      length,
+      category,
+      additionalInstructions,
+    } = req.body;
+
+    if (!topic || !topic.trim()) {
+      return res.status(400).json({ error: "topic is required" });
+    }
+
+    const abortController = new AbortController();
+    req.on("close", () => abortController.abort());
+
+    const workflow = new PublisherPipelineWorkflow();
+    const result = await workflow.execute(
+      {
+        topic: topic.trim(),
+        audience: audience || "developers",
+        goal: goal || "educate",
+        tone: tone || "informative",
+        length: length || "medium",
+        category: category || "general",
+        additionalInstructions: additionalInstructions || "",
+      },
+      abortController.signal
+    );
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  });
+
+  /**
+   * POST /ai/v1/publisher
+   * Multi-agent Publisher Orchestrator endpoint:
+   * State Machine: IDLE → PLANNING → WRITING → SEO → VALIDATING → DONE
+   */
+  publishMultiAgent = asyncHandler(async (req, res) => {
+    const { topic, audience, additionalInstructions } = req.body;
+
+    if (!topic || !topic.trim()) {
+      return res.status(400).json({ error: "topic is required" });
+    }
+
+    const abortController = new AbortController();
+    req.on("close", () => abortController.abort());
+
+    const orchestrator = new PublisherOrchestrator();
+    const resultContext = await orchestrator.execute(
+      {
+        topic: topic.trim(),
+        audience: audience || "developers",
+        additionalInstructions: additionalInstructions || "",
+      },
+      abortController.signal
+    );
+
+    if (resultContext.state === "FAILED") {
+      return res.status(422).json({
+        status: "failed",
+        error: resultContext.error,
+        data: resultContext,
+      });
+    }
+
+    res.json({
+      status: "success",
+      data: {
+        title: resultContext.plan?.title || "",
+        slug: resultContext.seo?.slug || "",
+        description: resultContext.seo?.metaDescription || "",
+        category: resultContext.seo?.category || "general",
+        tags: resultContext.seo?.tags || [],
+        blocks: resultContext.writerOutput?.blocks || [],
+        coverImage: resultContext.coverImage || null,
+        validation: resultContext.validation,
+        state: resultContext.state,
+      },
+    });
+  });
+
+  /**
+   * POST /ai/v1/publisher/cover-image
+   * Regenerates AI Cover Image:
+   *   1. ImageAgent creates prompt
+   *   2. Generates image
+   *   3. Uploads Cloudinary
+   *   4. Saves to Media Library schema
+   */
+  regeneratePublisherCoverImage = asyncHandler(async (req, res) => {
+    const { _id: userId } = req.userInfo;
+    const { title, keywords, customPrompt } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: "title is required" });
+    }
+
+    const abortController = new AbortController();
+    req.on("close", () => abortController.abort());
+
+    const service = new PublisherCoverImageService();
+    const coverImage = await service.generateAndSaveCoverImage(
+      {
+        title: title.trim(),
+        keywords: keywords || [],
+        customPrompt: customPrompt || "",
+        userId: userId ? userId.toString() : undefined,
+      },
+      abortController.signal
+    );
+
+    res.json({
+      status: "success",
+      data: coverImage,
+    });
+  });
+
+  /**
+   * POST /ai/v1/publisher/one-click
+   * One-Click Autonomous Publisher pipeline:
+   *   1. Planner (Outline & Intent)
+   *   2. Writer (Markdown & Blocks-v1)
+   *   3. SEO (Slug & Meta)
+   *   4. Cover Image (Cloudinary & Media)
+   *   5. Validator (Audit)
+   *   6. Save MongoDB Draft
+   * Returns { draftId: post._id, title, slug }
+   */
+  oneClickPublish = asyncHandler(async (req, res) => {
+    const { _id: userId } = req.userInfo;
+    const { topic, audience, tone, length, additionalInstructions } = req.body;
+
+    if (!topic || !topic.trim()) {
+      return res.status(400).json({ error: "topic is required" });
+    }
+
+    const abortController = new AbortController();
+    req.on("close", () => abortController.abort());
+
+    const orchestrator = new PublisherOrchestrator();
+    const resultContext = await orchestrator.execute(
+      {
+        topic: topic.trim(),
+        audience: audience || "developers",
+        additionalInstructions: additionalInstructions || "",
+        userId: userId ? userId.toString() : undefined,
+      },
+      abortController.signal
+    );
+
+    if (resultContext.state === "FAILED") {
+      return res.status(422).json({
+        status: "failed",
+        error: resultContext.error,
+        data: resultContext,
+      });
+    }
+
+    // Save Draft Post in MongoDB
+    const postTitle = resultContext.plan?.title || topic.trim();
+    let rawSlug = resultContext.seo?.slug || (slugify ? slugify(postTitle, { lower: true, strict: true }) : postTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+    let postSlug = rawSlug.replace(/^-+|-+$/g, "") || `post-${Date.now()}`;
+    
+    // Ensure slug uniqueness
+    const existingPost = await Post.findOne({ slug: postSlug });
+    if (existingPost) {
+      postSlug = `${postSlug}-${Date.now().toString(36)}`;
+    }
+
+    const rawMarkdown = resultContext.writerOutput?.rawMarkdown || "";
+
+    const postId = new mongoose.Types.ObjectId();
+    const draftPost = await Post.create({
+      _id: postId,
+      title: postTitle,
+      slug: postSlug,
+      description: resultContext.seo?.metaDescription || "",
+      content: rawMarkdown,
+      text: rawMarkdown,
+      blocks: resultContext.writerOutput?.blocks || [],
+      contentVersion: "blocks-v1",
+      published: false, // Save as Draft
+      author: userId,
+      image: resultContext.coverImage?._id ? resultContext.coverImage._id : undefined,
+    });
+
+    res.json({
+      status: "success",
+      data: {
+        draftId: draftPost._id.toString(),
+        title: draftPost.title,
+        slug: draftPost.slug,
+        coverImage: resultContext.coverImage,
+        state: "DONE",
+      },
+    });
+  });
+
+  /**
+   * GET /ai/v1/brand-voice
+   * Returns list of user brand voice profiles + system default.
+   */
+  getBrandVoices = asyncHandler(async (req, res) => {
+    const userId = req.userInfo?._id?.toString();
+    const service = new BrandVoiceService();
+    const profiles = await service.getProfiles(userId);
+
+    res.json({
+      status: "success",
+      data: profiles,
+    });
+  });
+
+  /**
+   * POST /ai/v1/brand-voice
+   * Creates a new custom brand voice profile for user.
+   */
+  createBrandVoice = asyncHandler(async (req, res) => {
+    const userId = req.userInfo?._id?.toString();
+    const { name, tone, emoji, language, codeStyle } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "name is required" });
+    }
+
+    const service = new BrandVoiceService();
+    const profile = await service.createProfile(userId, {
+      name: name.trim(),
+      tone: tone || "Friendly Senior Engineer",
+      emoji: emoji || "low",
+      language: language || "Vietnamese",
+      codeStyle: codeStyle || "TypeScript",
+    });
+
+    res.json({
+      status: "success",
+      data: profile,
+    });
+  });
+
+  /**
+   * DELETE /ai/v1/brand-voice/:id
+   * Deletes a user custom brand voice profile.
+   */
+  deleteBrandVoice = asyncHandler(async (req, res) => {
+    const userId = req.userInfo?._id?.toString();
+    const { id } = req.params;
+
+    const service = new BrandVoiceService();
+    const deleted = await service.deleteProfile(userId, id);
+
+    res.json({
+      status: "success",
+      data: { deleted, id },
+    });
+  });
+
+  /**
+   * POST /ai/v1/internal-link
+   * Automatically searches MongoDB for related published posts and contextually inserts internal links.
+   */
+  processInternalLinks = asyncHandler(async (req, res) => {
+    const { blocks, currentPostId } = req.body;
+
+    if (!Array.isArray(blocks) || blocks.length === 0) {
+      return res.status(400).json({ error: "blocks array is required" });
+    }
+
+    const agent = new InternalLinkAgent();
+    const result = await agent.execute({
+      blocks,
+      currentPostId,
+    });
+
+    res.json({
+      status: "success",
+      data: result.data,
+    });
+  });
+
   initController = () => {
-    this._router.post(`${this._rootPath}/planner`,       AuthMiddleware, this.planArticle);
-    this._router.post(`${this._rootPath}/writer`,        AuthMiddleware, this.writeArticle);
-    this._router.post(`${this._rootPath}/writer/stream`, AuthMiddleware, this.streamArticle);
-    this._router.get( `${this._rootPath}/image/providers`, AuthMiddleware, this.getImageProviders);
-    this._router.post(`${this._rootPath}/image/generate`,  AuthMiddleware, this.generateImage);
-    this._router.post(`${this._rootPath}/image/edit`,       AuthMiddleware, this.editImage);
-    this._router.post(`${this._rootPath}/diagram/generate`, AuthMiddleware, this.generateDiagram);
-    this._router.get( `${this._rootPath}/telemetry`,        AuthMiddleware, this.getTelemetry);
+    this._router.post(`${this._rootPath}/planner`,            AuthMiddleware, this.planArticle);
+    this._router.post(`${this._rootPath}/writer`,             AuthMiddleware, this.writeArticle);
+    this._router.post(`${this._rootPath}/writer/stream`,      AuthMiddleware, this.streamArticle);
+    this._router.post(`${this._rootPath}/structure`,          AuthMiddleware, this.structureArticle);
+    this._router.post(`${this._rootPath}/enhance`,            AuthMiddleware, this.enhanceContent);
+    this._router.post(`${this._rootPath}/enhance-images`,     AuthMiddleware, this.enhanceImages);
+    this._router.post(`${this._rootPath}/publisher/generate`, AuthMiddleware, this.publisherGenerate);
+    this._router.post(`${this._rootPath}/publisher`,          AuthMiddleware, this.publishMultiAgent);
+    this._router.post(`${this._rootPath}/publisher/cover-image`, AuthMiddleware, this.regeneratePublisherCoverImage);
+    this._router.post(`${this._rootPath}/publisher/one-click`,   AuthMiddleware, this.oneClickPublish);
+    this._router.post(`${this._rootPath}/internal-link`,        AuthMiddleware, this.processInternalLinks);
+    this._router.get( `${this._rootPath}/brand-voice`,          AuthMiddleware, this.getBrandVoices);
+    this._router.post(`${this._rootPath}/brand-voice`,         AuthMiddleware, this.createBrandVoice);
+    this._router.delete(`${this._rootPath}/brand-voice/:id`,   AuthMiddleware, this.deleteBrandVoice);
+    this._router.get( `${this._rootPath}/image/providers`,    AuthMiddleware, this.getImageProviders);
+    this._router.post(`${this._rootPath}/image/generate`,     AuthMiddleware, this.generateImage);
+    this._router.post(`${this._rootPath}/image/edit`,         AuthMiddleware, this.editImage);
+    this._router.post(`${this._rootPath}/diagram/generate`,   AuthMiddleware, this.generateDiagram);
+    this._router.get( `${this._rootPath}/telemetry`,          AuthMiddleware, this.getTelemetry);
   };
 }
 
 module.exports = AIController;
+

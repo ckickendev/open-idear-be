@@ -12,6 +12,7 @@ const Course = require("./course.schema");
 const Lesson = require("./lesson.schema");
 const Chapter = require("./chapter.schema");
 const CategoryCourse = require("./categoryCourse.schema");
+const CourseCategory = require("./courseCategory.schema");
 const Topic = require("./topic.schema");
 const Review = require("./review.schema");
 const Enrollment = require("./enrollment.schema");
@@ -22,6 +23,14 @@ const MediaAsset = require("./mediaAsset.schema");
 const MediaFolder = require("./mediaFolder.schema");
 const Asset = require("./asset.schema");
 const AIJob = require("./aiJob.schema");
+const BrandVoice = require("./brandVoice.schema");
+const LessonIntelligence = require("./lessonIntelligence.schema");
+const KnowledgeCheck = require("./knowledgeCheck.schema");
+const KnowledgeCheckAttempt = require("./knowledgeCheckAttempt.schema");
+const TutorSession = require("./tutorSession.schema");
+const TutorMessage = require("./tutorMessage.schema");
+const LearningEvidence = require("./learningEvidence.schema");
+const ObjectiveMastery = require("./objectiveMastery.schema");
 
 module.exports = {
   User,
@@ -38,6 +47,7 @@ module.exports = {
   Lesson,
   Chapter,
   CategoryCourse,
+  CourseCategory,
   Topic,
   Review,
   Enrollment,
@@ -48,4 +58,12 @@ module.exports = {
   MediaFolder,
   Asset,
   AIJob,
+  BrandVoice,
+  LessonIntelligence,
+  KnowledgeCheck,
+  KnowledgeCheckAttempt,
+  TutorSession,
+  TutorMessage,
+  LearningEvidence,
+  ObjectiveMastery,
 };

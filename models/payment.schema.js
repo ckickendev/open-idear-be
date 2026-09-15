@@ -13,13 +13,13 @@ const paymentSchema = new Schema(
         currency: { type: String, default: "VND" },
         status: {
             type: String,
-            enum: ["pending", "paid", "failed", "refunded"],
+            enum: ["pending", "paid", "failed", "refunded", "cancelled"],
             default: "pending",
         },
         paymentMethod: { type: String, default: "demo" },
         paymentGateway: {
             type: String,
-            enum: ["demo", "stripe", "vnpay", "momo"],
+            enum: ["demo", "stripe", "vnpay", "momo", "payos"],
             default: "demo",
         },
         transactionId: { type: String, default: null },
@@ -27,6 +27,11 @@ const paymentSchema = new Schema(
         couponCode: { type: String, default: null },
         affiliateCode: { type: String, default: null },
         paidAt: { type: Date, default: null },
+
+        // payOS-specific fields
+        payosOrderCode: { type: Number, default: null },
+        payosPaymentLinkId: { type: String, default: null },
+        checkoutUrl: { type: String, default: null },
     },
     {
         timestamps: true,
@@ -35,5 +40,6 @@ const paymentSchema = new Schema(
 
 paymentSchema.index({ user: 1, status: 1 });
 paymentSchema.index({ transactionId: 1 });
+paymentSchema.index({ payosOrderCode: 1 }, { sparse: true });
 
 module.exports = mongoose.model("payment", paymentSchema);

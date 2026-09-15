@@ -136,3 +136,19 @@ export {
   type ValidationIssue,
   type ValidationOptions,
 } from "./publishValidator";
+
+export {
+  SmartPublishWorkflow,
+  smartPublishWorkflow,
+} from "./smartPublish.workflow";
+
+export {
+  SmartPublishInputSchema,
+  type SmartPublishInput,
+  SmartPublishResultSchema,
+  type SmartPublishResult,
+  type CoverImageSuggestion,
+  type SEOValidation,
+  type SEOIssue,
+  type CategoryMatch,
+} from "./smartPublish.schema";

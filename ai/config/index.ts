@@ -27,7 +27,7 @@ export interface AIConfig {
   readonly stream: boolean;
 }
 
-export type AIConfigScope = "planner" | "writer" | "editor" | "publishing" | "growth";
+export type AIConfigScope = "planner" | "writer" | "editor" | "publishing" | "growth" | "publisher";
 
 export class AIConfigCenter {
   private readonly configs = new Map<AIConfigScope, AIConfig>();
@@ -101,6 +101,19 @@ export class AIConfigCenter {
       timeout: 45000,
       retry: {
         maxAttempts: 3,
+        initialDelayMs: 1000,
+        backoffMultiplier: 2,
+      },
+      stream: false,
+    });
+
+    // 6. Publisher Scope Defaults (Multi-agent full workflow)
+    this.configs.set("publisher", {
+      model: "quality",
+      temperature: 0.4,
+      timeout: 180000,
+      retry: {
+        maxAttempts: 2,
         initialDelayMs: 1000,
         backoffMultiplier: 2,
       },
