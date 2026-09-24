@@ -34,6 +34,8 @@ const knowledgeCheckService = require("./knowledgeCheck.services");
 const tutorService = require("./tutor.services");
 const masteryService = require("./mastery.services");
 
+const { articleVersionService } = require("./articleVersion.services");
+
 module.exports = {
   userService,
   authService,
@@ -70,4 +72,5 @@ module.exports = {
   knowledgeCheckService,
   tutorService,
   masteryService,
+  articleVersionService,
 };

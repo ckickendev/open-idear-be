@@ -47,10 +47,14 @@ export class TelemetryLoggingMiddleware implements ExecutionMiddleware {
         ...(context.rawResponse !== undefined && { response: context.rawResponse }),
         ...(context.tokenUsage !== undefined && { usage: context.tokenUsage }),
         ...(context.error !== undefined && { error: context.error }),
+        ...(context.featureId && { featureId: context.featureId }),
+        ...(context.telemetryKey && { telemetryKey: context.telemetryKey }),
+        ...((context.userId || context.user?.id) && { userId: context.userId || context.user?.id }),
         promptName: context.promptName,
         promptVersion: context.promptVersion,
         retryCount: context.retryCount,
       });
+
     } catch (logErr) {
       console.error(`[TelemetryLoggingMiddleware] Logging failed:`, logErr);
     }

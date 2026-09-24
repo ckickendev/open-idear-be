@@ -16,6 +16,7 @@
 
 import { PlannerAgent, type PlannerInput, type PlannerOutline } from "../agent/planner.agent";
 import { WriterAgent } from "../agent/writer.agent";
+import type { ImageSuggestion, VisualSuggestion } from "../agent/writer.schema";
 import { ContentStructureService, type ArticleBlock } from "../content/contentStructure.service";
 
 // ─── Input / Output Types ─────────────────────────────────────────────────────
@@ -56,6 +57,10 @@ export interface PublisherPipelineResult {
   readonly keywords: string[];
   /** Estimated reading time in minutes. */
   readonly estimatedReadingTime: number;
+  /** Optional AI section visual suggestions */
+  readonly imageSuggestions?: ImageSuggestion[];
+  /** Structured visual suggestions with classification, rationale and confidence */
+  readonly visualSuggestions?: VisualSuggestion[];
 }
 
 // ─── Workflow ─────────────────────────────────────────────────────────────────
@@ -73,8 +78,11 @@ export class PublisherPipelineWorkflow {
    * Executes the full publisher pipeline sequentially.
    * Throws on any stage failure — the controller handles error responses.
    */
-  async execute(input: PublisherPipelineInput, signal?: AbortSignal): Promise<PublisherPipelineResult> {
-    const options = signal ? { signal } : {};
+  public async execute(
+    input: PublisherPipelineInput,
+    signal?: AbortSignal
+  ): Promise<PublisherPipelineResult> {
+    const options = { signal };
 
     // ── Stage 1: Planner ──────────────────────────────────────────────────────
     const plannerInput: PlannerInput = {
@@ -106,7 +114,7 @@ export class PublisherPipelineWorkflow {
     if (!writerResult.success || !writerResult.data) {
       throw new Error("PublisherPipeline: Writer stage failed. Check server logs for details.");
     }
-    const { markdown, estimatedReadingTime } = writerResult.data;
+    const { markdown, estimatedReadingTime, imageSuggestions, visualSuggestions } = writerResult.data;
 
     // ── Stage 3: Content Structure ────────────────────────────────────────────
     const structureResult = ContentStructureService.buildArticleStructure({ markdown });
@@ -139,6 +147,8 @@ export class PublisherPipelineWorkflow {
       markdown,
       keywords: plan.keywords ?? [],
       estimatedReadingTime: estimatedReadingTime ?? Math.max(1, Math.ceil(markdown.split(/\s+/).length / 225)),
+      imageSuggestions: imageSuggestions ?? [],
+      visualSuggestions: visualSuggestions ?? [],
     };
   }
 }

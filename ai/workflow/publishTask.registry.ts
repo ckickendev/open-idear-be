@@ -51,10 +51,10 @@ export class PublishTaskRegistry {
   }
 
   /**
-   * Get a registered task by ID.
+   * Get a registered task by ID or canonical feature ID.
    */
   get(id: string): PublishTask {
-    const task = this.tasks.get(id);
+    const task = this.resolveTask(id);
     if (!task) {
       throw new Error(`Publishing task with ID "${id}" is not registered.`);
     }
@@ -62,11 +62,25 @@ export class PublishTaskRegistry {
   }
 
   /**
-   * Check if a task is registered.
+   * Check if a task is registered by ID or canonical feature ID.
    */
   has(id: string): boolean {
-    return this.tasks.has(id);
+    return this.resolveTask(id) !== undefined;
   }
+
+  private resolveTask(id: string): PublishTask | undefined {
+    if (!id) return undefined;
+    if (this.tasks.has(id)) return this.tasks.get(id);
+
+    const stripped = id.startsWith("publish_") ? id.replace(/^publish_/, "") : id;
+    if (this.tasks.has(stripped)) return this.tasks.get(stripped);
+
+    const normalized = id.replace(/_/g, "-");
+    if (this.tasks.has(normalized)) return this.tasks.get(normalized);
+
+    return undefined;
+  }
+
 
   /**
    * List all registered tasks.

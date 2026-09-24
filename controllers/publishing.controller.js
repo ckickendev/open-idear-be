@@ -3,7 +3,7 @@ const { Controller } = require("../core");
 const asyncHandler = require("../utils/asyncHandler");
 const { AuthMiddleware } = require("../middlewares/auth.middleware");
 const { Post } = require("../models");
-const { publishingEngine } = require("../ai");
+const { publishingEngine, aiFeatureRegistry } = require("../ai");
 
 /**
  * =============================================================================
@@ -14,6 +14,7 @@ const { publishingEngine } = require("../ai");
  *  - Exposes REST endpoint for publishing validations and checks.
  *  - Uses PublishingEngine to run registered preflight tasks.
  *  - Authenticated via AuthMiddleware and checks ownership of the draft.
+ *  - Uses centralized aiFeatureRegistry for typed validation and telemetry.
  * =============================================================================
  */
 
@@ -40,6 +41,17 @@ class PublishingController extends Controller {
       return res.status(400).json({ error: "articleId is required." });
     }
 
+    // Validate and resolve task against centralized aiFeatureRegistry
+    let feature;
+    try {
+      feature = aiFeatureRegistry.resolve(task);
+    } catch (err) {
+      return res.status(400).json({
+        error: `Invalid publishing task "${task}". Must be a registered AI feature.`,
+        registeredTasks: aiFeatureRegistry.getByCategory("publishing").map((f) => f.id),
+      });
+    }
+
     // 1. Fetch draft post details
     const post = await Post.findById(articleId);
     if (!post) {
@@ -63,15 +75,25 @@ class PublishingController extends Controller {
         context: {
           ...context,
           category: post.category ? String(post.category) : undefined,
+          featureId: feature.id,
+          telemetryKey: feature.telemetryKey,
         }
       }
     );
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
+
 
   /**
    * Registers router endpoints

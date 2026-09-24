@@ -30,8 +30,10 @@ export class ConsoleAILogSink implements AILogSink {
     const status = entry.success ? "SUCCESS" : "FAILED";
     const duration = `${entry.executionTimeMs}ms`;
     const cost = entry.estimatedCost ? `$${entry.estimatedCost.toFixed(6)}` : "$0.000000";
+    const featureTag = entry.featureId ? ` [Feature: ${entry.featureId}]` : "";
 
-    console.log(`[AI LOG] [${timestamp}] [${status}] [${entry.providerId}/${entry.model}] [Time: ${duration}] [Cost: ${cost}]`);
+    console.log(`[AI LOG] [${timestamp}] [${status}] [${entry.providerId}/${entry.model}]${featureTag} [Time: ${duration}] [Cost: ${cost}]`);
+
 
     if (entry.error) {
       console.error(`  - Error [${entry.error.code || "unknown"}]: ${entry.error.message}`);
@@ -107,12 +109,17 @@ export class TelemetryLogger {
       ...(params.usage && { tokenUsage: params.usage }),
       estimatedCost,
       ...(loggedError && { error: loggedError }),
+      ...(params.userId && { userId: params.userId }),
+      ...(params.featureId && { featureId: params.featureId }),
+      ...(params.telemetryKey && { telemetryKey: params.telemetryKey }),
+
       ...(params.promptName && { promptName: params.promptName }),
       ...(params.promptVersion && { promptVersion: params.promptVersion }),
       ...(params.retryCount !== undefined && { retryCount: params.retryCount }),
       ...(params.validationErrors && { validationErrors: params.validationErrors }),
       ...(params.streamingDurationMs !== undefined && { streamingDurationMs: params.streamingDurationMs }),
     };
+
 
     await this.forwardToSinks(entry);
     return entry;
@@ -203,7 +210,11 @@ export class TelemetryLogger {
   }
 }
 
-// Export default instance configured with Console and File sinks
+import { mongoAIUsageSink } from "../usage/sink/mongoAIUsage.sink";
+
+// Export default instance configured with Console, File, and MongoDB AI Usage sinks
 export const aiLogger = new TelemetryLogger()
   .register(new ConsoleAILogSink())
-  .register(new FileAILogSink());
+  .register(new FileAILogSink())
+  .register(mongoAIUsageSink);
+

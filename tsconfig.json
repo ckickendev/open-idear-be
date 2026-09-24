@@ -32,8 +32,13 @@
     }
   },
   "include": [
-    "ai/**/*.ts"
+    "ai/**/*.ts",
+    "models/**/*.ts",
+    "services/**/*.ts",
+    "controllers/**/*.ts",
+    "tests/**/*.ts"
   ],
+
   "exclude": [
     "node_modules",
     "dist"

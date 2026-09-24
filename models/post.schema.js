@@ -132,6 +132,20 @@ const postSchema = new Schema(
       }, { _id: false }),
       default: undefined,
     },
+
+    /**
+     * Article Versioning System (Sprint 1)
+     * Points to the active immutable ArticleVersion snapshot.
+     */
+    currentVersionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "articleVersion",
+      default: undefined,
+    },
+    latestVersion: {
+      type: String,
+      default: "1.0",
+    },
   },
   {
     versionKey: '_somethingElse',

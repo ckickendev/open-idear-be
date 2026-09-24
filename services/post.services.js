@@ -176,7 +176,8 @@ class PostService extends Service {
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
             .populate('image', 'url description')
-            .populate('mediaContent', 'url type description');
+            .populate('mediaContent', 'url type description')
+            .populate('currentVersionId', 'version changelog source createdAt');
         if (!post) {
             return null;
         }
@@ -189,7 +190,8 @@ class PostService extends Service {
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
             .populate('image', 'url description')
-            .populate('mediaContent', 'url type description');
+            .populate('mediaContent', 'url type description')
+            .populate('currentVersionId', 'version changelog source createdAt');
 
         if (!post) {
             return null;
@@ -315,6 +317,11 @@ class PostService extends Service {
                 category: publicInfo.category,
                 published: true,
             }, { new: true });
+            
+            // Ensure ArticleVersion 1.0 snapshot exists for newly published post
+            const { articleVersionService } = require("./articleVersion.services");
+            await articleVersionService.ensureInitialVersion(updatedPost);
+
             memoryCache.invalidate('hot_posts_');
             return updatedPost;
         } catch (error) {

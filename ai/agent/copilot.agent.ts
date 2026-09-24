@@ -127,6 +127,112 @@ copilotActionRegistry.register({
   defaultModel: "quality",
 });
 
+copilotActionRegistry.register({
+  id: "rewrite",
+  title: "Rewrite Content",
+  description: "Rewrite selected text for enhanced clarity, conciseness, and narrative flow",
+  promptName: "improve",
+  defaultPromptVersion: "v1",
+  inputSchema: z.object({
+    selectedText: z.string(),
+    instruction: z.string().optional().default("Rewrite this text to be clearer, punchy, and engaging."),
+    surroundingContext: z.string().optional(),
+    audience: z.string().optional(),
+    tone: z.string().optional(),
+  }),
+  outputSchema: ImproveSchema,
+  responseFormat: "json",
+  defaultModel: "fast",
+  validate: (data) => {
+    return typeof data.improvedText === "string" && data.improvedText.trim().length > 0;
+  },
+});
+
+copilotActionRegistry.register({
+  id: "improve_tone",
+  title: "Improve Tone",
+  description: "Adjust writing tone (professional, casual, persuasive, authoritative)",
+  promptName: "improve",
+  defaultPromptVersion: "v1",
+  inputSchema: z.object({
+    selectedText: z.string(),
+    instruction: z.string().optional().default("Adjust the tone to match the target audience and style."),
+    surroundingContext: z.string().optional(),
+    audience: z.string().optional(),
+    tone: z.string().optional().default("professional"),
+  }),
+  outputSchema: ImproveSchema,
+  responseFormat: "json",
+  defaultModel: "fast",
+  validate: (data) => {
+    return typeof data.improvedText === "string" && data.improvedText.trim().length > 0;
+  },
+});
+
+copilotActionRegistry.register({
+  id: "summarize",
+  title: "Summarize Content",
+  description: "Generate concise executive or tl;dr summaries of text blocks or articles",
+  promptName: "improve",
+  defaultPromptVersion: "v1",
+  inputSchema: z.object({
+    selectedText: z.string(),
+    instruction: z.string().optional().default("Provide a concise summary capturing all core key points."),
+    surroundingContext: z.string().optional(),
+    audience: z.string().optional(),
+    tone: z.string().optional(),
+  }),
+  outputSchema: ImproveSchema,
+  responseFormat: "json",
+  defaultModel: "fast",
+  validate: (data) => {
+    return typeof data.improvedText === "string" && data.improvedText.trim().length > 0;
+  },
+});
+
+copilotActionRegistry.register({
+  id: "shorten",
+  title: "Shorten Block",
+  description: "Condense selected paragraph while strictly preserving core meaning and takeaways",
+  promptName: "improve",
+  defaultPromptVersion: "v1",
+  inputSchema: z.object({
+    selectedText: z.string(),
+    instruction: z.string().optional().default("Shorten this block while preserving the core meaning."),
+    surroundingContext: z.string().optional(),
+    audience: z.string().optional(),
+    tone: z.string().optional(),
+  }),
+  outputSchema: ImproveSchema,
+  responseFormat: "json",
+  defaultModel: "fast",
+  validate: (data) => {
+    return typeof data.improvedText === "string" && data.improvedText.trim().length > 0;
+  },
+});
+
+copilotActionRegistry.register({
+  id: "expand",
+  title: "Expand Block",
+  description: "Elaborate on concept with additional depth, explanation, and contextual nuance",
+  promptName: "improve",
+  defaultPromptVersion: "v1",
+  inputSchema: z.object({
+    selectedText: z.string(),
+    instruction: z.string().optional().default("Expand this block with more detail, explanation, and examples."),
+    surroundingContext: z.string().optional(),
+    audience: z.string().optional(),
+    tone: z.string().optional(),
+  }),
+  outputSchema: ImproveSchema,
+  responseFormat: "json",
+  defaultModel: "fast",
+  validate: (data) => {
+    return typeof data.improvedText === "string" && data.improvedText.trim().length > 0;
+  },
+});
+
+
 
 // =============================================================================
 //  TRANSIENT THREAD-SAFE RUNNER AGENT

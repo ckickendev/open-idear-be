@@ -54,6 +54,9 @@ export interface AILogEntry {
   readonly error?: LoggedError;
 
   // ─── Platform-Level Dimensions (optional) ──────────────────────────
+  readonly userId?: string;
+  readonly featureId?: string;
+  readonly telemetryKey?: string;
   readonly promptName?: string;
   readonly promptVersion?: string;
   readonly retryCount?: number;
@@ -81,9 +84,14 @@ export interface TelemetryLogParams {
   readonly response?: string;
   readonly usage?: TokenUsage;
   readonly error?: unknown;
+  readonly userId?: string;
+  readonly featureId?: string;
+  readonly telemetryKey?: string;
   readonly promptName?: string;
   readonly promptVersion?: string;
   readonly retryCount?: number;
   readonly validationErrors?: any;
   readonly streamingDurationMs?: number;
 }
+
+

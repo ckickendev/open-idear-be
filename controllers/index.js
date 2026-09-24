@@ -26,9 +26,17 @@ const CourseCategoryController = require("./courseCategory.controller");
 const SmartPublishController = require("./smartPublish.controller");
 const CourseIntelligenceController = require("./courseIntelligence.controller");
 const MasteryController = require("./mastery.controller");
-
+const AIUsageController = require("./aiUsage.controller");
+const ArticleController = require("./article.controller");
+const ReadingProgressController = require("./readingProgress.controller");
+const CollectionController = require("./collection.controller");
 
 module.exports = {
+  CollectionController,
+  ReadingProgressController,
+  ArticleController,
+  AIUsageController,
+  MasteryController,
   UserController,
   CategoryController,
   CommentController,

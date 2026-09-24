@@ -2,12 +2,18 @@ const express = require("express");
 const { Controller } = require("../core");
 const asyncHandler = require("../utils/asyncHandler");
 const { AuthMiddleware } = require("../middlewares/auth.middleware");
-const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent } = require("../ai");
+const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent, aiFeatureRegistry } = require("../ai");
 const { ContentStructureService } = require("../ai/content/contentStructure.service");
 const { PublisherPipelineWorkflow } = require("../ai/workflow/publisherPipeline.workflow");
 const { aiImageGenerationOrchestratorService } = require("../services/aiImageGeneration.services");
 const { aiImageEditingOrchestratorService } = require("../services/aiImageEditing.services");
-const { Post } = require("../models");
+const { imageSearchService } = require("../services/imageSearch.service");
+const { imageGenerationService, ImageGenerationService } = require("../services/imageGeneration.service");
+const { imageImportService } = require("../services/imageImport.service");
+const { visualClassifierService } = require("../ai/visual-intelligence/visualClassifier.service");
+const { batchVisualService } = require("../services/batchVisual.service");
+const { visualAnalyticsService } = require("../services/visualAnalytics.service");
+const { Post, ArticleVersion } = require("../models");
 const mongoose = require("mongoose");
 const { default: slugify } = require("slugify");
 const fs = require("fs").promises;
@@ -67,7 +73,8 @@ class AIController extends Controller {
       return res.status(400).json({ error: "category is required" });
     }
 
-    // 2. Instantiate and execute the planning workflow
+    // 2. Resolve feature and execute planning workflow
+    const feature = aiFeatureRegistry.get("seo_outline");
     const workflow = new CreateArticlePlanningWorkflow();
     const result = await workflow.execute({
       topic: topic.trim(),
@@ -80,12 +87,21 @@ class AIController extends Controller {
       context: {
         language: req.body.language || "en",
         userPreference: req.body.userPreference || "",
+        featureId: feature.id,
+        telemetryKey: feature.telemetryKey,
       }
     });
 
     // 3. Return JSON response
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
@@ -108,7 +124,8 @@ class AIController extends Controller {
       return res.status(400).json({ error: "plan.outline is required and must be a non-empty array" });
     }
 
-    // 2. Instantiate and execute the writing workflow
+    // 2. Resolve feature and execute writing workflow
+    const feature = aiFeatureRegistry.get("article_writer");
     const workflow = new CreateArticleWorkflow();
     const result = await workflow.execute({
       plan,
@@ -117,15 +134,25 @@ class AIController extends Controller {
       context: {
         language: req.body.language || "en",
         userPreference: req.body.userPreference || "",
+        featureId: feature.id,
+        telemetryKey: feature.telemetryKey,
       }
     });
 
     // 3. Return JSON response
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
+
 
   /**
    * POST /ai/v1/writer/stream
@@ -511,11 +538,19 @@ class AIController extends Controller {
       return res.status(400).json({ error: "markdown content is required" });
     }
 
+    const feature = aiFeatureRegistry.get("content_enhancement");
     const { enhancementPipeline } = require("../services");
     const result = await enhancementPipeline.execute(userId, markdown, options);
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
@@ -532,6 +567,7 @@ class AIController extends Controller {
       return res.status(400).json({ error: "markdown content is required" });
     }
 
+    const feature = aiFeatureRegistry.get("image_enhancement");
     const { enhancementPipeline } = require("../services");
     const result = await enhancementPipeline.execute(userId, markdown, {
       title,
@@ -541,6 +577,13 @@ class AIController extends Controller {
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: {
         enhancedMarkdown: result.enhancedMarkdown,
         insertedAssets: result.insertedAssets || result.insertedImages || [],
@@ -559,6 +602,7 @@ class AIController extends Controller {
   structureArticle = asyncHandler(async (req, res) => {
     const { markdown, growthResults } = req.body;
 
+    const feature = aiFeatureRegistry.get("content_structure");
     const result = ContentStructureService.buildArticleStructure({
       markdown: markdown || "",
       growthResults: growthResults || null,
@@ -566,6 +610,13 @@ class AIController extends Controller {
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
@@ -591,6 +642,7 @@ class AIController extends Controller {
       return res.status(400).json({ error: "topic is required" });
     }
 
+    const feature = aiFeatureRegistry.get("publish_by_ai");
     const abortController = new AbortController();
     req.on("close", () => abortController.abort());
 
@@ -610,9 +662,17 @@ class AIController extends Controller {
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
+
 
   /**
    * POST /ai/v1/publisher
@@ -754,6 +814,21 @@ class AIController extends Controller {
     const rawMarkdown = resultContext.writerOutput?.rawMarkdown || "";
 
     const postId = new mongoose.Types.ObjectId();
+    const blocks = resultContext.writerOutput?.blocks || [];
+
+    // Create immutable initial ArticleVersion with source = ai
+    const initialVersion = await ArticleVersion.create({
+      articleId: postId,
+      version: "1.0",
+      markdown: rawMarkdown,
+      html: rawMarkdown,
+      blocks,
+      changelog: req.body.changelog || "Initial AI generation via Autonomous Publisher Pipeline",
+      createdBy: userId,
+      source: "ai",
+      createdAt: new Date(),
+    });
+
     const draftPost = await Post.create({
       _id: postId,
       title: postTitle,
@@ -761,11 +836,13 @@ class AIController extends Controller {
       description: resultContext.seo?.metaDescription || "",
       content: rawMarkdown,
       text: rawMarkdown,
-      blocks: resultContext.writerOutput?.blocks || [],
+      blocks,
       contentVersion: "blocks-v1",
       published: false, // Save as Draft
       author: userId,
       image: resultContext.coverImage?._id ? resultContext.coverImage._id : undefined,
+      currentVersionId: initialVersion._id,
+      latestVersion: "1.0",
     });
 
     res.json({
@@ -775,6 +852,8 @@ class AIController extends Controller {
         title: draftPost.title,
         slug: draftPost.slug,
         coverImage: resultContext.coverImage,
+        version: "1.0",
+        versionId: initialVersion._id.toString(),
         state: "DONE",
       },
     });
@@ -850,6 +929,7 @@ class AIController extends Controller {
       return res.status(400).json({ error: "blocks array is required" });
     }
 
+    const feature = aiFeatureRegistry.get("internal_links");
     const agent = new InternalLinkAgent();
     const result = await agent.execute({
       blocks,
@@ -858,11 +938,138 @@ class AIController extends Controller {
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result.data,
     });
   });
 
+  /**
+   * GET /ai/v1/features
+   * Returns all registered AI capabilities or filtered by ?category=
+   */
+  getFeatures = asyncHandler(async (req, res) => {
+    const { category } = req.query;
+    const features = category
+      ? aiFeatureRegistry.getByCategory(category)
+      : aiFeatureRegistry.getAll();
+    res.json({
+      status: "success",
+      total: features.length,
+      data: features,
+    });
+  });
+
+  /**
+   * GET /ai/v1/features/:id
+   * Returns detailed definition of a specific AI feature by canonical ID or alias.
+   */
+  getFeatureById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    try {
+      const feature = aiFeatureRegistry.resolve(id);
+      res.json({
+        status: "success",
+        data: feature,
+      });
+    } catch (err) {
+      res.status(404).json({
+        error: `AI Feature "${id}" not found.`,
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/images/search
+   * POST /ai/images/search
+   * Unified image search across user Asset Library and technical stock.
+   */
+  searchImages = asyncHandler(async (req, res) => {
+    const { query, limit, page } = req.body;
+    if (!query || typeof query !== "string" || !query.trim()) {
+      return res.status(400).json({ error: "query is required" });
+    }
+
+    const userId = req.userInfo?._id;
+    const parsedLimit = parseInt(limit, 10) || 12;
+    const parsedPage  = parseInt(page,  10) || 1;
+
+    const results = await imageSearchService.search(query.trim(), parsedLimit, userId, parsedPage);
+
+    res.json({
+      status: "success",
+      query: query.trim(),
+      page: parsedPage,
+      total: results.length,
+      data: results,
+    });
+  });
+
+  /**
+   * POST /ai/v1/images/import
+   * POST /ai/images/import
+   * Downloads a stock image from an allowed external provider, uploads to Cloudinary,
+   * deduplicates by sourceUrl and file hash, and persists an Asset record.
+   * Returns the saved Asset so the editor can reference an Asset ID.
+   */
+  importStockImage = asyncHandler(async (req, res) => {
+    const {
+      url,
+      thumbnailUrl,
+      title,
+      alt,
+      author,
+      license,
+      attributionUrl,
+      sourceProvider,
+      sourceUrl,
+      searchQuery,
+    } = req.body;
+
+    if (!url || typeof url !== "string" || !url.trim()) {
+      return res.status(400).json({ error: "url is required" });
+    }
+
+    const userId = req.userInfo?._id?.toString();
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    // Validate URL before any processing
+    const urlCheck = imageImportService.validateUrl(url.trim());
+    if (!urlCheck.valid) {
+      return res.status(400).json({ error: urlCheck.reason || "URL not allowed" });
+    }
+
+    const asset = await imageImportService.importFromExternalUrl({
+      url: url.trim(),
+      thumbnailUrl: thumbnailUrl ? thumbnailUrl.trim() : undefined,
+      title: title ? String(title).trim() : undefined,
+      alt: alt ? String(alt).trim() : undefined,
+      author: author ? String(author).trim() : undefined,
+      license: license ? String(license).trim() : undefined,
+      attributionUrl: attributionUrl ? String(attributionUrl).trim() : undefined,
+      sourceProvider: sourceProvider ? String(sourceProvider).trim() : undefined,
+      sourceUrl: sourceUrl ? String(sourceUrl).trim() : url.trim(),
+      searchQuery: searchQuery ? String(searchQuery).trim() : undefined,
+      userId,
+    });
+
+    res.json({
+      status: "success",
+      isExisting: asset.isExisting || false,
+      data: asset,
+    });
+  });
+
   initController = () => {
+    this._router.get( `${this._rootPath}/features`,           AuthMiddleware, this.getFeatures);
+    this._router.get( `${this._rootPath}/features/:id`,       AuthMiddleware, this.getFeatureById);
     this._router.post(`${this._rootPath}/planner`,            AuthMiddleware, this.planArticle);
     this._router.post(`${this._rootPath}/writer`,             AuthMiddleware, this.writeArticle);
     this._router.post(`${this._rootPath}/writer/stream`,      AuthMiddleware, this.streamArticle);
@@ -879,10 +1086,213 @@ class AIController extends Controller {
     this._router.delete(`${this._rootPath}/brand-voice/:id`,   AuthMiddleware, this.deleteBrandVoice);
     this._router.get( `${this._rootPath}/image/providers`,    AuthMiddleware, this.getImageProviders);
     this._router.post(`${this._rootPath}/image/generate`,     AuthMiddleware, this.generateImage);
+    this._router.post(`${this._rootPath}/images/generate`,    AuthMiddleware, this.generateTechnicalIllustration);
+    this._router.post(`/ai/images/generate`,                  AuthMiddleware, this.generateTechnicalIllustration);
     this._router.post(`${this._rootPath}/image/edit`,         AuthMiddleware, this.editImage);
+    this._router.post(`${this._rootPath}/images/search`,      AuthMiddleware, this.searchImages);
+    this._router.post(`/ai/images/search`,                    AuthMiddleware, this.searchImages);
+    this._router.post(`${this._rootPath}/images/import`,      AuthMiddleware, this.importStockImage);
+    this._router.post(`/ai/images/import`,                    AuthMiddleware, this.importStockImage);
     this._router.post(`${this._rootPath}/diagram/generate`,   AuthMiddleware, this.generateDiagram);
     this._router.get( `${this._rootPath}/telemetry`,          AuthMiddleware, this.getTelemetry);
+
+    // Sprint 3: Visual Intelligence, Decision Engine & Batch Pipeline
+    this._router.post(`${this._rootPath}/visuals/classify`,       AuthMiddleware, this.classifyVisuals);
+    this._router.post(`/ai/visuals/classify`,                     AuthMiddleware, this.classifyVisuals);
+    this._router.post(`${this._rootPath}/visuals/batch-generate`, AuthMiddleware, this.batchGenerateVisuals);
+    this._router.post(`/ai/visuals/batch-generate`,               AuthMiddleware, this.batchGenerateVisuals);
+    this._router.post(`${this._rootPath}/visuals/analytics`,      AuthMiddleware, this.recordVisualAnalytics);
+    this._router.post(`/ai/visuals/analytics`,                    AuthMiddleware, this.recordVisualAnalytics);
+    this._router.get( `${this._rootPath}/visuals/analytics/stats`, AuthMiddleware, this.getVisualAnalyticsStats);
+    this._router.get( `/ai/visuals/analytics/stats`,              AuthMiddleware, this.getVisualAnalyticsStats);
   };
+
+  /**
+   * POST /ai/images/generate
+   * POST /ai/v1/images/generate
+   * Generates a technical illustration, saves to Cloudinary & Asset library.
+   * Conforms to Sprint 3 specifications:
+   * Validates:
+   *   - prompt length (3 - 1000 characters)
+   *   - supported style preset
+   *   - supported aspect ratio
+   *   - authenticated user (401 if missing)
+   *   - per-user rate limits (429 if exceeded)
+   */
+  generateTechnicalIllustration = asyncHandler(async (req, res) => {
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { prompt, style, aspectRatio, seed, force, suggestionId } = req.body;
+
+    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+      return res.status(400).json({ error: "prompt is required" });
+    }
+
+    const cleanPrompt = prompt.trim();
+    if (cleanPrompt.length < 3 || cleanPrompt.length > 1000) {
+      return res.status(400).json({
+        error: "prompt length must be between 3 and 1000 characters",
+      });
+    }
+
+    const targetStyle = style || "isometric";
+    if (!imageGenerationService.isValidStyle(targetStyle)) {
+      return res.status(400).json({
+        error: `Invalid style. Supported styles: ${ImageGenerationService.SUPPORTED_STYLES.join(", ")}`,
+      });
+    }
+
+    const targetRatio = aspectRatio || "16:9";
+    if (!imageGenerationService.isValidAspectRatio(targetRatio)) {
+      return res.status(400).json({
+        error: `Invalid aspectRatio. Supported ratios: ${ImageGenerationService.SUPPORTED_ASPECT_RATIOS.join(", ")}`,
+      });
+    }
+
+    try {
+      const asset = await imageGenerationService.generateTechnicalIllustration({
+        prompt: cleanPrompt,
+        style: targetStyle,
+        aspectRatio: targetRatio,
+        seed: seed !== undefined ? Number(seed) : undefined,
+        userId,
+        suggestionId: suggestionId ? String(suggestionId).trim() : undefined,
+        force: Boolean(force),
+      });
+
+      res.json({
+        status: "success",
+        data: asset,
+      });
+    } catch (err) {
+      if (err.status === 429 || err.code === "RATE_LIMIT_EXCEEDED") {
+        return res.status(429).json({ error: err.message });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * POST /ai/visuals/classify
+   * POST /ai/v1/visuals/classify
+   * Analyzes section heading/content or full markdown article and returns visual recommendations.
+   */
+  classifyVisuals = asyncHandler(async (req, res) => {
+    const { heading, content, markdown } = req.body;
+
+    if (markdown && typeof markdown === "string") {
+      const sections = visualClassifierService.analyzeArticle(markdown);
+      return res.json({
+        status: "success",
+        total: sections.length,
+        data: sections,
+      });
+    }
+
+    if (!heading || !String(heading).trim()) {
+      return res.status(400).json({ error: "heading or markdown is required" });
+    }
+
+    const recommendation = visualClassifierService.classifySection(
+      String(heading).trim(),
+      content ? String(content).trim() : ""
+    );
+
+    res.json({
+      status: "success",
+      data: recommendation,
+    });
+  });
+
+  /**
+   * POST /ai/visuals/batch-generate
+   * POST /ai/v1/visuals/batch-generate
+   * Executes batch visual pipeline: skips completed, generates/searches remaining, inserts automatically.
+   */
+  batchGenerateVisuals = asyncHandler(async (req, res) => {
+    const { markdown, preferredStyle, postId } = req.body;
+
+    if (!markdown || !String(markdown).trim()) {
+      return res.status(400).json({ error: "markdown is required" });
+    }
+
+    const userId = req.userInfo?._id || req.user?._id;
+
+    const result = await batchVisualService.executeBatchPipeline({
+      markdown: String(markdown),
+      userId: userId ? userId.toString() : null,
+      postId: postId ? postId.toString() : null,
+      preferredStyle,
+    });
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  });
+
+  /**
+   * POST /ai/visuals/analytics
+   * POST /ai/v1/visuals/analytics
+   * Records author action telemetry: generated, accepted, regenerated, deleted, search_preferred.
+   */
+  recordVisualAnalytics = asyncHandler(async (req, res) => {
+    const {
+      heading,
+      visualType,
+      recommendedAction,
+      actionTaken,
+      preset,
+      prompt,
+      confidence,
+      metadata,
+      postId,
+    } = req.body;
+
+    if (!actionTaken) {
+      return res.status(400).json({ error: "actionTaken is required" });
+    }
+
+    const userId = req.userInfo?._id || req.user?._id;
+
+    const record = await visualAnalyticsService.recordEvent({
+      userId: userId ? userId.toString() : null,
+      postId,
+      heading,
+      visualType,
+      recommendation: req.body.recommendation,
+      recommendedAction,
+      actionTaken,
+      preset,
+      prompt,
+      confidence: confidence ? Number(confidence) : undefined,
+      metadata,
+    });
+
+    res.json({
+      status: "success",
+      data: record,
+    });
+  });
+
+  /**
+   * GET /ai/visuals/analytics/stats
+   * GET /ai/v1/visuals/analytics/stats
+   * Aggregates telemetry stats.
+   */
+  getVisualAnalyticsStats = asyncHandler(async (req, res) => {
+    const userId = req.userInfo?._id || req.user?._id;
+    const stats = await visualAnalyticsService.getStats(userId ? userId.toString() : null);
+
+    res.json({
+      status: "success",
+      data: stats,
+    });
+  });
+
 }
 
 module.exports = AIController;

@@ -31,6 +31,13 @@ const TutorSession = require("./tutorSession.schema");
 const TutorMessage = require("./tutorMessage.schema");
 const LearningEvidence = require("./learningEvidence.schema");
 const ObjectiveMastery = require("./objectiveMastery.schema");
+const { AIUsage } = require("./aiUsage.schema");
+const { ArticleVersion } = require("./articleVersion.schema");
+const { ReadingProgress } = require("./readingProgress.schema");
+const { Collection } = require("./collection.schema");
+const { CollectionItem } = require("./collectionItem.schema");
+const { VisualAnalytics } = require("./visualAnalytics.schema");
+
 
 module.exports = {
   User,
@@ -66,4 +73,11 @@ module.exports = {
   TutorMessage,
   LearningEvidence,
   ObjectiveMastery,
+  AIUsage,
+  ArticleVersion,
+  ReadingProgress,
+  Collection,
+  CollectionItem,
+  VisualAnalytics,
 };
+

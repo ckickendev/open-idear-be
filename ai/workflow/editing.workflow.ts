@@ -1,5 +1,6 @@
 import { Workflow } from "./executor";
 import { EditorCopilot, editorCopilot, copilotActionRegistry } from "../agent";
+import { aiFeatureRegistry } from "../feature";
 import type { AgentOptions } from "../agent/types";
 
 // =============================================================================
@@ -8,7 +9,7 @@ import type { AgentOptions } from "../agent/types";
 //
 //  Design Decisions:
 //  - Implements the specialized workflow coordinating all editor copilot actions.
-//  - Validates action IDs and payloads against the dynamic Action Registry.
+//  - Validates action IDs and payloads against the dynamic Action & Feature Registries.
 //  - Leverages Dependency Injection (DI): accepts an EditorCopilot instance.
 //  - Completely decoupled from specific LLM providers (does not know Gemini).
 // =============================================================================
@@ -44,24 +45,39 @@ export class EditingWorkflow extends Workflow<EditingWorkflowInput, any> {
   ): Promise<any> {
     const { actionId, payload } = initialInput;
 
-    // 1. Receive & Validate action ID
-    if (!actionId || !copilotActionRegistry.has(actionId)) {
-      throw new Error(`Unsupported or unregistered copilot action: "${actionId}"`);
+    // 1. Resolve canonical feature from aiFeatureRegistry
+    const feature = aiFeatureRegistry.resolve(actionId);
+
+    // 2. Validate action existence in copilot registry (matching feature.id or actionId)
+    const targetActionId = copilotActionRegistry.has(feature.id)
+      ? feature.id
+      : (copilotActionRegistry.has(actionId) ? actionId : null);
+
+    if (!targetActionId) {
+      throw new Error(`Unsupported or unregistered copilot action: "${actionId}" (resolved: "${feature.id}")`);
     }
 
-    const action = copilotActionRegistry.get(actionId);
+    const action = copilotActionRegistry.get(targetActionId);
 
-    // 2. Validate request parameters against strategy input schema
-    const validatedInput = action.inputSchema.parse(payload);
+    // 3. Validate request parameters against strategy input schema
+    const validatedInput = action.inputSchema.parse(payload || {});
 
-    // 3. Build & execute target flow via EditorCopilot runner
-    const result = await this.copilot.execute(actionId, validatedInput, options);
+    // 4. Build & execute target flow via EditorCopilot runner
+    const result = await this.copilot.execute(targetActionId, validatedInput, {
+      ...options,
+      context: {
+        ...(options.context || {}),
+        featureId: feature.id,
+        telemetryKey: feature.telemetryKey,
+      },
+    });
 
     if (!result.success) {
       throw new Error(`EditingWorkflow failed execution of action "${actionId}".`);
     }
 
-    // 4. Return validated result
+    // 5. Return validated result with feature metadata
     return result.data;
   }
 }
+

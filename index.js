@@ -34,6 +34,10 @@ const {
   CourseCategoryController,
   CourseIntelligenceController,
   MasteryController,
+  AIUsageController,
+  ArticleController,
+  ReadingProgressController,
+  CollectionController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -66,6 +70,10 @@ const app = new AppServer([
   new CourseCategoryController(),
   new CourseIntelligenceController(),
   new MasteryController(),
+  new AIUsageController(),
+  new ArticleController(),
+  new ReadingProgressController(),
+  new CollectionController(),
 ]);
 
 app.startListening();
