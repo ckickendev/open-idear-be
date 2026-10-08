@@ -243,6 +243,14 @@ A detailed system architecture view of Redis cluster master and replica caching 
       "visual_generation_rejected",
       "visual_generation_regenerated",
       "visual_suggestion_dismissed",
+      "ai_image_opened",
+      "ai_image_context_detected",
+      "ai_image_recommendation_shown",
+      "ai_image_generated",
+      "ai_image_regenerated",
+      "ai_image_accepted",
+      "ai_image_rejected",
+      "ai_image_inserted",
     ];
 
     for (const evt of eventsToTest) {
@@ -257,7 +265,7 @@ A detailed system architecture view of Redis cluster master and replica caching 
     }
 
     const stats = await visualAnalyticsService.getStats(userId);
-    assert(stats.totalEvents === 8, `Expected 8 events recorded, got ${stats.totalEvents}`);
+    assert(stats.totalEvents === 16, `Expected 16 events recorded, got ${stats.totalEvents}`);
   });
 
   // ─── TEST 8: Quality Metrics Engine Arithmetic Calculation ─────────────────

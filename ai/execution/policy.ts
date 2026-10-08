@@ -106,6 +106,20 @@ export class PolicyRegistry {
       allowStreaming: false,
       temperatureOverride: 0.3,
     });
+
+    // 6. Content Studio Engine Policy
+    this.register("content_studio", {
+      name: "DefaultContentStudioPolicy",
+      scope: "content_studio",
+      allowedModels: sharedModels,
+      maxAttempts: 2,
+      initialDelayMs: 1000,
+      backoffMultiplier: 2,
+      timeoutMs: 45000,
+      budgetCap: 0.15,
+      allowStreaming: false,
+      temperatureOverride: 0.7,
+    });
   }
 }
 

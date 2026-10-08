@@ -365,8 +365,11 @@ export {
   aiUsageRepository,
   AIUsageService,
   aiUsageService,
-  MongoAIUsageSink,
   mongoAIUsageSink,
 } from "./usage";
+
+// ─── Content Studio Layer ─────────────────────────────────────────────────────
+export * from "./content-studio";
+
 
 

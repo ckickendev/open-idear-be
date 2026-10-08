@@ -11,6 +11,7 @@
 import type { ImageGenerator } from "./imageGenerator.interface";
 import { GeminiImageGenerator } from "./providers/gemini.generator";
 import { OpenAIImageGenerator, IdeogramImageGenerator } from "./providers/stubs.generator";
+import { PollinationsImageGenerator } from "./providers/pollinations.generator";
 
 export class ImageGeneratorRegistry {
   private readonly providers = new Map<string, ImageGenerator>();
@@ -18,6 +19,7 @@ export class ImageGeneratorRegistry {
 
   constructor() {
     this.register(new GeminiImageGenerator());
+    this.register(new PollinationsImageGenerator());
     this.register(new OpenAIImageGenerator());
     this.register(new IdeogramImageGenerator());
   }

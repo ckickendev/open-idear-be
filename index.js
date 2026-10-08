@@ -81,6 +81,6 @@ app.startListening();
 // Start background AI metadata generation worker daemon
 const { aiWorker } = require("./services");
 aiWorker.start();
-// trigger restart nodemon clean - updated writer prompt maxTokens & streamArticle
+// trigger restart nodemon clean - content studio loaded successfully
 
 

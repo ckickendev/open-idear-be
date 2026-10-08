@@ -39,7 +39,16 @@ export type VisualActionType =
   | "accepted"
   | "regenerated"
   | "deleted"
-  | "search_preferred";
+  | "search_preferred"
+  // AI Assist / AI Image Modal Actions
+  | "ai_image_opened"
+  | "ai_image_context_detected"
+  | "ai_image_recommendation_shown"
+  | "ai_image_generated"
+  | "ai_image_regenerated"
+  | "ai_image_accepted"
+  | "ai_image_rejected"
+  | "ai_image_inserted";
 
 export interface RecordVisualEventDTO {
   userId?: string | mongoose.Types.ObjectId | null;
@@ -89,6 +98,14 @@ export class VisualAnalyticsService {
     "regenerated",
     "deleted",
     "search_preferred",
+    "ai_image_opened",
+    "ai_image_context_detected",
+    "ai_image_recommendation_shown",
+    "ai_image_generated",
+    "ai_image_regenerated",
+    "ai_image_accepted",
+    "ai_image_rejected",
+    "ai_image_inserted",
   ];
 
   /**
@@ -192,15 +209,47 @@ export class VisualAnalyticsService {
 
     for (const r of records) {
       const act = r.actionTaken;
-      if (act === "visual_suggestion_created") created++;
-      else if (act === "visual_search_started") searchStarted++;
-      else if (act === "visual_search_selected") searchSelected++;
-      else if (act === "visual_generation_started" || act === "generated") genStarted++;
-      else if (act === "visual_generation_accepted" || act === "accepted") genAccepted++;
-      else if (act === "visual_generation_rejected" || act === "deleted") genRejected++;
-      else if (act === "visual_generation_regenerated" || act === "regenerated") genRegenerated++;
-      else if (act === "visual_suggestion_dismissed") dismissed++;
-      else if (act === "search_preferred") searchStarted++;
+      if (
+        act === "visual_suggestion_created" ||
+        act === "ai_image_opened" ||
+        act === "ai_image_context_detected" ||
+        act === "ai_image_recommendation_shown"
+      ) {
+        created++;
+      } else if (act === "visual_search_started") {
+        searchStarted++;
+      } else if (act === "visual_search_selected") {
+        searchSelected++;
+      } else if (
+        act === "visual_generation_started" ||
+        act === "generated" ||
+        act === "ai_image_generated"
+      ) {
+        genStarted++;
+      } else if (
+        act === "visual_generation_accepted" ||
+        act === "accepted" ||
+        act === "ai_image_accepted" ||
+        act === "ai_image_inserted"
+      ) {
+        genAccepted++;
+      } else if (
+        act === "visual_generation_rejected" ||
+        act === "deleted" ||
+        act === "ai_image_rejected"
+      ) {
+        genRejected++;
+      } else if (
+        act === "visual_generation_regenerated" ||
+        act === "regenerated" ||
+        act === "ai_image_regenerated"
+      ) {
+        genRegenerated++;
+      } else if (act === "visual_suggestion_dismissed") {
+        dismissed++;
+      } else if (act === "search_preferred") {
+        searchStarted++;
+      }
     }
 
     const totalAcceptedVisuals = genAccepted + searchSelected;

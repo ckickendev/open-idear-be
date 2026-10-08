@@ -479,6 +479,41 @@ export class AIFeatureRegistry {
         defaultModel: "quality",
         tags: ["enhancement", "media", "upscale"],
       },
+
+      // ── Content Studio ─────────────────────────────────────────────────────
+      {
+        id: "content_studio_ideas",
+        name: "AI Content Studio - Ideas Generator",
+        description: "Generate structured, high-value content ideas and angles based on topic and goal.",
+        category: "authoring",
+        estimatedCreditCost: 5,
+        telemetryKey: "ai.content_studio.ideas",
+        endpoint: "/ai/v1/content-studio/ideas",
+        defaultModel: "fast",
+        tags: ["content-studio", "ideas", "planning", "seo"],
+      },
+      {
+        id: "content_studio_brief",
+        name: "AI Content Studio - Brief Generator",
+        description: "Generate structured content brief with audience, tone, length, category, and objective.",
+        category: "authoring",
+        estimatedCreditCost: 5,
+        telemetryKey: "ai.content_studio.brief",
+        endpoint: "/ai/v1/content-studio/brief",
+        defaultModel: "fast",
+        tags: ["content-studio", "brief", "planning", "strategy"],
+      },
+      {
+        id: "content_studio_outline",
+        name: "AI Content Studio - Outline Generator",
+        description: "Generate deep, structured content outline with introduction, sections, and FAQ.",
+        category: "authoring",
+        estimatedCreditCost: 6,
+        telemetryKey: "ai.content_studio.outline",
+        endpoint: "/ai/v1/content-studio/outline",
+        defaultModel: "fast",
+        tags: ["content-studio", "outline", "planning", "structure"],
+      },
     ];
 
     for (const feature of defaultFeatures) {
@@ -514,6 +549,11 @@ export class AIFeatureRegistry {
       // Media aliases
       ["diagram", "diagram_generation"],
       ["image", "image_generation"],
+
+      // Content Studio aliases
+      ["content-studio", "content_studio_ideas"],
+      ["content_studio", "content_studio_ideas"],
+      ["ideas", "content_studio_ideas"],
     ];
 
     for (const [alias, canonicalId] of defaultAliases) {

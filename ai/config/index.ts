@@ -27,7 +27,7 @@ export interface AIConfig {
   readonly stream: boolean;
 }
 
-export type AIConfigScope = "planner" | "writer" | "editor" | "publishing" | "growth" | "publisher";
+export type AIConfigScope = "planner" | "writer" | "editor" | "publishing" | "growth" | "publisher" | "content_studio";
 
 export class AIConfigCenter {
   private readonly configs = new Map<AIConfigScope, AIConfig>();
@@ -112,6 +112,20 @@ export class AIConfigCenter {
       model: "quality",
       temperature: 0.4,
       timeout: 180000,
+      retry: {
+        maxAttempts: 2,
+        initialDelayMs: 1000,
+        backoffMultiplier: 2,
+      },
+      stream: false,
+    });
+
+    // 7. Content Studio Scope Defaults (Creative idea synthesis, balanced temperature)
+    this.configs.set("content_studio", {
+      model: "fast",
+      temperature: 0.7,
+      topP: 0.95,
+      timeout: 45000,
       retry: {
         maxAttempts: 2,
         initialDelayMs: 1000,

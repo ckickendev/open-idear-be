@@ -1,8 +1,8 @@
 const express = require("express");
 const { Controller } = require("../core");
 const asyncHandler = require("../utils/asyncHandler");
-const { AuthMiddleware } = require("../middlewares/auth.middleware");
-const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent, aiFeatureRegistry } = require("../ai");
+const { AuthMiddleware, OptionalAuthMiddleware } = require("../middlewares/auth.middleware");
+const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent, aiFeatureRegistry, ideaGeneratorService, briefGeneratorService, outlineGeneratorService, contentInventoryService } = require("../ai");
 const { ContentStructureService } = require("../ai/content/contentStructure.service");
 const { PublisherPipelineWorkflow } = require("../ai/workflow/publisherPipeline.workflow");
 const { aiImageGenerationOrchestratorService } = require("../services/aiImageGeneration.services");
@@ -1067,6 +1067,148 @@ class AIController extends Controller {
     });
   });
 
+  /**
+   * POST /ai/v1/content-studio/ideas
+   * POST /api/ai/content-studio/ideas
+   * Generates 5-20 diverse, structured content ideas for a given topic & goal.
+   */
+  generateContentStudioIdeas = asyncHandler(async (req, res) => {
+    const { topic, contentGoal, numberOfIdeas, existingCategories } = req.body;
+
+    if (!topic || typeof topic !== "string" || !topic.trim()) {
+      return res.status(400).json({ error: "topic is required and must not be empty" });
+    }
+
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+
+    try {
+      const result = await ideaGeneratorService.generate(
+        {
+          topic: topic.trim(),
+          contentGoal: contentGoal || "seo",
+          numberOfIdeas: Number(numberOfIdeas) || 10,
+          existingCategories: Array.isArray(existingCategories) ? existingCategories : undefined,
+        },
+        { userId }
+      );
+
+      res.json({
+        status: "success",
+        ideas: result.ideas,
+        intelligence: result.intelligence,
+      });
+    } catch (error) {
+      console.error("[AIController] generateContentStudioIdeas error:", error);
+      res.status(500).json({
+        error: error.message || "Failed to generate content ideas",
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/content-studio/intelligence
+   * POST /api/ai/content-studio/intelligence
+   * Inspects OpenIdear's existing content inventory and returns Content Intelligence.
+   */
+  getContentStudioIntelligence = asyncHandler(async (req, res) => {
+    const { topic } = req.body;
+
+    if (!topic || typeof topic !== "string" || !topic.trim()) {
+      return res.status(400).json({ error: "topic is required and must not be empty" });
+    }
+
+    try {
+      const inspection = await contentInventoryService.inspectInventory(topic.trim());
+
+      res.json({
+        status: "success",
+        topic: inspection.topic,
+        matchedArticles: inspection.matchedArticles,
+        allInventoryCount: inspection.allInventoryCount,
+        allCategories: inspection.allCategories,
+        intelligence: inspection.intelligence,
+      });
+    } catch (error) {
+      console.error("[AIController] getContentStudioIntelligence error:", error);
+      res.status(500).json({
+        error: error.message || "Failed to analyze content intelligence",
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/content-studio/brief
+   * POST /api/ai/content-studio/brief
+   * Generates a structured Content Brief for a selected Content Idea.
+   */
+  generateContentStudioBrief = asyncHandler(async (req, res) => {
+    const { idea, existingCategories } = req.body;
+
+    if (!idea || !idea.title) {
+      return res.status(400).json({ error: "idea is required with at least a title" });
+    }
+
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+
+    try {
+      const brief = await briefGeneratorService.generate(
+        {
+          idea,
+          existingCategories: Array.isArray(existingCategories) ? existingCategories : undefined,
+        },
+        { userId }
+      );
+
+      res.json({
+        status: "success",
+        brief,
+      });
+    } catch (error) {
+      console.error("[AIController] generateContentStudioBrief error:", error);
+      res.status(500).json({
+        error: error.message || "Failed to generate content brief",
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/content-studio/outline
+   * POST /api/ai/content-studio/outline
+   * Generates a structured Content Outline from an idea and content brief.
+   */
+  generateContentStudioOutline = asyncHandler(async (req, res) => {
+    const { idea, contentBrief } = req.body;
+
+    if (!idea || !idea.title) {
+      return res.status(400).json({ error: "idea is required with at least a title" });
+    }
+    if (!contentBrief || !contentBrief.targetAudience) {
+      return res.status(400).json({ error: "contentBrief is required with targetAudience" });
+    }
+
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+
+    try {
+      const outline = await outlineGeneratorService.generateOutline(
+        {
+          idea,
+          contentBrief,
+        },
+        { userId }
+      );
+
+      res.json({
+        status: "success",
+        outline,
+      });
+    } catch (error) {
+      console.error("[AIController] generateContentStudioOutline error:", error);
+      res.status(500).json({
+        error: error.message || "Failed to generate content outline",
+      });
+    }
+  });
+
   initController = () => {
     this._router.get( `${this._rootPath}/features`,           AuthMiddleware, this.getFeatures);
     this._router.get( `${this._rootPath}/features/:id`,       AuthMiddleware, this.getFeatureById);
@@ -1095,6 +1237,16 @@ class AIController extends Controller {
     this._router.post(`/ai/images/import`,                    AuthMiddleware, this.importStockImage);
     this._router.post(`${this._rootPath}/diagram/generate`,   AuthMiddleware, this.generateDiagram);
     this._router.get( `${this._rootPath}/telemetry`,          AuthMiddleware, this.getTelemetry);
+
+    // AI Content Studio
+    this._router.post(`${this._rootPath}/content-studio/ideas`, OptionalAuthMiddleware, this.generateContentStudioIdeas);
+    this._router.post(`/api/ai/content-studio/ideas`,          OptionalAuthMiddleware, this.generateContentStudioIdeas);
+    this._router.post(`${this._rootPath}/content-studio/brief`, OptionalAuthMiddleware, this.generateContentStudioBrief);
+    this._router.post(`/api/ai/content-studio/brief`,          OptionalAuthMiddleware, this.generateContentStudioBrief);
+    this._router.post(`${this._rootPath}/content-studio/outline`, OptionalAuthMiddleware, this.generateContentStudioOutline);
+    this._router.post(`/api/ai/content-studio/outline`,          OptionalAuthMiddleware, this.generateContentStudioOutline);
+    this._router.post(`${this._rootPath}/content-studio/intelligence`, OptionalAuthMiddleware, this.getContentStudioIntelligence);
+    this._router.post(`/api/ai/content-studio/intelligence`,          OptionalAuthMiddleware, this.getContentStudioIntelligence);
 
     // Sprint 3: Visual Intelligence, Decision Engine & Batch Pipeline
     this._router.post(`${this._rootPath}/visuals/classify`,       AuthMiddleware, this.classifyVisuals);

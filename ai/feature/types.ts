@@ -63,6 +63,11 @@ export const AI_FEATURE_IDS = [
   "diagram_generation",
   "content_enhancement",
   "image_enhancement",
+
+  // ── Content Studio ─────────────────────────────────────────────────────────
+  "content_studio_ideas",
+  "content_studio_brief",
+  "content_studio_outline",
 ] as const;
 
 export type AIFeatureId = (typeof AI_FEATURE_IDS)[number];
