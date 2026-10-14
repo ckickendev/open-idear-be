@@ -36,25 +36,37 @@ export class BriefGeneratorService {
         ? existingCategories.join(", ")
         : "None provided";
 
+    const systemPrompt = `You are an expert editorial planner for OpenIdear. Generate a structured Content Brief for the idea provided.
+Return ONLY valid JSON matching:
+{
+  "targetAudience": ["string", "string"],
+  "tone": "Practical" | "Professional" | "Beginner-friendly" | "Technical" | "Conversational" | "Data-driven" | "Opinionated" | "Educational",
+  "length": "Short — 1,000–1,500 words" | "Medium — 1,500–2,500 words" | "Long — 2,500–3,500 words" | "Deep Dive — 3,500–5,000 words",
+  "category": "string",
+  "objective": "Explain" | "Educate" | "Compare" | "Help users make a purchase decision" | "Solve a technical problem" | "Build topical authority" | "Generate SEO traffic"
+}`;
+
+    const userPrompt = `Title: ${idea.title}
+Hook: ${idea.hook}
+Content Type: ${idea.contentType}
+Category: ${idea.category}
+Target Audience Hint: ${idea.targetAudience}
+Difficulty: ${idea.difficulty}
+Search Intent: ${idea.searchIntent}
+Keywords: ${(idea.keywords || []).join(", ")}
+Available System Categories: ${categoriesHint}`;
+
     try {
       const facadeResult = await aiExecutionFacade.execute<ContentBrief>({
+        scope: "content_studio",
         featureId: "content_studio_brief",
         userId: options.userId,
-        prompt: {
-          name: CONTENT_STUDIO_BRIEF_PROMPT_NAME,
-          version: CONTENT_STUDIO_BRIEF_PROMPT_ACTIVE_VERSION,
-          variables: {
-            title: idea.title,
-            hook: idea.hook,
-            contentType: idea.contentType,
-            category: idea.category,
-            targetAudience: idea.targetAudience,
-            difficulty: idea.difficulty,
-            searchIntent: idea.searchIntent,
-            keywords: (idea.keywords || []).join(", "),
-            existingCategoriesHint: categoriesHint,
-          },
-        },
+        responseFormat: "json",
+        defaultModel: "fast",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
       });
 
       if (facadeResult.data && facadeResult.data.targetAudience) {
@@ -72,6 +84,7 @@ export class BriefGeneratorService {
   private async fallbackDirectGeneration(
     idea: any,
     categoriesHint: string
+  ): Promise<ContentBrief> {
     let provider;
     try {
       provider = providerRegistry.getDefault();
@@ -99,18 +112,18 @@ Search Intent: ${idea.searchIntent}
 Keywords: ${(idea.keywords || []).join(", ")}
 Available System Categories: ${categoriesHint}`;
 
-    const response = await provider.complete({
-      messages: [
+    const response = await provider.generateJSON<ContentBrief>(
+      [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.3,
-      maxTokens: 1000,
-    });
+      {
+        temperature: 0.3,
+        maxOutputTokens: 1500,
+      }
+    );
 
-    const text = response.content || "{}";
-    const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
-    return JSON.parse(cleanJson);
+    return response.data;
   }
 }
 

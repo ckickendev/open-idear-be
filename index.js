@@ -2,8 +2,9 @@ require("ts-node/register");
 require("dotenv").config();
 
 const { providerRegistry, GeminiProvider } = require("./ai");
-if (process.env.GEMINI_API_KEY) {
-  providerRegistry.register(new GeminiProvider(process.env.GEMINI_API_KEY.trim()));
+const geminiApiKey = (process.env.GEMINI_API_KEY || process.env["GEMINI_API_KEY "] || "").trim();
+if (geminiApiKey) {
+  providerRegistry.register(new GeminiProvider(geminiApiKey));
 }
 
 const {

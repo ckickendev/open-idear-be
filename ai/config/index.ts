@@ -139,6 +139,9 @@ export class AIConfigCenter {
    * Fetches the configuration schema for a specific scope.
    */
   get(scope: AIConfigScope): AIConfig {
+    if (!scope) {
+      return this.configs.get("content_studio") || this.configs.get("editor")!;
+    }
     const config = this.configs.get(scope);
     if (!config) {
       throw new Error(`AI configuration scope "${scope}" is not registered.`);

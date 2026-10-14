@@ -109,7 +109,7 @@ export class BatchVisualService {
           reason: "Section already contains visual representation.",
         });
 
-        rebuiltSections.push(`${headingLine}\n${sec.content}`);
+        rebuiltSections.push(`${headingLine}\n\n${sec.content.trim()}`);
         continue;
       }
 
@@ -130,7 +130,7 @@ export class BatchVisualService {
           reason: rec.reason || "Conceptual prose or syntax block; visual omitted.",
         });
 
-        rebuiltSections.push(`${headingLine}\n${sec.content}`);
+        rebuiltSections.push(`${headingLine}\n\n${sec.content.trim()}`);
         continue;
       }
 
@@ -252,8 +252,8 @@ export class BatchVisualService {
       }
 
       // Step 5: Format visual Markdown preview
-      const imageMarkdown = `\n\n![${sec.heading}](${insertedImageUrl})\n`;
-      const updatedSection = `${headingLine}${imageMarkdown}\n${sec.content.trim()}`;
+      const imageMarkdown = `\n\n![${sec.heading}](${insertedImageUrl})\n\n`;
+      const updatedSection = `${headingLine}${imageMarkdown}${sec.content.trim()}`;
       rebuiltSections.push(updatedSection);
     }
 

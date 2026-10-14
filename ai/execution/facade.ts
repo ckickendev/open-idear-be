@@ -54,8 +54,13 @@ export class ExecutionFacade {
     readonly featureId?: AIFeatureId | string;
     readonly userId?: string;
   }): Promise<ExecutionResult<T>> {
-    const config = aiConfigCenter.get(params.scope);
-    const policy = policyRegistry.get(params.scope);
+    const resolvedScope: AIConfigScope =
+      params.scope ||
+      (typeof params.featureId === "string" && params.featureId.includes("content_studio")
+        ? "content_studio"
+        : "editor");
+    const config = aiConfigCenter.get(resolvedScope);
+    const policy = policyRegistry.get(resolvedScope);
 
     let messages: AIMessage[];
     let promptVersion = params.promptVersion || "";

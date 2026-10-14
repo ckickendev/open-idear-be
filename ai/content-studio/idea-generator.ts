@@ -58,21 +58,42 @@ export class IdeaGeneratorService {
 
     let rawIdeas: ContentIdea[] = [];
 
+    const systemPrompt = `You are an editorial director and SEO strategist for OpenIdear. Generate ${numberOfIdeas} structured content ideas for the topic "${topic}" with goal "${contentGoal}".
+Ensure ideas match search intent, avoid duplicating existing content, and cover content gaps.
+Return ONLY valid JSON matching:
+{
+  "ideas": [
+    {
+      "id": "string",
+      "title": "string",
+      "hook": "string",
+      "contentType": "guide" | "comparison" | "tutorial" | "explainer" | "listicle" | "case_study" | "news",
+      "category": "string",
+      "targetAudience": "string",
+      "difficulty": "beginner" | "intermediate" | "advanced",
+      "searchIntent": "informational" | "commercial" | "transactional" | "navigational",
+      "keywords": ["string"]
+    }
+  ]
+}`;
+
+    const userPrompt = `Topic: ${topic}
+Content Goal: ${contentGoal}
+Number of Ideas: ${numberOfIdeas}
+Available Categories: ${categoriesHint}
+Existing Published Articles:\n${existingTitlesText}`;
+
     try {
       const facadeResult = await aiExecutionFacade.execute<{ ideas: ContentIdea[] }>({
+        scope: "content_studio",
         featureId: "content_studio_ideas",
         userId: options.userId,
-        prompt: {
-          name: CONTENT_STUDIO_IDEAS_PROMPT_NAME,
-          version: CONTENT_STUDIO_IDEAS_PROMPT_ACTIVE_VERSION,
-          variables: {
-            topic,
-            contentGoal,
-            numberOfIdeas: String(numberOfIdeas),
-            existingArticles: existingTitlesText,
-            existingCategoriesHint: categoriesHint,
-          },
-        },
+        responseFormat: "json",
+        defaultModel: "fast",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
       });
 
       if (facadeResult.data && Array.isArray(facadeResult.data.ideas)) {
@@ -243,6 +264,7 @@ export class IdeaGeneratorService {
     count: number,
     categoriesHint: string,
     existingArticles: string
+  ): Promise<ContentIdea[]> {
     let provider;
     try {
       provider = providerRegistry.getDefault();
@@ -274,19 +296,18 @@ Number of ideas: ${count}
 Categories hint: ${categoriesHint}
 Existing articles: ${existingArticles}`;
 
-    const response = await provider.complete({
-      messages: [
+    const response = await provider.generateJSON<{ ideas: ContentIdea[] }>(
+      [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.7,
-      maxTokens: 3000,
-    });
+      {
+        temperature: 0.7,
+        maxOutputTokens: 3000,
+      }
+    );
 
-    const text = response.content || "{}";
-    const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
-    const parsed = JSON.parse(cleanJson);
-    return Array.isArray(parsed.ideas) ? parsed.ideas : [];
+    return Array.isArray(response.data?.ideas) ? response.data.ideas : [];
   }
 
   private generateStrategicFallbackIdeas(

@@ -34,26 +34,50 @@ export class OutlineGeneratorService {
     const validated = OutlineGeneratorInputSchema.parse(input);
     const { idea, contentBrief } = validated;
 
+    const systemPrompt = `You are an expert technical editorial director and SEO content architect for OpenIdear.
+Generate a structured, high-value content outline based on the idea and brief.
+Return ONLY valid JSON matching:
+{
+  "title": "string",
+  "introduction": "string",
+  "sections": [
+    {
+      "id": "string",
+      "heading": "string",
+      "purpose": "string",
+      "keyPoints": ["string", "string", "string"]
+    }
+  ],
+  "conclusion": "string",
+  "faq": [
+    {
+      "question": "string",
+      "answerDirection": "string"
+    }
+  ]
+}`;
+
+    const userPrompt = `Title: ${idea.title}
+Hook: ${idea.hook}
+Content Type: ${idea.contentType}
+Category: ${idea.category}
+Search Intent: ${idea.searchIntent}
+Target Audience: ${(contentBrief.targetAudience || []).join(", ")}
+Tone: ${contentBrief.tone}
+Length: ${contentBrief.length}
+Objective: ${contentBrief.objective}`;
+
     try {
       const facadeResult = await aiExecutionFacade.execute<ContentOutline>({
+        scope: "content_studio",
         featureId: "content_studio_outline",
         userId: options.userId,
-        prompt: {
-          name: CONTENT_STUDIO_OUTLINE_PROMPT_NAME,
-          version: CONTENT_STUDIO_OUTLINE_PROMPT_ACTIVE_VERSION,
-          variables: {
-            title: idea.title,
-            hook: idea.hook,
-            contentType: idea.contentType,
-            category: idea.category,
-            keywords: (idea.keywords || []).join(", "),
-            searchIntent: idea.searchIntent,
-            targetAudience: (contentBrief.targetAudience || []).join(", "),
-            tone: contentBrief.tone,
-            length: contentBrief.length,
-            objective: contentBrief.objective,
-          },
-        },
+        responseFormat: "json",
+        defaultModel: "fast",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
       });
 
       if (facadeResult.data && Array.isArray(facadeResult.data.sections)) {
@@ -71,6 +95,7 @@ export class OutlineGeneratorService {
   private async fallbackDirectGeneration(
     idea: any,
     brief: any
+  ): Promise<ContentOutline> {
     let provider;
     try {
       provider = providerRegistry.getDefault();
@@ -111,18 +136,18 @@ Tone: ${brief.tone}
 Length: ${brief.length}
 Objective: ${brief.objective}`;
 
-    const response = await provider.complete({
-      messages: [
+    const response = await provider.generateJSON<ContentOutline>(
+      [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.4,
-      maxTokens: 4000,
-    });
+      {
+        temperature: 0.4,
+        maxOutputTokens: 4000,
+      }
+    );
 
-    const text = response.content || "{}";
-    const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
-    return JSON.parse(cleanJson);
+    return response.data;
   }
 }
 

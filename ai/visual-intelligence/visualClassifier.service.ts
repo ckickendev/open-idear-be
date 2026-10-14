@@ -304,9 +304,23 @@ export class VisualClassifierService {
       action = "search";
     }
 
+    const sanitizedTitle = cleanHeading
+      .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+      .replace(/^(?:công\s+cụ|tiện\s+ích|phần\s+mềm|bước|phần|mục|chương|bài|tool|step|section|part|chapter)\s*(?:[0-9ivx]+|[a-z])?[:\s\-–—.]+/i, "")
+      .replace(/^(?:[0-9]+(?:\.[0-9]+)*|[ivx]+)[.):\s\-–—]+/i, "")
+      .replace(/[:;.\-–—\s]+$/, "")
+      .trim() || cleanHeading;
+
+    const isHardwareContext =
+      /(hwinfo|gpu-z|cpu-z|afterburner|phần cứng|linh kiện|nhiệt độ|cảm biến|ép xung|cpu|gpu|ram|motherboard|telemetry)/i.test(
+        `${headingLower} ${contentLower}`
+      );
+
     const preset = bestMatch.suggestedPreset || "isometric";
-    const imagePrompt = `Modern ${preset} technical illustration of ${cleanHeading}, software engineering architecture, clean dark background`;
-    const searchQuery = `${cleanHeading} ${visualType === "product" ? "hardware photo" : "diagram architecture"}`;
+    const imagePrompt = isHardwareContext
+      ? `Modern ${preset} technical illustration of ${sanitizedTitle}, PC hardware telemetry and component diagnostics, clean high-tech composition`
+      : `Modern ${preset} technical illustration of ${sanitizedTitle}, software engineering architecture, clean dark background`;
+    const searchQuery = `${sanitizedTitle} ${visualType === "product" || isHardwareContext ? "hardware photo" : "diagram architecture"}`;
 
     return {
       heading: cleanHeading,
@@ -331,7 +345,13 @@ export class VisualClassifierService {
       return [];
     }
 
-    const lines = markdown.split(/\r?\n/);
+    // Pre-normalize: ensure headings glued to previous text are cleanly separated onto new lines
+    const sanitizedMarkdown = markdown
+      .replace(/\r\n/g, "\n")
+      .replace(/([^\n])\s*(#{1,6}\s+[^\n]+)/g, "$1\n\n$2")
+      .replace(/^(#{1,6}\s+[^\n]+)\n([^\n#])/gm, "$1\n\n$2");
+
+    const lines = sanitizedMarkdown.split("\n");
     const sections: Array<{
       heading: string;
       level: number;

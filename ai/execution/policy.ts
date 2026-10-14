@@ -16,6 +16,9 @@ export class PolicyRegistry {
   }
 
   get(scope: AIConfigScope): ExecutionPolicy {
+    if (!scope) {
+      return this.policies.get("content_studio") || this.policies.get("editor")!;
+    }
     const policy = this.policies.get(scope);
     if (!policy) {
       throw new Error(`Execution policy for scope "${scope}" is not registered.`);
