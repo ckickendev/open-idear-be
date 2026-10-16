@@ -23,4 +23,6 @@ export { PublisherAgent, publisherAgent, type PublisherAgentInput, type Publishe
 export { SeoAgent, seoAgent, type SeoAgentInput, type SeoAgentOutput } from "./seo.agent";
 export { InternalLinkAgent, type InternalLinkInput } from "./internalLink.agent";
 export { InternalLinkSchema, type InternalLinkOutput } from "./internalLink.schema";
+export { TranslatorAgent, type TranslatorInput } from "./translator.agent";
+export { TranslatorSchema, type TranslatorOutput } from "./translator.schema";
 export * from "./copilot.schema";

@@ -102,16 +102,29 @@ export class PollinationsImageGenerator implements ImageGenerator {
         ? "3d technical render"
         : "isometric 3d illustration";
 
-    // Strip parentheses, brackets, special chars, multiple spaces
-    const clean = rawPrompt
-      .replace(/[()[\]{}"'`]/g, " ")
-      .replace(/[^a-zA-Z0-9\s,-]/g, " ")
-      .replace(/\s+/g, " ")
+    // Extract core subject from prompt by stripping boilerplate prefixes
+    let subject = rawPrompt
+      .replace(/^(?:create|generate)\s+a\s+(?:clean\s+)?(?:technical\s+)?(?:isometric\s+)?(?:illustration|diagram|workflow|comparison|chart|blueprint|ui\s+dashboard\s+mockup)\s+(?:explaining|showing|illustrating|for)\s+/i, "")
+      .replace(/^clean modern isometric technical illustration of\s+/i, "")
+      .replace(/^an?\s+|^the\s+/i, "")
+      .replace(/\s+hardware diagnostics:?.*$/is, "")
+      .replace(/:\s*isometric 30-degree.*$/is, "")
+      .replace(/:\s*displaying real-time.*$/is, "")
+      .replace(/:\s*modern developer.*$/is, "")
       .trim();
 
-    // Keep core description concise (max 90 chars) for stable path routing
-    const core = clean.slice(0, 90).trim();
-    return `${core}, ${styleKeyword}`;
+    if (!subject || subject.length < 3) {
+      subject = rawPrompt.slice(0, 80);
+    }
+
+    // Clean special chars but preserve unicode letters (including Vietnamese letters)
+    const clean = subject
+      .replace(/[()[\]{}"'`~@#$%^&*+=|\\/<>]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 100);
+
+    return `${clean}, ${styleKeyword}, clean high-tech composition, dark background`;
   }
 }
 

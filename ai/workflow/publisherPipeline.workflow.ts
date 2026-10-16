@@ -36,6 +36,8 @@ export interface PublisherPipelineInput {
   readonly category?: string;
   /** Optional extra instructions for the writer. */
   readonly additionalInstructions?: string;
+  /** Target language/locale (e.g. 'en', 'vi'). Defaults to 'en'. */
+  readonly language?: string;
 }
 
 export interface PublisherPipelineResult {
@@ -82,7 +84,11 @@ export class PublisherPipelineWorkflow {
     input: PublisherPipelineInput,
     signal?: AbortSignal
   ): Promise<PublisherPipelineResult> {
-    const options = { signal };
+    const language = input.language === "vi" ? "vi" : "en";
+    const options = {
+      signal,
+      context: { language },
+    };
 
     // ── Stage 1: Planner ──────────────────────────────────────────────────────
     const plannerInput: PlannerInput = {
@@ -106,9 +112,7 @@ export class PublisherPipelineWorkflow {
         plan,
         additionalInstructions: input.additionalInstructions ?? "",
       },
-      {
-        ...options,
-      }
+      options
     );
 
     if (!writerResult.success || !writerResult.data) {

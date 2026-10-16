@@ -41,6 +41,7 @@ export {
 export {
   type AIContext,
   AIContextCollector,
+  getLanguageInstructions,
   type EditorContext,
   EditorContextBuilder,
   type PublishingContext,
@@ -176,6 +177,10 @@ export {
   exampleAgent,
   ReviewAgent,
   reviewAgent,
+  TranslatorAgent,
+  type TranslatorInput,
+  TranslatorSchema,
+  type TranslatorOutput,
 } from "./agent";
 
 // ─── Workflow Layer ───────────────────────────────────────────────────────────
@@ -184,6 +189,7 @@ export {
   type WorkflowStage,
   CreateArticlePlanningWorkflow,
   CreateArticleWorkflow,
+  ArticleTranslationWorkflow,
   AssetUploadWorkflow,
   type AssetUploadInput,
   EditingWorkflow,

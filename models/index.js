@@ -37,7 +37,7 @@ const { ReadingProgress } = require("./readingProgress.schema");
 const { Collection } = require("./collection.schema");
 const { CollectionItem } = require("./collectionItem.schema");
 const { VisualAnalytics } = require("./visualAnalytics.schema");
-
+const PostTranslation = require("./postTranslation.schema");
 
 module.exports = {
   User,
@@ -79,5 +79,6 @@ module.exports = {
   Collection,
   CollectionItem,
   VisualAnalytics,
+  PostTranslation,
 };
 

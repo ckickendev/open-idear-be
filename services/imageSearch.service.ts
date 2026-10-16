@@ -156,6 +156,50 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       attributionUrl: "https://unsplash.com/photos/1551288049-bebda4e38f71",
       sourceProvider: "unsplash",
     },
+    {
+      keywords: ["gpu", "graphics", "rtx", "nvidia", "amd", "geforce", "bottleneck", "vram", "pcb", "cuda", "gaming", "hardware", "video card"],
+      url: "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=400&q=80",
+      title: "High Performance Dedicated GPU (Graphics Card)",
+      alt: "Modern dedicated graphics card PCIe unit with twin cooling fans and heatsink",
+      author: "Christian Wiediger",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/WkfDrhxDMC8",
+      sourceProvider: "unsplash",
+    },
+    {
+      keywords: ["cpu", "processor", "intel", "amd", "ryzen", "core", "silicon", "chip", "semiconductor", "microprocessor", "socket", "bottleneck"],
+      url: "https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=400&q=80",
+      title: "Multi-Core CPU Processor & Silicon Die",
+      alt: "High-speed multi-core computer processor chip on motherboard circuit board",
+      author: "Sajjad Zabihi",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/I-lAeb_6t2E",
+      sourceProvider: "unsplash",
+    },
+    {
+      keywords: ["motherboard", "circuit", "pc", "pcb", "hardware", "ram", "bus", "electronics", "components", "desktop"],
+      url: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=400&q=80",
+      title: "Desktop Motherboard Architecture & Component Bus",
+      alt: "Computer motherboard printed circuit board with chipset, capacitors and traces",
+      author: "Alexandre Debiève",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/FO7JIlwjOtU",
+      sourceProvider: "unsplash",
+    },
+    {
+      keywords: ["ram", "memory", "ddr4", "ddr5", "vram", "dimm", "speed", "frequency", "bandwidth"],
+      url: "https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=400&q=80",
+      title: "High-Speed Memory (RAM) Modules",
+      alt: "High performance dual-channel desktop RAM memory sticks mounted in motherboard slots",
+      author: "Harrison Broadbent",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/lzjl4K8CD28",
+      sourceProvider: "unsplash",
+    },
   ];
 
   async search(optionsOrQuery: ImageSearchOptions | string, legacyLimit?: number): Promise<NormalizedImageResult[]> {
@@ -220,6 +264,10 @@ class ImageSearchService {
     try {
       const { pexelsProvider } = require("./imageSearch/pexels.provider");
       providers.push(pexelsProvider);
+    } catch {}
+    try {
+      const { wikimediaProvider } = require("./imageSearch/wikimedia.provider");
+      providers.push(wikimediaProvider);
     } catch {}
     return providers;
   }

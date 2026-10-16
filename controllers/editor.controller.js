@@ -47,11 +47,30 @@ class EditorController extends Controller {
 
     const workflow = new EditingWorkflow();
 
+    const targetLocale = (
+      req.body.locale ||
+      req.body.targetLanguage ||
+      req.body.language ||
+      (context && (context.targetLanguage || context.locale || context.language)) ||
+      req.headers["x-locale"] ||
+      "en"
+    ).toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+
     // Execute the workflow, transferring context and feature telemetry metadata
     const result = await workflow.execute(
-      { actionId: feature.id, payload: context },
+      {
+        actionId: feature.id,
+        payload: {
+          ...(context || {}),
+          locale: validatedLocale,
+          targetLanguage: validatedLocale,
+          language: validatedLocale,
+        },
+      },
       {
         context: {
+          language: validatedLocale,
           ...(context || {}),
           featureId: feature.id,
           telemetryKey: feature.telemetryKey,

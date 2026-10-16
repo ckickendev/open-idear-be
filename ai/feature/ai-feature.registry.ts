@@ -241,6 +241,17 @@ export class AIFeatureRegistry {
         tags: ["authoring", "streaming"],
       },
       {
+        id: "article_translate",
+        name: "Article Translator",
+        description: "Translate complete technical articles between English and Vietnamese preserving code and markdown structure.",
+        category: "authoring",
+        estimatedCreditCost: 20,
+        telemetryKey: "ai.authoring.translate",
+        endpoint: "/ai/v1/translate",
+        defaultModel: "quality",
+        tags: ["authoring", "translation", "bilingual"],
+      },
+      {
         id: "content_structure",
         name: "Content Structure Pass",
         description: "Analyze and parse markdown text into rich structured content blocks.",
@@ -540,6 +551,7 @@ export class AIFeatureRegistry {
       ["writer", "article_writer"],
       ["stream", "article_writer_stream"],
       ["structure", "content_structure"],
+      ["translate", "article_translate"],
 
       // Publisher aliases
       ["publisher", "publish_by_ai"],

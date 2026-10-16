@@ -146,6 +146,20 @@ const postSchema = new Schema(
       type: String,
       default: "1.0",
     },
+
+    // ─── Bilingual Architecture Fields (Sprint 1) ──────────────────────
+    // Parent post tracks default locale and available translation locales.
+    // Localized content (title, slug, content, blocks, seo, published)
+    // is authoritatively stored in the PostTranslation collection.
+    defaultLocale: {
+      type: String,
+      enum: ["en", "vi"],
+      default: "en",
+    },
+    availableLocales: {
+      type: [String],
+      default: ["en"],
+    },
   },
   {
     versionKey: '_somethingElse',

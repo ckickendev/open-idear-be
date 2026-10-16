@@ -2,7 +2,7 @@ const express = require("express");
 const { Controller } = require("../core");
 const asyncHandler = require("../utils/asyncHandler");
 const { AuthMiddleware, OptionalAuthMiddleware } = require("../middlewares/auth.middleware");
-const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent, aiFeatureRegistry, ideaGeneratorService, briefGeneratorService, outlineGeneratorService, contentInventoryService } = require("../ai");
+const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, ArticleTranslationWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent, aiFeatureRegistry, ideaGeneratorService, briefGeneratorService, outlineGeneratorService, contentInventoryService } = require("../ai");
 const { ContentStructureService } = require("../ai/content/contentStructure.service");
 const { PublisherPipelineWorkflow } = require("../ai/workflow/publisherPipeline.workflow");
 const { aiImageGenerationOrchestratorService } = require("../services/aiImageGeneration.services");
@@ -74,6 +74,9 @@ class AIController extends Controller {
     }
 
     // 2. Resolve feature and execute planning workflow
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+
     const feature = aiFeatureRegistry.get("seo_outline");
     const workflow = new CreateArticlePlanningWorkflow();
     const result = await workflow.execute({
@@ -83,9 +86,10 @@ class AIController extends Controller {
       tone: tone.trim(),
       length: length.trim(),
       category: category.trim(),
+      language: validatedLocale,
     }, {
       context: {
-        language: req.body.language || "en",
+        language: validatedLocale,
         userPreference: req.body.userPreference || "",
         featureId: feature.id,
         telemetryKey: feature.telemetryKey,
@@ -125,14 +129,18 @@ class AIController extends Controller {
     }
 
     // 2. Resolve feature and execute writing workflow
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+
     const feature = aiFeatureRegistry.get("article_writer");
     const workflow = new CreateArticleWorkflow();
     const result = await workflow.execute({
       plan,
       additionalInstructions: additionalInstructions || "",
+      language: validatedLocale,
     }, {
       context: {
-        language: req.body.language || "en",
+        language: validatedLocale,
         userPreference: req.body.userPreference || "",
         featureId: feature.id,
         telemetryKey: feature.telemetryKey,
@@ -188,18 +196,21 @@ class AIController extends Controller {
     });
 
     // 3. Instantiate WriterAgent
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
     const agent = new WriterAgent();
 
     try {
       const stream = agent.executeStream({
         plan,
         additionalInstructions: additionalInstructions || "",
+        language: validatedLocale,
       }, {
         promptVersionOverride: "v2", // Force text-only markdown prompt (writer.v2.md)
         maxTokensOverride: 8192, // High token output cap for full 15-section articles
         signal: abortController.signal,
         context: {
-          language: req.body.language || "en",
+          language: validatedLocale,
           userPreference: req.body.userPreference || "",
         }
       });
@@ -219,6 +230,79 @@ class AIController extends Controller {
       res.write(`data: ${JSON.stringify({ error: err.message || "Streaming failed" })}\n\n`);
       res.end();
     }
+  });
+
+  /**
+   * POST /ai/v1/translate
+   * Translates an article between English and Vietnamese.
+   * Preserves code blocks, headings, markdown tables, and media references.
+   */
+  translateArticle = asyncHandler(async (req, res) => {
+    const {
+      sourceLocale = "en",
+      targetLocale = "vi",
+      sourceTitle,
+      sourceContent,
+      sourceDescription = "",
+      additionalInstructions = "",
+    } = req.body;
+
+    if (!sourceTitle || !sourceTitle.trim()) {
+      return res.status(400).json({ error: "sourceTitle is required" });
+    }
+    if (!sourceContent || !sourceContent.trim()) {
+      return res.status(400).json({ error: "sourceContent is required" });
+    }
+
+    const validLocales = ["en", "vi"];
+    const src = String(sourceLocale).toLowerCase().trim();
+    const tgt = String(targetLocale).toLowerCase().trim();
+
+    if (!validLocales.includes(src)) {
+      return res.status(400).json({ error: `Invalid sourceLocale "${sourceLocale}". Must be "en" or "vi".` });
+    }
+    if (!validLocales.includes(tgt)) {
+      return res.status(400).json({ error: `Invalid targetLocale "${targetLocale}". Must be "en" or "vi".` });
+    }
+    if (src === tgt) {
+      return res.status(400).json({ error: "sourceLocale and targetLocale must be different." });
+    }
+
+    const feature = aiFeatureRegistry.get("article_translate");
+    const workflow = new ArticleTranslationWorkflow();
+    const result = await workflow.execute(
+      {
+        sourceLocale: src,
+        targetLocale: tgt,
+        sourceTitle: sourceTitle.trim(),
+        sourceContent: sourceContent.trim(),
+        sourceDescription: sourceDescription.trim(),
+        additionalInstructions: additionalInstructions.trim(),
+      },
+      {
+        context: {
+          language: tgt,
+          featureId: feature.id,
+          telemetryKey: feature.telemetryKey,
+        },
+      }
+    );
+
+    res.json({
+      status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
+      data: {
+        ...result,
+        sourceLocale: src,
+        targetLocale: tgt,
+      },
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -1215,6 +1299,7 @@ class AIController extends Controller {
     this._router.post(`${this._rootPath}/planner`,            AuthMiddleware, this.planArticle);
     this._router.post(`${this._rootPath}/writer`,             AuthMiddleware, this.writeArticle);
     this._router.post(`${this._rootPath}/writer/stream`,      AuthMiddleware, this.streamArticle);
+    this._router.post(`${this._rootPath}/translate`,          AuthMiddleware, this.translateArticle);
     this._router.post(`${this._rootPath}/structure`,          AuthMiddleware, this.structureArticle);
     this._router.post(`${this._rootPath}/enhance`,            AuthMiddleware, this.enhanceContent);
     this._router.post(`${this._rootPath}/enhance-images`,     AuthMiddleware, this.enhanceImages);

@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const { Controller } = require("../core");
 const mediaAssetService = require("../services/mediaAsset.services");
 const mediaFolderService = require("../services/mediaFolder.services");
@@ -303,6 +304,9 @@ class MediaAssetController extends Controller {
 
   // GET /media/v2/:id/usage
   getUsage = asyncHandler(async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.json({ status: "success", data: { usedIn: [], usageCount: 0 } });
+    }
     const usage = await mediaAssetService.getUsage(
       req.params.id,
       req.userInfo._id
@@ -317,6 +321,10 @@ class MediaAssetController extends Controller {
       return res
         .status(400)
         .json({ error: "entityType and entityId are required" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(200).json({ status: "skipped", message: "Not a persistent media asset" });
     }
 
     await mediaAssetService.addUsage(
@@ -335,6 +343,10 @@ class MediaAssetController extends Controller {
       return res
         .status(400)
         .json({ error: "entityType and entityId are required" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(200).json({ status: "skipped", message: "Not a persistent media asset" });
     }
 
     await mediaAssetService.removeUsage(req.params.id, entityType, entityId);

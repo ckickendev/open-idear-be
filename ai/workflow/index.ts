@@ -27,6 +27,10 @@ export {
 } from "./createArticle.workflow";
 
 export {
+  ArticleTranslationWorkflow,
+} from "./translation.workflow";
+
+export {
   EditingWorkflow,
   type EditingWorkflowInput,
 } from "./editing.workflow";

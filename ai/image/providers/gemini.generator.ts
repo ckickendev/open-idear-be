@@ -200,18 +200,38 @@ export class GeminiImageGenerator implements ImageGenerator {
       styleLabel = "3D PRECISION ENGINEERING";
     }
 
-    const cleanTitle = this.escapeXml(
-      prompt
-        .replace(/^(an? |the |illustration of |diagram of )/i, "")
-        .slice(0, 75)
-        .trim()
-    );
+    const isHardware = /(gpu|cpu|hardware|linh kiện|bottleneck|motherboard|ram|rtx|geforce|radeon)/i.test(prompt);
 
-    const isChart = /chart|graph|comparison|vs|efficiency|tdp|benchmark|power/i.test(prompt);
+    // Extract actual subject from prompt:
+    let extractedSubject = prompt
+      .replace(/^(?:clean modern |architectural engineering |modern flat vector |3d technical )?[a-z\s_-]+ of\s+/i, "")
+      .replace(/^(?:create|generate)\s+a\s+(?:clean\s+)?(?:technical\s+)?(?:isometric\s+)?(?:illustration|diagram|workflow|comparison|chart|blueprint|ui\s+dashboard\s+mockup)\s+(?:explaining|showing|illustrating|for)\s+/i, "")
+      .replace(/^an?\s+|^the\s+/i, "")
+      .replace(/\s+hardware diagnostics:?.*$/is, "")
+      .replace(/:\s*isometric 30-degree.*$/is, "")
+      .replace(/:\s*displaying real-time.*$/is, "")
+      .replace(/:\s*modern developer.*$/is, "")
+      .replace(/:\s*left vs right.*$/is, "")
+      .replace(/:\s*comparative horizontal.*$/is, "")
+      .replace(/:\s*clean syntax hierarchy.*$/is, "")
+      .replace(/:\s*volumetric geometric.*$/is, "")
+      .replace(/:\s*clean vector iconography.*$/is, "")
+      .trim();
+
+    if (!extractedSubject || extractedSubject.length < 3) {
+      extractedSubject = prompt.slice(0, 70);
+    }
+    const cleanTitle = this.escapeXml(extractedSubject.slice(0, 75).trim());
+
+    // Only treat as a chart if the style preset is chart or flat_vector AND the prompt specifically requests benchmark metrics/data charts
+    const isChart =
+      (normStyle === "chart" || normStyle === "flat_vector") &&
+      /\b(?:data chart|bar chart|benchmark data|p99 latency|throughput metrics|horizontal benchmark)\b/i.test(prompt) &&
+      !/\bisometric\b/i.test(prompt);
 
     const svg = isChart
       ? `
-<svg width="1200" height="675" viewBox="0 0 1200 675" xmlns="http://www.w3.org/2000/svg">
+<svg width="1200" height="675" viewBox="0 0 1200 675" xmlns="http://www.w3.org/2000/svg" data-seed="${seed}">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="${bgGradientStart}"/>
@@ -247,7 +267,7 @@ export class GeminiImageGenerator implements ImageGenerator {
       ${cleanTitle}
     </text>
     <text y="48" font-family="monospace" font-size="12" fill="#94a3b8">
-      PRESET: ${normStyle.toUpperCase()} • GENERATIONAL POWER EFFICIENCY (WATTS / LOWER IS BETTER)
+      PRESET: ${normStyle.toUpperCase()} • SEED: ${seed} • OPENIDEAR DATA BENCHMARK
     </text>
   </g>
 
@@ -351,16 +371,19 @@ export class GeminiImageGenerator implements ImageGenerator {
       <polygon points="0,-60 60,-25 60,35 0,70 -60,35 -60,-25" fill="#ffffff" fill-opacity="0.1" stroke="${accentColor}" stroke-width="1.5"/>
       <circle cx="0" cy="5" r="14" fill="${accentColor}" fill-opacity="0.8"/>
       <circle cx="0" cy="5" r="6" fill="#ffffff"/>
+      <text y="-75" font-family="monospace" font-size="11" font-weight="700" letter-spacing="1" fill="#f8fafc">${isHardware ? "GPU / PROCESSING DIE" : "CORE PROCESSING SYSTEM"}</text>
     </g>
 
     <!-- Left & Right Satellite Nodes -->
     <g transform="translate(-180, -70)">
       <polygon points="0,-30 35,-10 35,20 0,40 -35,20 -35,-10" fill="${primaryColor}" fill-opacity="0.15" stroke="${primaryColor}" stroke-width="1.5"/>
       <circle cx="0" cy="5" r="5" fill="${primaryColor}"/>
+      <text y="38" font-family="monospace" font-size="9" font-weight="600" letter-spacing="0.5" fill="#94a3b8">${isHardware ? "CPU HOST INTERFACE" : "INGESTION NODE"}</text>
     </g>
     <g transform="translate(180, 70)">
       <polygon points="0,-30 35,-10 35,20 0,40 -35,20 -35,-10" fill="${accentColor}" fill-opacity="0.15" stroke="${accentColor}" stroke-width="1.5"/>
       <circle cx="0" cy="5" r="5" fill="${accentColor}"/>
+      <text y="38" font-family="monospace" font-size="9" font-weight="600" letter-spacing="0.5" fill="#94a3b8">${isHardware ? "PCIE BUS / MEMORY" : "PERSISTENCE STORE"}</text>
     </g>
 
     <!-- Style Badge -->

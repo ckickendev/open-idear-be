@@ -134,6 +134,13 @@ export class ImageGenerationService {
    */
   public enhancePromptWithPreset(prompt: string, style?: string): string {
     const cleanPrompt = (prompt || "").trim();
+
+    // If prompt is already formulated with explicit professional synthesis instructions, avoid double-wrapping
+    if (/^(?:create|generate)\s+a\s+(?:clean\s+)?(?:technical\s+)?(?:isometric\s+)?(?:illustration|diagram|workflow|comparison|chart|blueprint|ui\s+dashboard|code\s+architecture)\b/i.test(cleanPrompt) ||
+        /^(?:clean modern|architectural engineering|modern flat vector|3d technical)\b/i.test(cleanPrompt)) {
+      return cleanPrompt;
+    }
+
     const normalized = this.normalizeStyle(style);
     const modifier = ImageGenerationService.PRESET_MODIFIERS[normalized];
 
@@ -441,40 +448,67 @@ export class ImageGenerationService {
         let savedAsset = assetData;
         if (mongoose.connection.readyState === 1) {
           try {
-            const created = await Asset.create(assetData);
-            savedAsset = created.toObject();
+            // First check if an asset with this exact content hash already exists for this owner
+            const existing = await Asset.findOne({
+              ownerId: effectiveUserId,
+              hash: fileHash,
+            });
 
-            // Sync to MediaAsset
-            try {
-              await MediaAsset.create({
-                _id: assetId,
-                user: effectiveUserId,
-                originalFilename: `${baseName}.png`,
-                mimeType: result.mimeType || "image/png",
-                fileHash,
-                type: "image",
-                urls: {
-                  original: url,
-                  thumbnail_md: thumbnailUrl,
-                  thumbnail_sm: thumbnailUrl,
-                },
-                dimensions: { width: 1200, height: 675 },
-                fileSize: result.buffer.length,
-                provider: "cloudinary",
-                altText: assetData.alt,
-                description: assetData.description,
-                tags: assetData.tags,
-                aiMetadata: {
-                  prompt: cleanPrompt,
-                  model: result.model,
-                  generatedAt: new Date(),
-                },
-              });
-            } catch (mErr: any) {
-              // Silently ignore MediaAsset sync warnings in test/offline
+            if (existing) {
+              // Existing asset found with identical content hash, reuse it directly
+              savedAsset = existing.toObject();
+            } else {
+              const created = await Asset.create(assetData);
+              savedAsset = created.toObject();
+
+              // Sync to MediaAsset
+              try {
+                await MediaAsset.create({
+                  _id: assetId,
+                  user: effectiveUserId,
+                  originalFilename: `${baseName}.png`,
+                  mimeType: result.mimeType || "image/png",
+                  fileHash,
+                  type: "image",
+                  urls: {
+                    original: url,
+                    thumbnail_md: thumbnailUrl,
+                    thumbnail_sm: thumbnailUrl,
+                  },
+                  dimensions: { width: 1200, height: 675 },
+                  fileSize: result.buffer.length,
+                  provider: "cloudinary",
+                  altText: assetData.alt,
+                  description: assetData.description,
+                  tags: assetData.tags,
+                  aiMetadata: {
+                    prompt: cleanPrompt,
+                    model: result.model,
+                    generatedAt: new Date(),
+                  },
+                });
+              } catch (mErr: any) {
+                // Silently ignore MediaAsset sync warnings in test/offline
+              }
             }
           } catch (dbErr: any) {
-            console.warn("[ImageGenerationService] Asset DB persistence fallback:", dbErr.message);
+            if (dbErr.code === 11000) {
+              try {
+                const existingDup = await Asset.findOne({
+                  ownerId: effectiveUserId,
+                  hash: fileHash,
+                });
+                if (existingDup) {
+                  savedAsset = existingDup.toObject();
+                } else {
+                  console.warn("[ImageGenerationService] Asset DB persistence fallback:", dbErr.message);
+                }
+              } catch {
+                console.warn("[ImageGenerationService] Asset DB persistence fallback:", dbErr.message);
+              }
+            } else {
+              console.warn("[ImageGenerationService] Asset DB persistence fallback:", dbErr.message);
+            }
           }
         }
 

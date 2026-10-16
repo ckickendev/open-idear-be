@@ -34,6 +34,7 @@ export const AI_FEATURE_IDS = [
   // ── Authoring & Core Workflows ─────────────────────────────────────────────
   "article_writer",
   "article_writer_stream",
+  "article_translate",
   "content_structure",
 
   // ── Editor / Copilot Actions ───────────────────────────────────────────────

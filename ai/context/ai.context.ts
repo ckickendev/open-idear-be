@@ -132,20 +132,43 @@ export class AIContextCollector {
    * Formats the context fields as a clean, standardized Markdown list
    * ready to be injected into a prompt block.
    */
-  static formatToMarkdown(context: AIContext): string {
+  static formatToMarkdown(context: Partial<AIContext>): string {
     const lines: string[] = [];
+    const lang = (context?.language || "en").toLowerCase();
+    const isVi = lang === "vi" || lang.startsWith("vi");
 
-    lines.push(`- **Target Language**: ${context.language}`);
-    if (context.topic) lines.push(`- **Topic**: ${context.topic}`);
-    if (context.tone) lines.push(`- **Tone**: ${context.tone}`);
-    if (context.audience) lines.push(`- **Audience**: ${context.audience}`);
-    if (context.category) lines.push(`- **Category**: ${context.category}`);
-    if (context.length) lines.push(`- **Length**: ${context.length}`);
-    if (context.userPreference) lines.push(`- **User Writing Preference**: ${context.userPreference}`);
-    if (context.additionalInstructions) {
+    lines.push(`# TARGET LANGUAGE & LOCALIZATION RULES`);
+    if (isVi) {
+      lines.push(`- **Target Language**: Vietnamese (Tiếng Việt)`);
+      lines.push(`- **Language Instructions**: ${getLanguageInstructions("vi")}`);
+    } else {
+      lines.push(`- **Target Language**: English (en)`);
+      lines.push(`- **Language Instructions**: ${getLanguageInstructions("en")}`);
+    }
+
+    if (context?.topic) lines.push(`- **Topic**: ${context.topic}`);
+    if (context?.tone) lines.push(`- **Tone**: ${context.tone}`);
+    if (context?.audience) lines.push(`- **Audience**: ${context.audience}`);
+    if (context?.category) lines.push(`- **Category**: ${context.category}`);
+    if (context?.length) lines.push(`- **Length**: ${context.length}`);
+    if (context?.userPreference) lines.push(`- **User Writing Preference**: ${context.userPreference}`);
+    if (context?.additionalInstructions) {
       lines.push(`- **Additional Instructions**: ${context.additionalInstructions}`);
     }
 
     return lines.join("\n");
   }
 }
+
+/**
+ * Returns centralized language instructions for prompt construction.
+ */
+export function getLanguageInstructions(locale?: string): string {
+  const normalized = (locale || "en").toLowerCase();
+  const isVi = normalized === "vi" || normalized.startsWith("vi");
+  if (isVi) {
+    return "Generate natural, technically accurate Vietnamese (Tiếng Việt). Preserve code blocks, inline code, identifiers, API names, command-line instructions, and library names. Retain English technical terms in parentheses when it improves clarity (e.g., 'bộ nhớ đệm (cache)', 'đồng thuận (consensus)'). Avoid awkward literal translation. Preserve the requested tone, audience, length, and article objective.";
+  }
+  return "Generate natural technical English. Preserve correct technical terminology, code structures, and architecture semantics.";
+}
+
