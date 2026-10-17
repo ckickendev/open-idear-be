@@ -61,6 +61,7 @@ async function migratePostTranslations() {
       skippedEmpty: 0,
       slugCollisions: 0,
       errors: 0,
+      recordsRequiringManualReview: [],
     };
 
     const seenSlugsByLocale = {
@@ -88,6 +89,11 @@ async function migratePostTranslations() {
       if (!title || !rawContent) {
         console.warn(`⚠️  [SKIP EMPTY] Post ID "${post._id}" is missing title or content.`);
         stats.skippedEmpty++;
+        stats.recordsRequiringManualReview.push({
+          postId: post._id ? post._id.toString() : "unknown",
+          slug: slug || "(none)",
+          reason: "Missing title or content (Skipped)",
+        });
         continue;
       }
 
@@ -110,20 +116,28 @@ async function migratePostTranslations() {
       }
 
       // Check for slug collision within the target locale
+      let finalSlug = slug;
       if (seenSlugsByLocale[detectedLocale].has(slug)) {
+        finalSlug = `${slug}-${post._id.toString().slice(-6)}`;
         console.warn(
-          `⚠️  [SLUG COLLISION] Slug "${slug}" already exists for locale "${detectedLocale}" (Post ID: ${post._id}).`
+          `⚠️  [SLUG COLLISION RESOLVED] Slug "${slug}" collision detected for locale "${detectedLocale}". Auto-disambiguated to "${finalSlug}" (Post ID: ${post._id}).`
         );
         stats.slugCollisions++;
-      } else {
-        seenSlugsByLocale[detectedLocale].add(slug);
+        stats.recordsRequiringManualReview.push({
+          postId: post._id.toString(),
+          originalSlug: slug,
+          resolvedSlug: finalSlug,
+          locale: detectedLocale,
+          reason: "Duplicate slug in locale auto-disambiguated",
+        });
       }
+      seenSlugsByLocale[detectedLocale].add(finalSlug);
 
       const translationDoc = {
         postId: post._id,
         locale: detectedLocale,
         title,
-        slug,
+        slug: finalSlug,
         description: (post.description || "").trim(),
         content: post.content || rawText,
         text: post.text || title,
@@ -146,14 +160,15 @@ async function migratePostTranslations() {
     }
 
     console.log("-----------------------------------------------------------------");
-    console.log("📊 Migration Pre-Check Summary:");
-    console.log(`   - Total Posts Scanned        : ${stats.scanned}`);
-    console.log(`   - Already Migrated           : ${stats.alreadyMigrated}`);
-    console.log(`   - Pending Migration          : ${stats.toMigrate}`);
-    console.log(`   - Classified as English (en) : ${stats.detectedEn}`);
+    console.log("📊 Migration Pre-Check Summary & Reconciliation Preview:");
+    console.log(`   - Total Posts Scanned          : ${stats.scanned}`);
+    console.log(`   - Already Migrated (Unchanged) : ${stats.alreadyMigrated}`);
+    console.log(`   - Pending Migration            : ${stats.toMigrate}`);
+    console.log(`   - Classified as English (en)   : ${stats.detectedEn}`);
     console.log(`   - Classified as Vietnamese (vi): ${stats.detectedVi}`);
-    console.log(`   - Skipped (Empty / Missing)  : ${stats.skippedEmpty}`);
-    console.log(`   - Slug Collisions Detected   : ${stats.slugCollisions}`);
+    console.log(`   - Skipped (Empty / Missing)    : ${stats.skippedEmpty}`);
+    console.log(`   - Slug Collisions Disambiguated: ${stats.slugCollisions}`);
+    console.log(`   - Records for Manual Review    : ${stats.recordsRequiringManualReview.length}`);
     console.log("-----------------------------------------------------------------\n");
 
     if (isDryRun) {

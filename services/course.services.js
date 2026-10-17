@@ -1,8 +1,10 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
 const { NotFoundException, BadRequestException, ForbiddenException, ServerException } = require("../exceptions");
-const { Course, Lesson, Chapter, Review, Enrollment, User, CategoryCourse } = require("../models");
+const { Course, Lesson, Chapter, Review, Enrollment, User, CategoryCourse, Media } = require("../models");
 const { default: slugify } = require("slugify");
+const cloudinary = require("../utils/cloudinary");
+const axios = require("axios");
 
 class CourseService extends Service {
     async findCourses({ keyword, category, status, minPrice, maxPrice, sort, page = 1, limit = 10 }) {
@@ -69,10 +71,11 @@ class CourseService extends Service {
                     path: 'lessons',
                     match: { del_flag: 0 },
                     options: { sort: { order: 1 } },
-                    populate: { path: 'media', select: 'url type cloudflareId' }
+                    populate: { path: 'media', select: 'url type cloudflareId duration' }
                 }
             })
             .populate('thumbnail', 'url')
+            .populate('category', 'name slug')
             .populate('topics', 'name slug');
 
         if (!course) throw new NotFoundException("Course not found");
@@ -99,10 +102,11 @@ class CourseService extends Service {
                     path: 'lessons',
                     match: { del_flag: 0 },
                     options: { sort: { order: 1 } },
-                    populate: { path: 'media', select: 'url type cloudflareId' }
+                    populate: { path: 'media', select: 'url type cloudflareId duration' }
                 }
             })
             .populate('thumbnail', 'url')
+            .populate('category', 'name slug')
             .populate('topics', 'name slug');
 
         if (!course) throw new NotFoundException("Course not found");
@@ -214,10 +218,18 @@ class CourseService extends Service {
     async deleteChapter(chapterId, userId) {
         const chapter = await this.verifyChapterOwnership(chapterId, userId);
 
+        // Delete media assets for all lessons in this chapter
+        const lessons = await Lesson.find({ chapter: chapterId, del_flag: 0 });
+        for (const l of lessons) {
+            if (l.media) {
+                await this._deleteMediaAsset(l.media);
+            }
+        }
+
         // Cascade soft delete to all lessons in this chapter
         await Promise.all([
             Chapter.findByIdAndUpdate(chapterId, { del_flag: 1 }, { new: true }),
-            Lesson.updateMany({ chapter: chapterId }, { del_flag: 1 }),
+            Lesson.updateMany({ chapter: chapterId }, { del_flag: 1, $unset: { media: 1 } }),
             Course.findByIdAndUpdate(chapter.course, { $pull: { chapters: chapterId } }),
         ]);
 
@@ -249,14 +261,34 @@ class CourseService extends Service {
     }
 
     async updateLesson(lessonId, updateData, userId) {
-        await this.verifyLessonOwnership(lessonId, userId);
+        const lesson = await this.verifyLessonOwnership(lessonId, userId);
 
         if (updateData.title) {
             const baseSlug = slugify(updateData.title.trim(), { lower: true, strict: true }) || "lesson";
             updateData.slug = `${baseSlug}-${Date.now().toString(36)}`;
             updateData.title = updateData.title.trim();
         }
-        return Lesson.findByIdAndUpdate(lessonId, updateData, { new: true });
+
+        // If media is explicitly removed or nullified
+        if (updateData.media === null || updateData.removeMedia) {
+            if (lesson.media) {
+                await this._deleteMediaAsset(lesson.media);
+            }
+            delete updateData.removeMedia;
+            delete updateData.media;
+            return Lesson.findByIdAndUpdate(
+                lessonId,
+                { ...updateData, $unset: { media: 1 }, $set: { suggestedVideoChapters: [] } },
+                { new: true }
+            ).populate('media', 'url type cloudflareId');
+        }
+
+        // If replacing existing video with a different video
+        if (updateData.media && lesson.media && updateData.media.toString() !== lesson.media.toString()) {
+            await this._deleteMediaAsset(lesson.media);
+        }
+
+        return Lesson.findByIdAndUpdate(lessonId, updateData, { new: true }).populate('media', 'url type cloudflareId');
     }
 
     async moveLesson(lessonId, sourceChapterId, targetChapterId, userId) {
@@ -277,15 +309,119 @@ class CourseService extends Service {
         return Lesson.findByIdAndUpdate(lessonId, { chapter: targetChapterId }, { new: true });
     }
 
+    /**
+     * Delete video from lesson, including Cloudinary / Cloudflare asset and DB record
+     */
+    async deleteLessonVideo(lessonId, userId) {
+        const lesson = await this.verifyLessonOwnership(lessonId, userId);
+
+        if (lesson.media) {
+            await this._deleteMediaAsset(lesson.media);
+        }
+
+        const updated = await Lesson.findByIdAndUpdate(
+            lessonId,
+            {
+                $unset: { media: 1 },
+                $set: { suggestedVideoChapters: [] }
+            },
+            { new: true }
+        ).populate('media', 'url type cloudflareId');
+
+        return updated;
+    }
+
     async deleteLesson(lessonId, userId) {
         const lesson = await this.verifyLessonOwnership(lessonId, userId);
 
+        // Delete associated video from Cloudinary / Cloudflare and DB
+        if (lesson.media) {
+            await this._deleteMediaAsset(lesson.media);
+        }
+
         await Promise.all([
-            Lesson.findByIdAndUpdate(lessonId, { del_flag: 1 }, { new: true }),
+            Lesson.findByIdAndUpdate(lessonId, { del_flag: 1, $unset: { media: 1 } }, { new: true }),
             Chapter.findByIdAndUpdate(lesson.chapter, { $pull: { lessons: lessonId } }),
         ]);
 
         return lesson;
+    }
+
+    /**
+     * Helper to permanently delete a media asset from Cloudinary (or Cloudflare) and database
+     */
+    async _deleteMediaAsset(mediaIdOrDoc) {
+        if (!mediaIdOrDoc) return;
+        try {
+            let media = mediaIdOrDoc;
+            if (typeof mediaIdOrDoc === 'string' || (mediaIdOrDoc instanceof mongoose.Types.ObjectId)) {
+                media = await Media.findById(mediaIdOrDoc);
+            }
+            if (!media) return;
+
+            // 1. Delete from Cloudinary if hosted there
+            if (media.url && typeof media.url === 'string' && media.url.includes('cloudinary.com')) {
+                try {
+                    const uploadIdx = media.url.indexOf('/upload/');
+                    if (uploadIdx !== -1) {
+                        const pathAfterUpload = media.url.substring(uploadIdx + '/upload/'.length);
+                        let resourceType = 'video';
+                        if (media.url.includes('/image/upload/')) {
+                            resourceType = 'image';
+                        } else if (media.url.includes('/raw/upload/')) {
+                            resourceType = 'raw';
+                        }
+
+                        // Remove transformations and version (v123456/) to get public_id
+                        let clean = pathAfterUpload.split(/[?#]/)[0];
+                        clean = clean.replace(/^(?:[a-zA-Z0-9_]+_[a-zA-Z0-9_-]+(?:,[a-zA-Z0-9_]+_[a-zA-Z0-9_-]+)*\/)*/, '');
+                        clean = clean.replace(/^v\d+\//, '');
+                        clean = clean.replace(/\.[^/.]+$/, '');
+                        const publicId = decodeURIComponent(clean);
+
+                        if (publicId) {
+                            const res = await cloudinary.uploader.destroy(publicId, {
+                                resource_type: resourceType,
+                                invalidate: true,
+                            });
+                            // If not found as video, try image just in case
+                            if (res?.result === 'not found' && resourceType === 'video') {
+                                await cloudinary.uploader.destroy(publicId, {
+                                    resource_type: 'image',
+                                    invalidate: true,
+                                });
+                            }
+                        }
+                    }
+                } catch (cldErr) {
+                    console.warn(`[Cloudinary] Failed to delete media ${media._id}:`, cldErr.message);
+                }
+            }
+
+            // 2. Delete from Cloudflare Stream if hosted there
+            const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
+            const apiToken = (process.env.CLOUDFLARE_API_TOKEN || '').trim();
+            const cfId = media.cloudflareId || (media.url && !media.url.includes('://') ? media.url : null);
+            if (cfId && accountId && apiToken) {
+                try {
+                    await axios.delete(
+                        `https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/${cfId}`,
+                        {
+                            headers: {
+                                Authorization: `Bearer ${apiToken}`,
+                            },
+                        }
+                    );
+                } catch (cfErr) {
+                    console.warn(`[Cloudflare] Failed to delete video ${cfId}:`, cfErr.response?.data || cfErr.message);
+                }
+            }
+
+            // 3. Delete from Database
+            await Media.findByIdAndDelete(media._id);
+        } catch (err) {
+            console.warn(`[MediaCleanup] Error during media cleanup:`, err.message);
+        }
     }
 
     /**
@@ -502,10 +638,11 @@ class CourseService extends Service {
                     path: 'lessons',
                     match: { del_flag: 0 },
                     options: { sort: { order: 1 } },
-                    populate: { path: 'media', select: 'url type cloudflareId' }
+                    populate: { path: 'media', select: 'url type cloudflareId duration' }
                 }
             })
             .populate('thumbnail', 'url')
+            .populate('category', 'name slug')
             .populate('topics', 'name slug');
 
         if (!course || course.del_flag === 1) throw new NotFoundException("Course not found");

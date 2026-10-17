@@ -151,12 +151,22 @@ class MediaController extends Controller {
         }
     });
 
+    deleteMedia = asyncHandler(async (req, res) => {
+        const { id } = req.params;
+        await mediaService.deleteMedia(id, req.userInfo._id);
+        res.json({
+            status: "success",
+            message: "Media deleted successfully"
+        });
+    });
+
     initController = () => {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/user`, AuthMiddleware, this.getByUser);
         this._router.post(`${this._rootPath}/uploadImage`, AuthMiddleware, upload.single("image"), this.uploadImage);
         this._router.post(`${this._rootPath}/cloudflare/upload-url`, AuthMiddleware, this.getCloudflareUploadUrl);
         this._router.post(`${this._rootPath}/cloudflare/save`, AuthMiddleware, this.saveCloudflareVideo);
+        this._router.delete(`${this._rootPath}/:id`, AuthMiddleware, this.deleteMedia);
     };
 }
 

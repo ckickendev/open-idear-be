@@ -168,6 +168,7 @@ export const GenerateIdeasInputSchema = z.object({
   contentGoal: ContentGoalEnum.default("seo"),
   numberOfIdeas: z.number().min(1).max(20).default(10),
   existingCategories: z.array(z.string()).optional(),
+  language: z.enum(["en", "vi"]).optional().default("en"),
 });
 export type GenerateIdeasInput = z.infer<typeof GenerateIdeasInputSchema>;
 
@@ -183,6 +184,7 @@ export type ContentBrief = z.infer<typeof ContentBriefSchema>;
 export const GenerateBriefInputSchema = z.object({
   idea: ContentIdeaSchema,
   existingCategories: z.array(z.string()).optional(),
+  language: z.enum(["en", "vi"]).optional().default("en"),
 });
 export type GenerateBriefInput = z.infer<typeof GenerateBriefInputSchema>;
 
@@ -212,5 +214,6 @@ export type ContentOutline = z.infer<typeof ContentOutlineSchema>;
 export const OutlineGeneratorInputSchema = z.object({
   idea: ContentIdeaSchema,
   contentBrief: ContentBriefSchema,
+  language: z.enum(["en", "vi"]).optional().default("en"),
 });
 export type OutlineGeneratorInput = z.infer<typeof OutlineGeneratorInputSchema>;

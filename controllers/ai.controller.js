@@ -198,12 +198,13 @@ class AIController extends Controller {
     // 3. Instantiate WriterAgent
     const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
     const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+    const langLabel = validatedLocale === "vi" ? "Vietnamese (Tiếng Việt)" : "English";
     const agent = new WriterAgent();
 
     try {
       const stream = agent.executeStream({
         plan,
-        additionalInstructions: additionalInstructions || "",
+        additionalInstructions: `${additionalInstructions || ""}\n\nCRITICAL LANGUAGE REQUIREMENT: Write the ENTIRE article strictly in ${langLabel}. All section headings, paragraphs, bullet points, callouts, and explanations must strictly match ${langLabel}. Do NOT mix English and Vietnamese.`,
         language: validatedLocale,
       }, {
         promptVersionOverride: "v2", // Force text-only markdown prompt (writer.v2.md)
@@ -1164,6 +1165,8 @@ class AIController extends Controller {
     }
 
     const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
 
     try {
       const result = await ideaGeneratorService.generate(
@@ -1172,6 +1175,7 @@ class AIController extends Controller {
           contentGoal: contentGoal || "seo",
           numberOfIdeas: Number(numberOfIdeas) || 10,
           existingCategories: Array.isArray(existingCategories) ? existingCategories : undefined,
+          language: validatedLocale,
         },
         { userId }
       );
@@ -1233,12 +1237,15 @@ class AIController extends Controller {
     }
 
     const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
 
     try {
       const brief = await briefGeneratorService.generate(
         {
           idea,
           existingCategories: Array.isArray(existingCategories) ? existingCategories : undefined,
+          language: validatedLocale,
         },
         { userId }
       );
@@ -1271,12 +1278,15 @@ class AIController extends Controller {
     }
 
     const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
 
     try {
       const outline = await outlineGeneratorService.generateOutline(
         {
           idea,
           contentBrief,
+          language: validatedLocale,
         },
         { userId }
       );

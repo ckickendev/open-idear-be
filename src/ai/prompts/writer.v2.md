@@ -35,6 +35,9 @@ metadata:
 ---
 Write the article based on this outline plan:
 
+CRITICAL LANGUAGE REQUIREMENT:
+The entire article MUST be written strictly in the target language specified in the plan or instructions. All section headings, body paragraphs, bullet points, callouts, and explanations must strictly match this language. Do not mix English and Vietnamese.
+
 Plan JSON:
 {plan}
 

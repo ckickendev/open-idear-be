@@ -39,7 +39,7 @@ export class IdeaGeneratorService {
     options: { userId?: string } = {}
   ): Promise<GenerateIdeasResult> {
     const validated = GenerateIdeasInputSchema.parse(input);
-    const { topic, contentGoal, numberOfIdeas, existingCategories } = validated;
+    const { topic, contentGoal, numberOfIdeas, existingCategories, language = "en" } = validated;
 
     // 1. Inspect existing published inventory
     const inventoryResult = await contentInventoryService.inspectInventory(topic);
@@ -58,7 +58,11 @@ export class IdeaGeneratorService {
 
     let rawIdeas: ContentIdea[] = [];
 
+    const langLabel = language === "vi" ? "Vietnamese (Tiếng Việt)" : "English";
     const systemPrompt = `You are an editorial director and SEO strategist for OpenIdear. Generate ${numberOfIdeas} structured content ideas for the topic "${topic}" with goal "${contentGoal}".
+CRITICAL LANGUAGE REQUIREMENT:
+All generated idea titles, hooks, keywords, and descriptions MUST be written strictly in ${langLabel}.
+Do NOT mix languages. Even if existing articles or category hints appear in another language, all your generated output fields must strictly be in ${langLabel}.
 Ensure ideas match search intent, avoid duplicating existing content, and cover content gaps.
 Return ONLY valid JSON matching:
 {
@@ -78,6 +82,7 @@ Return ONLY valid JSON matching:
 }`;
 
     const userPrompt = `Topic: ${topic}
+Target Language: ${langLabel} (Generate ALL output strictly in ${langLabel})
 Content Goal: ${contentGoal}
 Number of Ideas: ${numberOfIdeas}
 Available Categories: ${categoriesHint}

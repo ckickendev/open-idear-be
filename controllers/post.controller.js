@@ -26,9 +26,9 @@ class PostController extends Controller {
     });
 
     getPostToEdit = asyncHandler(async (req, res) => {
-        const { postId } = req.query;
+        const { postId, locale: queryLocale } = req.query;
         const { _id } = req.userInfo;
-        const locale = extractLocale(req);
+        const locale = ["en", "vi"].includes(queryLocale) ? queryLocale : null;
 
         const post = await postService.getPostToEdit(postId, locale);
 

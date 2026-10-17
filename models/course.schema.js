@@ -22,6 +22,10 @@ const courseSchema = new Schema(
         status: { type: String, enum: ["draft", "published", "archived"], default: "draft" },
         averageRating: { type: Number, default: 0 },
         ratingCount: { type: Number, default: 0 },
+        whatYouWillLearn: [{ type: String }],
+        requirements: [{ type: String }],
+        totalDuration: { type: Number, default: 0 },
+        level: { type: String, default: "All Levels" },
         del_flag: {
             type: Number,
             default: 0

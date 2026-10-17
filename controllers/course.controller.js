@@ -105,6 +105,16 @@ class CourseController extends Controller {
         res.status(200).json({ status: "success", data: lesson });
     });
 
+    deleteLessonVideo = asyncHandler(async (req, res) => {
+        const { lessonId } = req.body;
+        const { _id } = req.userInfo;
+        if (!lessonId) {
+            return res.status(400).json({ error: "lessonId is required" });
+        }
+        const lesson = await courseService.deleteLessonVideo(lessonId, _id);
+        res.status(200).json({ status: "success", data: lesson });
+    });
+
     enroll = asyncHandler(async (req, res) => {
         const { courseId } = req.body;
         const { _id } = req.userInfo;
@@ -215,6 +225,8 @@ class CourseController extends Controller {
         this._router.patch(`${this._rootPath}/lesson/update`, AuthMiddleware, this.updateLesson);
         this._router.patch(`${this._rootPath}/lesson/move`, AuthMiddleware, this.moveLesson);
         this._router.delete(`${this._rootPath}/lesson/delete`, AuthMiddleware, this.deleteLesson);
+        this._router.delete(`${this._rootPath}/lesson/video/delete`, AuthMiddleware, this.deleteLessonVideo);
+        this._router.post(`${this._rootPath}/lesson/video/delete`, AuthMiddleware, this.deleteLessonVideo);
 
         this._router.patch(`${this._rootPath}/curriculum`, AuthMiddleware, this.updateCurriculum);
         this._router.delete(`${this._rootPath}`, AuthMiddleware, this.deleteCourse);

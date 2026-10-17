@@ -32,10 +32,14 @@ export class OutlineGeneratorService {
     options: { userId?: string } = {}
   ): Promise<ContentOutline> {
     const validated = OutlineGeneratorInputSchema.parse(input);
-    const { idea, contentBrief } = validated;
+    const { idea, contentBrief, language = "en" } = validated;
 
+    const langLabel = language === "vi" ? "Vietnamese (Tiếng Việt)" : "English";
     const systemPrompt = `You are an expert technical editorial director and SEO content architect for OpenIdear.
 Generate a structured, high-value content outline based on the idea and brief.
+CRITICAL LANGUAGE REQUIREMENT:
+All generated outline fields (title, introduction, section headings, purpose, keyPoints, conclusion, and FAQ questions & answer directions) MUST be written strictly in ${langLabel}.
+Do NOT mix languages.
 Return ONLY valid JSON matching:
 {
   "title": "string",
@@ -58,6 +62,7 @@ Return ONLY valid JSON matching:
 }`;
 
     const userPrompt = `Title: ${idea.title}
+Target Language: ${langLabel} (ALL outline output MUST be strictly in ${langLabel})
 Hook: ${idea.hook}
 Content Type: ${idea.contentType}
 Category: ${idea.category}

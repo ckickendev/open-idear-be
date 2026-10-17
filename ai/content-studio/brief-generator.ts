@@ -29,14 +29,18 @@ export class BriefGeneratorService {
     options: { userId?: string } = {}
   ): Promise<ContentBrief> {
     const validated = GenerateBriefInputSchema.parse(input);
-    const { idea, existingCategories } = validated;
+    const { idea, existingCategories, language = "en" } = validated;
 
     const categoriesHint =
       existingCategories && existingCategories.length > 0
         ? existingCategories.join(", ")
         : "None provided";
 
+    const langLabel = language === "vi" ? "Vietnamese (Tiếng Việt)" : "English";
     const systemPrompt = `You are an expert editorial planner for OpenIdear. Generate a structured Content Brief for the idea provided.
+CRITICAL LANGUAGE REQUIREMENT:
+All generated content brief fields (targetAudience, objective) MUST be written in ${langLabel}.
+Do NOT mix languages.
 Return ONLY valid JSON matching:
 {
   "targetAudience": ["string", "string"],
@@ -47,6 +51,7 @@ Return ONLY valid JSON matching:
 }`;
 
     const userPrompt = `Title: ${idea.title}
+Target Language: ${langLabel} (ALL output MUST be strictly in ${langLabel})
 Hook: ${idea.hook}
 Content Type: ${idea.contentType}
 Category: ${idea.category}
