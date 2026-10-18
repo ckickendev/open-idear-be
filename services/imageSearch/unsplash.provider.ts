@@ -1,20 +1,24 @@
 // =============================================================================
-//  UNSPLASH IMAGE SEARCH PROVIDER
+//  UNSPLASH IMAGE SEARCH PROVIDER — SPRINT 1 FOUNDATION
 //  services/imageSearch/unsplash.provider.ts
 //
 //  Design Decisions:
-//  - Uses official Unsplash API (https://api.unsplash.com/search/photos).
-//  - Requires UNSPLASH_ACCESS_KEY environment variable.
-//  - Falls back gracefully (returns []) when key is absent or API fails.
-//  - Always populates license="unsplash", author, and attributionUrl.
-//  - License: Unsplash License — free for commercial use; attribution encouraged.
-//    See https://unsplash.com/license
+//  - Conforms strictly to ImageSearchProvider interface (searchImages & search).
+//  - Uses official Unsplash Search API (https://api.unsplash.com/search/photos).
+//  - Server-side only: reads UNSPLASH_ACCESS_KEY from process.env; never leaks key.
+//  - Supports pagination (page, per_page clamped to max 30) and orientation (landscape, portrait, square).
+//  - Normalizes results into internal ImageSearchResult contract.
+//  - Populates provider attribution, license, and usage restrictions in compliance with Unsplash API Guidelines.
+//  - Resilient: timeouts (8s), API errors (4xx/5xx), missing keys return empty arrays without throwing.
+//  - Safe logging: avoids logging API credentials or confidential article data.
 // =============================================================================
 
 import type {
   ImageSearchProvider,
+  ImageSearchInput,
   ImageSearchOptions,
-  NormalizedImageResult,
+  ImageSearchResult,
+  ImageOrientation,
 } from "./imageSearchProvider.interface";
 
 const UNSPLASH_API_BASE = "https://api.unsplash.com";
@@ -26,16 +30,19 @@ interface UnsplashPhoto {
   width: number;
   height: number;
   urls: {
-    full: string;
+    raw?: string;
+    full?: string;
     regular: string;
     small: string;
     thumb: string;
   };
   links: {
     html: string;
+    download_location?: string;
   };
   user: {
     name: string;
+    username?: string;
     links: { html: string };
   };
 }
@@ -49,19 +56,40 @@ interface UnsplashSearchResponse {
 export class UnsplashProvider implements ImageSearchProvider {
   readonly name = "unsplash";
 
-  async search(options: ImageSearchOptions): Promise<NormalizedImageResult[]> {
+  /**
+   * Primary image search satisfying the Sprint 1 contract.
+   */
+  async searchImages(input: {
+    query: string;
+    page?: number;
+    limit?: number;
+    orientation?: ImageOrientation;
+    userId?: string;
+  }): Promise<ImageSearchResult[]> {
     const apiKey = process.env.UNSPLASH_ACCESS_KEY;
     if (!apiKey) {
+      // Missing API key handled gracefully without error
       return [];
     }
 
-    const { query, limit = 12, page = 1 } = options;
-    if (!query || !query.trim()) return [];
+    const cleanQuery = (input.query || "").trim();
+    if (!cleanQuery) return [];
+
+    const safeLimit = Math.min(30, Math.max(1, Number(input.limit) || 12));
+    const safePage = Math.max(1, Number(input.page) || 1);
+
+    // Map orientation to Unsplash API values: landscape | portrait | squarish
+    let unsplashOrientation = "landscape";
+    if (input.orientation === "portrait") {
+      unsplashOrientation = "portrait";
+    } else if (input.orientation === "square") {
+      unsplashOrientation = "squarish";
+    }
 
     try {
       const url = `${UNSPLASH_API_BASE}/search/photos?query=${encodeURIComponent(
-        query.trim()
-      )}&per_page=${Math.min(30, limit)}&page=${page}&orientation=landscape`;
+        cleanQuery
+      )}&per_page=${safeLimit}&page=${safePage}&orientation=${unsplashOrientation}`;
 
       const resp = await fetch(url, {
         headers: {
@@ -72,34 +100,67 @@ export class UnsplashProvider implements ImageSearchProvider {
       });
 
       if (!resp.ok) {
-        console.warn(
-          `[UnsplashProvider] API responded ${resp.status}: ${resp.statusText}`
-        );
+        // Safe logging: log status code without sensitive headers or queries
+        console.warn(`[UnsplashProvider] API returned HTTP status ${resp.status}`);
         return [];
       }
 
-      const data: UnsplashSearchResponse = await resp.json();
+      const data = (await resp.json()) as UnsplashSearchResponse;
+      if (!data || !Array.isArray(data.results)) {
+        return [];
+      }
 
-      return (data.results || []).map((photo): NormalizedImageResult => ({
-        id: `unsplash_${photo.id}`,
-        url: photo.urls.regular,
-        thumbnailUrl: photo.urls.small,
-        width: photo.width,
-        height: photo.height,
-        title: photo.description || photo.alt_description || `Photo by ${photo.user.name}`,
-        alt: photo.alt_description || photo.description || `Photo by ${photo.user.name} on Unsplash`,
-        source: "stock",
-        author: photo.user.name,
-        license: "unsplash",
-        attributionUrl: photo.links.html,
-        sourceProvider: "unsplash",
-        sourceUrl: photo.links.html,
-        tags: [],
-      }));
+      return data.results.map((photo): ImageSearchResult => {
+        const authorName = photo.user?.name || "Unsplash Photographer";
+        const titleText = photo.description || photo.alt_description || `Photo by ${authorName}`;
+        const altText = photo.alt_description || photo.description || `Photo by ${authorName} on Unsplash`;
+        const photoPageUrl = photo.links?.html || "https://unsplash.com";
+
+        // Unsplash API Guidelines require attribution links to include UTM parameters
+        const attributionUrl = photoPageUrl.includes("?")
+          ? `${photoPageUrl}&utm_source=openidear&utm_medium=referral`
+          : `${photoPageUrl}?utm_source=openidear&utm_medium=referral`;
+
+        return {
+          id: `unsplash_${photo.id}`,
+          provider: "unsplash",
+          sourceProvider: "unsplash",
+          title: titleText,
+          imageUrl: photo.urls.regular,
+          url: photo.urls.regular,
+          thumbnailUrl: photo.urls.small || photo.urls.thumb,
+          width: photo.width,
+          height: photo.height,
+          author: authorName,
+          sourceUrl: photoPageUrl,
+          license: "unsplash",
+          attributionUrl,
+          usageRestrictions: [
+            "Free for commercial and non-commercial use",
+            "Attribution appreciated (Unsplash License)",
+            "Cannot be sold without significant modification",
+            "Cannot compile photos into a replicating competing service",
+          ],
+          alt: altText,
+          source: "stock",
+          tags: [],
+        };
+      });
     } catch (err: any) {
-      console.warn("[UnsplashProvider] search failed:", err?.message);
+      if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+        console.warn("[UnsplashProvider] Request timed out after 8s");
+      } else {
+        console.warn("[UnsplashProvider] Search failed gracefully:", err?.message);
+      }
       return [];
     }
+  }
+
+  /**
+   * Backward-compatible delegation for existing callers.
+   */
+  async search(options: ImageSearchOptions): Promise<ImageSearchResult[]> {
+    return this.searchImages(options);
   }
 }
 

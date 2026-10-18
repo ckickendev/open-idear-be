@@ -12,8 +12,9 @@
     "migrate:translations": "node -r ts-node/register scripts/migratePostTranslations.js --write",
     "migrate:translations:dry": "node -r ts-node/register scripts/migratePostTranslations.js --dry-run",
     "rollback:translations": "node -r ts-node/register scripts/rollbackPostTranslations.js --write",
-    "rollback:translations:dry": "node -r ts-node/register scripts/rollbackPostTranslations.js --dry-run",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "cleanup:test-videos": "node scripts/cleanupLegacyTestVideos.js --apply --confirm",
+    "cleanup:test-videos:dry": "node scripts/cleanupLegacyTestVideos.js --dry-run",
+    "test": "node tests/bunnyStream.test.js && node tests/bunnyStreamUploadPipeline.test.js && node -r ts-node/register tests/bunnyStreamSecurityAuth.test.js && node tests/sprint5EndToEndLifecycle.test.js && node tests/cleanupLegacyTestVideos.test.js"
   },
   "type": "commonjs",
   "author": "",

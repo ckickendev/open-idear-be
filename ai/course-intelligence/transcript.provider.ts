@@ -2,19 +2,71 @@ import axios from "axios";
 import { ITranscriptProvider, TranscriptResult, TranscriptSegment } from "./types";
 import { providerRegistry } from "../provider";
 
-export class CloudflareTranscriptProvider implements ITranscriptProvider {
+export class CourseTranscriptProvider implements ITranscriptProvider {
   async transcribe(input: {
     mediaId?: string;
     cloudflareId?: string;
+    bunnyVideoId?: string;
     url?: string;
     title: string;
     duration?: number;
     description?: string;
   }): Promise<TranscriptResult> {
+    const bunnyLibraryId = process.env.BUNNY_STREAM_LIBRARY_ID;
+    const bunnyApiKey = process.env.BUNNY_STREAM_API_KEY;
+    const bunnyCdnHostname = process.env.BUNNY_STREAM_CDN_HOSTNAME;
+
+    // 1. Try Bunny Stream Captions API if credentials and bunnyVideoId exist
+    if (bunnyLibraryId && bunnyApiKey && input.bunnyVideoId) {
+      try {
+        const response = await axios.get(
+          `https://video.bunnycdn.com/library/${bunnyLibraryId}/videos/${input.bunnyVideoId}`,
+          {
+            headers: {
+              AccessKey: bunnyApiKey,
+              Accept: "application/json",
+            },
+            timeout: 8000,
+          }
+        );
+
+        const captions = response.data?.captions;
+        if (Array.isArray(captions) && captions.length > 0) {
+          const cap = captions[0];
+          const srclang = cap.srclang || "en";
+          // Try fetching VTT from Bunny CDN or video captions endpoint
+          const vttUrl = bunnyCdnHostname
+            ? `https://${bunnyCdnHostname}/${input.bunnyVideoId}/captions/${srclang}.vtt`
+            : null;
+
+          if (vttUrl) {
+            const vttRes = await axios.get(vttUrl, { timeout: 8000 });
+            if (vttRes.data && typeof vttRes.data === "string") {
+              const segments = this.parseVTT(vttRes.data);
+              const fullText = segments.map((s) => s.text).join(" ");
+              return {
+                status: "ready",
+                language: srclang,
+                text: fullText,
+                segments,
+                provider: "bunny",
+                duration: response.data.length || input.duration || 0,
+              };
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn(
+          "Bunny captions not available or not yet generated, falling back:",
+          err?.message
+        );
+      }
+    }
+
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 
-    // 1. Try Cloudflare Stream Captions API if credentials and cloudflareId exist
+    // 2. Try legacy Cloudflare Stream Captions API if credentials and cloudflareId exist
     if (
       accountId &&
       apiToken &&
@@ -192,4 +244,4 @@ Yêu cầu định dạng JSON:
   }
 }
 
-export const transcriptProvider = new CloudflareTranscriptProvider();
+export const transcriptProvider = new CourseTranscriptProvider();

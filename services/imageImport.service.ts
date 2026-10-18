@@ -32,6 +32,7 @@ const ALLOWED_IMAGE_DOMAINS = new Set([
   "pixabay.com",
   "img.freepik.com",
   "upload.wikimedia.org",
+  "commons.wikimedia.org",
 ]);
 
 const MAX_DOWNLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -63,6 +64,8 @@ export interface ImportedAsset {
   license?: string;
   attributionUrl?: string;
   isExisting?: boolean;
+  isExternalReference?: boolean;
+  assetType?: "external_reference" | "downloaded" | "ai_generated";
 }
 
 export class ImageImportService {
@@ -89,41 +92,59 @@ export class ImageImportService {
 
   /**
    * Downloads an image buffer from a validated external URL.
-   * Enforces size limit and timeout.
+   * Enforces size limit, timeout, MIME type, and image magic bytes.
    */
-  private downloadBuffer(url: string): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const protocol = url.startsWith("https") ? https : http;
-      const chunks: Buffer[] = [];
-      let totalBytes = 0;
-
-      const request = protocol.get(url, { timeout: DOWNLOAD_TIMEOUT_MS }, (res) => {
-        if (res.statusCode && res.statusCode >= 400) {
-          reject(new Error(`HTTP ${res.statusCode} downloading image`));
-          res.destroy();
-          return;
-        }
-
-        res.on("data", (chunk: Buffer) => {
-          totalBytes += chunk.length;
-          if (totalBytes > MAX_DOWNLOAD_BYTES) {
-            reject(new Error(`Image exceeds size limit of ${MAX_DOWNLOAD_BYTES / 1024 / 1024} MB`));
-            res.destroy();
-            return;
-          }
-          chunks.push(chunk);
-        });
-
-        res.on("end", () => resolve(Buffer.concat(chunks)));
-        res.on("error", reject);
+  private async downloadBuffer(url: string): Promise<Buffer> {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
       });
 
-      request.on("timeout", () => {
-        request.destroy();
-        reject(new Error("Image download timed out"));
-      });
-      request.on("error", reject);
-    });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} downloading image`);
+      }
+
+      // 1. Content-Type Header Verification
+      const contentType = response.headers.get("content-type");
+      if (
+        contentType &&
+        !contentType.startsWith("image/") &&
+        !contentType.includes("octet-stream")
+      ) {
+        throw new Error(`Invalid content type "${contentType}". Only image files are permitted.`);
+      }
+
+      // 2. Content-Length Limit Verification
+      const contentLength = Number(response.headers.get("content-length"));
+      if (contentLength && contentLength > MAX_DOWNLOAD_BYTES) {
+        throw new Error(`Image exceeds size limit of ${MAX_DOWNLOAD_BYTES / 1024 / 1024} MB`);
+      }
+
+      const arrayBuf = await response.arrayBuffer();
+      if (arrayBuf.byteLength > MAX_DOWNLOAD_BYTES) {
+        throw new Error(`Image exceeds size limit of ${MAX_DOWNLOAD_BYTES / 1024 / 1024} MB`);
+      }
+
+      const buffer = Buffer.from(arrayBuf);
+
+      // 3. Image Magic Bytes Signature Verification
+      const isJpeg = buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+      const isPng = buffer.length > 4 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
+      const isGif = buffer.length > 3 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
+      const isWebp = buffer.length > 12 && buffer.subarray(0, 4).toString() === "RIFF" && buffer.subarray(8, 12).toString() === "WEBP";
+      const isSvg = buffer.subarray(0, 300).toString().toLowerCase().includes("<svg");
+
+      if (!isJpeg && !isPng && !isGif && !isWebp && !isSvg) {
+        throw new Error("Downloaded file does not match expected image signatures (JPEG, PNG, GIF, WebP, SVG).");
+      }
+
+      return buffer;
+    } catch (err: any) {
+      if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+        throw new Error("Image download timed out");
+      }
+      throw err;
+    }
   }
 
   /**
@@ -166,6 +187,7 @@ export class ImageImportService {
 
   /**
    * Main entry point. Imports a stock image into the Asset Library.
+   * If network fails or download fails, gracefully returns an external reference asset.
    */
   async importFromExternalUrl(options: ImageImportOptions): Promise<ImportedAsset> {
     const {
@@ -211,6 +233,8 @@ export class ImageImportService {
             license: existingBySource.license,
             attributionUrl: existingBySource.attributionUrl,
             isExisting: true,
+            isExternalReference: existingBySource.source === "stock" && !existingBySource.url.includes("cloudinary"),
+            assetType: existingBySource.url.includes("cloudinary") ? "downloaded" : "external_reference",
           };
         }
       } catch (err: any) {
@@ -218,12 +242,32 @@ export class ImageImportService {
       }
     }
 
-    // 3. Download image buffer
-    let buffer: Buffer;
+    // 3. Download image buffer (with graceful offline fallback)
+    let buffer: Buffer | null = null;
     try {
       buffer = await this.downloadBuffer(url);
     } catch (err: any) {
-      throw new Error(`[ImageImportService] Download failed: ${err.message}`);
+      console.warn(`[ImageImportService] Download skipped/failed: ${err.message}. Retaining as external reference asset.`);
+    }
+
+    // If download buffer is unavailable (e.g. offline, timeout, network failure),
+    // return external image reference asset so author's workflow is not interrupted.
+    if (!buffer) {
+      return {
+        _id: "ext_" + Date.now(),
+        url,
+        thumbnailUrl: thumbnailUrl || url,
+        alt: alt || title || "Stock Photo",
+        source: "stock",
+        sourceProvider,
+        sourceUrl,
+        author,
+        license,
+        attributionUrl,
+        isExisting: false,
+        isExternalReference: true,
+        assetType: "external_reference",
+      };
     }
 
     // 4. Compute file hash

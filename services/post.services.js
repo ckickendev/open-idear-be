@@ -1,6 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
-const { Post, Like, Series, Category, Course, PostTranslation } = require("../models");
+const { Post, Like, Series, Category, Course, PostTranslation, Comment, ArticleVersion, CollectionItem } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 const { default: slugify } = require("slugify");
 const { ContentStructureService } = require("../ai/content/contentStructure.service");
@@ -1290,6 +1290,46 @@ class PostService extends Service {
         if (!post) throw new NotFoundException("Post not found");
         memoryCache.invalidate('hot_posts_');
         return { success: true };
+    };
+
+    deletePostForever = async (postId) => {
+        const post = await Post.findById(postId);
+        if (!post) throw new NotFoundException("Post not found");
+
+        const deletePromises = [
+            Post.findByIdAndDelete(postId),
+            Like.deleteMany({ post: postId }),
+            PostTranslation.deleteMany({ postId: postId }),
+        ];
+
+        if (Comment) deletePromises.push(Comment.deleteMany({ post: postId }));
+        if (ArticleVersion) deletePromises.push(ArticleVersion.deleteMany({ articleId: postId }));
+        if (CollectionItem) deletePromises.push(CollectionItem.deleteMany({ itemType: "post", itemId: postId }));
+
+        await Promise.all(deletePromises);
+        memoryCache.invalidate('hot_posts_');
+        return { success: true };
+    };
+
+    cleanTrash = async () => {
+        const trashedPosts = await Post.find({ del_flag: 1 }).select('_id').lean();
+        if (!trashedPosts.length) return { success: true, deleted: 0 };
+
+        const postIds = trashedPosts.map(p => p._id);
+
+        const deletePromises = [
+            Post.deleteMany({ _id: { $in: postIds } }),
+            Like.deleteMany({ post: { $in: postIds } }),
+            PostTranslation.deleteMany({ postId: { $in: postIds } }),
+        ];
+
+        if (Comment) deletePromises.push(Comment.deleteMany({ post: { $in: postIds } }));
+        if (ArticleVersion) deletePromises.push(ArticleVersion.deleteMany({ articleId: { $in: postIds } }));
+        if (CollectionItem) deletePromises.push(CollectionItem.deleteMany({ itemType: "post", itemId: { $in: postIds } }));
+
+        await Promise.all(deletePromises);
+        memoryCache.invalidate('hot_posts_');
+        return { success: true, deleted: postIds.length };
     };
 };
 

@@ -169,6 +169,13 @@ class CourseController extends Controller {
         res.status(200).json({ status: "success", data: course });
     });
 
+    cleanTrash = asyncHandler(async (req, res) => {
+        const { _id, role } = req.userInfo;
+        const userId = role === 1 ? null : _id;
+        const result = await courseService.cleanTrash(userId);
+        res.status(200).json({ success: true, message: `Trash cleaned. ${result.deleted} course(s) permanently deleted.`, deleted: result.deleted });
+    });
+
     getCourseForEdit = asyncHandler(async (req, res) => {
         const { id } = req.query;
         const { _id } = req.userInfo;
@@ -231,6 +238,7 @@ class CourseController extends Controller {
         this._router.patch(`${this._rootPath}/curriculum`, AuthMiddleware, this.updateCurriculum);
         this._router.delete(`${this._rootPath}`, AuthMiddleware, this.deleteCourse);
         this._router.patch(`${this._rootPath}/restore`, AuthMiddleware, this.restoreCourse);
+        this._router.delete(`${this._rootPath}/cleanTrash`, AuthMiddleware, this.cleanTrash);
         this._router.post(`${this._rootPath}/enroll`, AuthMiddleware, this.enroll);
 
         // Builder-specific routes

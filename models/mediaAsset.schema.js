@@ -51,10 +51,11 @@ const mediaAssetSchema = new Schema(
     // ─── CDN Provider ───────────────────────────────────────
     provider: {
       type: String,
-      enum: ["cloudinary", "cloudflare", "s3"],
+      enum: ["cloudinary", "cloudflare", "bunny", "s3"],
       default: "cloudinary",
     },
     providerAssetId: { type: String },
+    bunnyLibraryId: { type: String },
 
     // ─── Metadata ───────────────────────────────────────────
     altText: { type: String, default: "" },

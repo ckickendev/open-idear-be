@@ -13,8 +13,10 @@
 
 import type {
   ImageSearchProvider,
+  ImageSearchInput,
   ImageSearchOptions,
-  NormalizedImageResult,
+  ImageSearchResult,
+  ImageOrientation,
 } from "./imageSearchProvider.interface";
 
 const PEXELS_API_BASE = "https://api.pexels.com/v1";
@@ -50,19 +52,29 @@ interface PexelsSearchResponse {
 export class PexelsProvider implements ImageSearchProvider {
   readonly name = "pexels";
 
-  async search(options: ImageSearchOptions): Promise<NormalizedImageResult[]> {
+  async searchImages(input: {
+    query: string;
+    page?: number;
+    limit?: number;
+    orientation?: ImageOrientation;
+    userId?: string;
+  }): Promise<ImageSearchResult[]> {
     const apiKey = process.env.PEXELS_API_KEY;
     if (!apiKey) {
       return [];
     }
 
-    const { query, limit = 12, page = 1 } = options;
+    const { query, limit = 12, page = 1, orientation } = input;
     if (!query || !query.trim()) return [];
+
+    const safeLimit = Math.min(30, Math.max(1, limit));
+    const safePage = Math.max(1, page);
+    const safeOrientation = orientation || "landscape";
 
     try {
       const url = `${PEXELS_API_BASE}/search?query=${encodeURIComponent(
         query.trim()
-      )}&per_page=${Math.min(30, limit)}&page=${page}&orientation=landscape`;
+      )}&per_page=${safeLimit}&page=${safePage}&orientation=${safeOrientation}`;
 
       const resp = await fetch(url, {
         headers: {
@@ -72,16 +84,20 @@ export class PexelsProvider implements ImageSearchProvider {
       });
 
       if (!resp.ok) {
-        console.warn(
-          `[PexelsProvider] API responded ${resp.status}: ${resp.statusText}`
-        );
+        console.warn(`[PexelsProvider] API responded ${resp.status}`);
         return [];
       }
 
       const data: PexelsSearchResponse = await resp.json();
+      if (!data || !Array.isArray(data.photos)) {
+        return [];
+      }
 
-      return (data.photos || []).map((photo): NormalizedImageResult => ({
+      return data.photos.map((photo): ImageSearchResult => ({
         id: `pexels_${photo.id}`,
+        provider: "pexels",
+        sourceProvider: "pexels",
+        imageUrl: photo.src.large,
         url: photo.src.large,
         thumbnailUrl: photo.src.small,
         width: photo.width,
@@ -92,14 +108,23 @@ export class PexelsProvider implements ImageSearchProvider {
         author: photo.photographer,
         license: "pexels",
         attributionUrl: photo.url,
-        sourceProvider: "pexels",
         sourceUrl: photo.url,
+        usageRestrictions: [
+          "Free for commercial and personal use",
+          "Attribution not required but appreciated (Pexels License)",
+          "Cannot sell unaltered copies",
+          "Do not imply endorsement",
+        ],
         tags: [],
       }));
     } catch (err: any) {
       console.warn("[PexelsProvider] search failed:", err?.message);
       return [];
     }
+  }
+
+  async search(options: ImageSearchOptions): Promise<ImageSearchResult[]> {
+    return this.searchImages(options);
   }
 }
 

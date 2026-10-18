@@ -24,6 +24,8 @@
 //   Avoid over-generating images."
 // =============================================================================
 
+const { buildSearchQuery } = require("../../services/imageSearch/searchQueryBuilder");
+
 export type VisualDecisionType =
   | "SEARCH_IMAGE"
   | "GENERATE_IMAGE"
@@ -320,7 +322,11 @@ export class VisualClassifierService {
     const imagePrompt = isHardwareContext
       ? `Modern ${preset} technical illustration of ${sanitizedTitle}, PC hardware telemetry and component diagnostics, clean high-tech composition`
       : `Modern ${preset} technical illustration of ${sanitizedTitle}, software engineering architecture, clean dark background`;
-    const searchQuery = `${sanitizedTitle} ${visualType === "product" || isHardwareContext ? "hardware photo" : "diagram architecture"}`;
+    const searchQuery = buildSearchQuery({
+      heading: sanitizedTitle,
+      visualType,
+      sectionContent: contentSnippet,
+    });
 
     return {
       heading: cleanHeading,

@@ -114,6 +114,7 @@ class CourseIntelligenceService extends Service {
                 transcriptResult = await transcriptProvider.transcribe({
                     mediaId: currentMedia._id?.toString(),
                     cloudflareId: currentMedia.cloudflareId,
+                    bunnyVideoId: currentMedia.bunnyVideoId,
                     url: currentMedia.url,
                     title: lesson.title,
                     duration: currentMedia.duration || 0,

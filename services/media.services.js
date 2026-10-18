@@ -44,6 +44,11 @@ class MediaService extends Service {
         return media;
     }
 
+    /**
+     * @deprecated Legacy Cloudflare upload URL generator. Decommissioned in Sprint 5.
+     * All video uploads now use BunnyStreamService.authorizeUpload.
+     * Retained strictly as an inactive historical reference.
+     */
     async getCloudflareUploadUrl(userId) {
         console.log("start getCloudflareUploadUrl services");
         const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID || "").trim();

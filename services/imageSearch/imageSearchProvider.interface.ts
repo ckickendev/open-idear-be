@@ -1,13 +1,13 @@
 // =============================================================================
-//  IMAGE SEARCH PROVIDER INTERFACE
+//  IMAGE SEARCH PROVIDER INTERFACE — SPRINT 1 FOUNDATION
 //  services/imageSearch/imageSearchProvider.interface.ts
 //
 //  Design Decisions:
 //  - Formal TypeScript contract that every image search provider must satisfy.
-//  - Normalises results across Unsplash, Pexels, Asset Library, and future providers.
-//  - Provider safety: author, license, and attributionUrl MUST be populated
-//    from real provider metadata. Do NOT present a stock image as "free to use"
-//    unless the provider explicitly supplies appropriate license information.
+//  - Normalizes results into a consistent internal contract (ImageSearchResult).
+//  - Adapts to existing codebase by aliasing `url` <-> `imageUrl` and `sourceProvider` <-> `provider`.
+//  - Provider safety: author, license, attributionUrl, and usageRestrictions
+//    must be populated from provider metadata.
 // =============================================================================
 
 export type ImageSourceType =
@@ -16,61 +16,116 @@ export type ImageSourceType =
   | "ai_generated"
   | "upload";
 
-/**
- * Normalised result returned by any ImageSearchProvider.
- * All providers MUST map their API response to this shape.
- */
-export interface NormalizedImageResult {
-  /** Stable provider-scoped identifier (e.g. Unsplash photo ID). */
-  readonly id: string;
-  /** Full-resolution CDN URL. */
-  readonly url: string;
-  /** Thumbnail CDN URL (≤400 px wide). */
-  readonly thumbnailUrl: string;
-  readonly width: number;
-  readonly height: number;
-  /** Human-readable title or description. */
-  readonly title: string;
-  /** Accessible alt text. */
-  readonly alt: string;
-  readonly source: ImageSourceType;
+export type ImageOrientation = "landscape" | "portrait" | "square";
 
-  // ─── Provider Safety ───────────────────────────────────────────────────────
-  /** Photographer or creator name. */
+/**
+ * Normalized internal contract for any image search result.
+ * Satisfies both the Sprint 1 requirements and existing OpenIdear callers.
+ */
+export interface ImageSearchResult {
+  /** Stable provider-scoped identifier */
+  readonly id: string;
+
+  /** Provider name/slug, e.g. "unsplash" | "pexels" | "asset_library" | "technical_stock" */
+  readonly provider: string;
+
+  /** Backward-compatible alias for provider */
+  readonly sourceProvider?: string;
+
+  /** Human-readable title or description */
+  readonly title?: string;
+
+  /** Canonical high-resolution / regular image URL */
+  readonly imageUrl: string;
+
+  /** Backward-compatible alias for imageUrl */
+  readonly url: string;
+
+  /** Thumbnail CDN URL (<= 400px wide) */
+  readonly thumbnailUrl?: string;
+
+  /** Pixel dimensions */
+  readonly width?: number;
+  readonly height?: number;
+
+  /** Photographer or creator name */
   readonly author?: string;
+
+  /** URL back to the original asset page for attribution */
+  readonly sourceUrl: string;
+
   /**
    * License identifier:
-   *  - "unsplash"  → Unsplash License (free for commercial use w/ attribution encouraged)
-   *  - "pexels"    → Pexels License  (free for commercial use w/ attribution encouraged)
-   *  - "cc0"       → Public Domain / CC0
+   *  - "unsplash" -> Unsplash License (free commercial & editorial w/ attribution encouraged)
+   *  - "pexels"   -> Pexels License (free commercial & editorial w/ attribution encouraged)
+   *  - "cc0"      -> Public Domain / CC0
    */
   readonly license?: string;
-  /** URL back to the original asset page for attribution purposes. */
-  readonly attributionUrl?: string;
-  /** Provider slug, e.g. "unsplash" | "pexels". */
-  readonly sourceProvider?: string;
-  /** Original provider asset page URL (for dedup & attribution). */
-  readonly sourceUrl?: string;
 
-  // ─── Optional Extras ───────────────────────────────────────────────────────
+  /** Attribution back-link URL (with UTM tags where required) */
+  readonly attributionUrl?: string;
+
+  /** Provider license conditions & restrictions */
+  readonly usageRestrictions?: string[];
+
+  // ─── OpenIdear UI & Search Additions ───────────────────────────────────────
+  /** Accessible alt text */
+  readonly alt?: string;
+  readonly source?: ImageSourceType;
   readonly prompt?: string;
   readonly tags?: string[];
 }
 
 /**
- * Input options for a provider search call.
+ * Backward-compatible alias for existing codebase callers.
  */
-export interface ImageSearchOptions {
+export type NormalizedImageResult = ImageSearchResult;
+
+/**
+ * Standard input options for image search queries.
+ */
+export interface ImageSearchInput {
   query: string;
-  limit?: number;
   page?: number;
+  limit?: number;
+  orientation?: ImageOrientation;
   userId?: string;
+  visualSuggestionId?: string;
+  context?: {
+    articleTitle?: string;
+    heading?: string;
+    sectionContent?: string;
+    visualType?: string;
+    imagePrompt?: string;
+    searchQuery?: string;
+  };
 }
 
 /**
- * Every image search provider MUST implement this interface.
+ * Backward-compatible alias for ImageSearchInput.
+ */
+export type ImageSearchOptions = ImageSearchInput;
+
+/**
+ * Interface that all image search providers must implement.
  */
 export interface ImageSearchProvider {
+  /** Provider identifier, e.g. "unsplash", "pexels", "asset_library" */
   readonly name: string;
-  search(options: ImageSearchOptions): Promise<NormalizedImageResult[]>;
+
+  /**
+   * Primary search method conforming to the Sprint 1 specification.
+   */
+  searchImages(input: {
+    query: string;
+    page?: number;
+    limit?: number;
+    orientation?: ImageOrientation;
+    userId?: string;
+  }): Promise<ImageSearchResult[]>;
+
+  /**
+   * Optional/backward-compatible search method for existing callers.
+   */
+  search?(options: ImageSearchOptions): Promise<ImageSearchResult[]>;
 }

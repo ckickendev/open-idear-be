@@ -2,6 +2,8 @@ const express = require("express");
 const { Controller } = require("../core");
 const asyncHandler = require("../utils/asyncHandler");
 const { AuthMiddleware, OptionalAuthMiddleware } = require("../middlewares/auth.middleware");
+const { mediaSearchLimiter } = require("../middlewares/mediaRateLimit.middleware");
+const { buildSearchQuery } = require("../services/imageSearch/searchQueryBuilder");
 const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, ArticleTranslationWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent, aiFeatureRegistry, ideaGeneratorService, briefGeneratorService, outlineGeneratorService, contentInventoryService } = require("../ai");
 const { ContentStructureService } = require("../ai/content/contentStructure.service");
 const { PublisherPipelineWorkflow } = require("../ai/workflow/publisherPipeline.workflow");
@@ -1075,23 +1077,110 @@ class AIController extends Controller {
    * Unified image search across user Asset Library and technical stock.
    */
   searchImages = asyncHandler(async (req, res) => {
-    const { query, limit, page } = req.body;
-    if (!query || typeof query !== "string" || !query.trim()) {
-      return res.status(400).json({ error: "query is required" });
+    const { query, limit, page, orientation, visualSuggestionId, context } = req.body;
+
+    // 1. Validate & normalize orientation
+    let validOrientation = undefined;
+    if (orientation) {
+      const lowerOrientation = String(orientation).toLowerCase().trim();
+      if (["landscape", "portrait", "square"].includes(lowerOrientation)) {
+        validOrientation = lowerOrientation;
+      } else {
+        return res.status(400).json({
+          error: "Invalid orientation. Must be one of: 'landscape', 'portrait', 'square'",
+        });
+      }
     }
 
-    const userId = req.userInfo?._id;
-    const parsedLimit = parseInt(limit, 10) || 12;
-    const parsedPage  = parseInt(page,  10) || 1;
+    // 2. Validate & normalize limit & page
+    const parsedLimit = Math.min(30, Math.max(1, parseInt(limit, 10) || 12));
+    const parsedPage = Math.max(1, parseInt(page, 10) || 1);
 
-    const results = await imageSearchService.search(query.trim(), parsedLimit, userId, parsedPage);
+    // 3. Resolve or construct query
+    let rawQuery = typeof query === "string" ? query.trim() : "";
+    if (!rawQuery && (visualSuggestionId || context)) {
+      rawQuery = buildSearchQuery({
+        query: rawQuery,
+        searchQuery: context?.searchQuery,
+        imagePrompt: context?.imagePrompt,
+        heading: context?.heading,
+        articleTitle: context?.articleTitle,
+        sectionContent: context?.sectionContent,
+        visualType: context?.visualType,
+        visualSuggestionId,
+      });
+    }
+
+    if (!rawQuery) {
+      return res.status(400).json({
+        error: "query or valid visual suggestion context is required",
+      });
+    }
+
+    // Sanitize query to prevent log injection or abuse (cap at 200 chars)
+    const cleanQuery = rawQuery.slice(0, 200);
+    const userId = req.userInfo?._id;
+
+    // 4. Execute search with error boundary
+    try {
+      const results = await imageSearchService.searchImages({
+        query: cleanQuery,
+        limit: parsedLimit,
+        page: parsedPage,
+        orientation: validOrientation,
+        userId,
+        visualSuggestionId,
+        context,
+      });
+
+      res.json({
+        status: "success",
+        query: cleanQuery,
+        page: parsedPage,
+        limit: parsedLimit,
+        total: results.length,
+        data: results,
+      });
+    } catch (err) {
+      // Safe error logging: do not log secrets or sensitive article content
+      console.error("[AIController] searchImages error:", err?.message);
+      res.json({
+        status: "success",
+        query: cleanQuery,
+        page: parsedPage,
+        limit: parsedLimit,
+        total: 0,
+        data: [],
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/images/batch-search
+   * POST /ai/images/batch-search
+   * Searches for images across multiple visual suggestions with bounded concurrency (2)
+   * and cross-suggestion query deduplication.
+   */
+  batchSearchImages = asyncHandler(async (req, res) => {
+    const { suggestions, limit = 6, orientation = "landscape" } = req.body;
+
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      return res.status(400).json({ error: "suggestions array is required" });
+    }
+
+    const cappedSuggestions = suggestions.slice(0, 30);
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+
+    const result = await imageSearchService.batchSearchImages(cappedSuggestions, {
+      userId,
+      limitPerSuggestion: Math.min(12, Math.max(1, Number(limit) || 6)),
+      orientation: ["landscape", "portrait", "square"].includes(orientation) ? orientation : "landscape",
+      concurrency: 2,
+    });
 
     res.json({
       status: "success",
-      query: query.trim(),
-      page: parsedPage,
-      total: results.length,
-      data: results,
+      ...result,
     });
   });
 
@@ -1131,25 +1220,49 @@ class AIController extends Controller {
       return res.status(400).json({ error: urlCheck.reason || "URL not allowed" });
     }
 
-    const asset = await imageImportService.importFromExternalUrl({
-      url: url.trim(),
-      thumbnailUrl: thumbnailUrl ? thumbnailUrl.trim() : undefined,
-      title: title ? String(title).trim() : undefined,
-      alt: alt ? String(alt).trim() : undefined,
-      author: author ? String(author).trim() : undefined,
-      license: license ? String(license).trim() : undefined,
-      attributionUrl: attributionUrl ? String(attributionUrl).trim() : undefined,
-      sourceProvider: sourceProvider ? String(sourceProvider).trim() : undefined,
-      sourceUrl: sourceUrl ? String(sourceUrl).trim() : url.trim(),
-      searchQuery: searchQuery ? String(searchQuery).trim() : undefined,
-      userId,
-    });
+    try {
+      const asset = await imageImportService.importFromExternalUrl({
+        url: url.trim(),
+        thumbnailUrl: thumbnailUrl ? thumbnailUrl.trim() : undefined,
+        title: title ? String(title).trim() : undefined,
+        alt: alt ? String(alt).trim() : undefined,
+        author: author ? String(author).trim() : undefined,
+        license: license ? String(license).trim() : undefined,
+        attributionUrl: attributionUrl ? String(attributionUrl).trim() : undefined,
+        sourceProvider: sourceProvider ? String(sourceProvider).trim() : undefined,
+        sourceUrl: sourceUrl ? String(sourceUrl).trim() : url.trim(),
+        searchQuery: searchQuery ? String(searchQuery).trim() : undefined,
+        userId,
+      });
 
-    res.json({
-      status: "success",
-      isExisting: asset.isExisting || false,
-      data: asset,
-    });
+      return res.json({
+        status: "success",
+        isExisting: asset.isExisting || false,
+        isExternalReference: asset.isExternalReference || false,
+        data: asset,
+      });
+    } catch (importErr) {
+      console.warn("[AIController] importStockImage fallback to external reference:", importErr.message);
+      return res.json({
+        status: "success",
+        isExisting: false,
+        isExternalReference: true,
+        data: {
+          _id: "ext_" + Date.now(),
+          url: url.trim(),
+          thumbnailUrl: thumbnailUrl ? thumbnailUrl.trim() : url.trim(),
+          alt: alt ? String(alt).trim() : title || "Stock Photo",
+          source: "stock",
+          sourceProvider: sourceProvider || "unsplash",
+          sourceUrl: sourceUrl || url.trim(),
+          author: author || "Photographer",
+          license: license || "unsplash",
+          attributionUrl: attributionUrl || url.trim(),
+          isExternalReference: true,
+          assetType: "external_reference",
+        },
+      });
+    }
   });
 
   /**
@@ -1326,8 +1439,10 @@ class AIController extends Controller {
     this._router.post(`${this._rootPath}/images/generate`,    AuthMiddleware, this.generateTechnicalIllustration);
     this._router.post(`/ai/images/generate`,                  AuthMiddleware, this.generateTechnicalIllustration);
     this._router.post(`${this._rootPath}/image/edit`,         AuthMiddleware, this.editImage);
-    this._router.post(`${this._rootPath}/images/search`,      AuthMiddleware, this.searchImages);
-    this._router.post(`/ai/images/search`,                    AuthMiddleware, this.searchImages);
+    this._router.post(`${this._rootPath}/images/search`,      AuthMiddleware, mediaSearchLimiter, this.searchImages);
+    this._router.post(`/ai/images/search`,                    AuthMiddleware, mediaSearchLimiter, this.searchImages);
+    this._router.post(`${this._rootPath}/images/batch-search`, AuthMiddleware, mediaSearchLimiter, this.batchSearchImages);
+    this._router.post(`/ai/images/batch-search`,               AuthMiddleware, mediaSearchLimiter, this.batchSearchImages);
     this._router.post(`${this._rootPath}/images/import`,      AuthMiddleware, this.importStockImage);
     this._router.post(`/ai/images/import`,                    AuthMiddleware, this.importStockImage);
     this._router.post(`${this._rootPath}/diagram/generate`,   AuthMiddleware, this.generateDiagram);
@@ -1505,24 +1620,31 @@ class AIController extends Controller {
 
     const userId = req.userInfo?._id || req.user?._id;
 
-    const record = await visualAnalyticsService.recordEvent({
-      userId: userId ? userId.toString() : null,
-      postId,
-      heading,
-      visualType,
-      recommendation: req.body.recommendation,
-      recommendedAction,
-      actionTaken,
-      preset,
-      prompt,
-      confidence: confidence ? Number(confidence) : undefined,
-      metadata,
-    });
+    try {
+      const record = await visualAnalyticsService.recordEvent({
+        userId: userId ? userId.toString() : null,
+        postId,
+        heading,
+        visualType,
+        recommendation: req.body.recommendation,
+        recommendedAction,
+        actionTaken,
+        preset,
+        prompt,
+        confidence: confidence ? Number(confidence) : undefined,
+        metadata,
+      });
 
-    res.json({
-      status: "success",
-      data: record,
-    });
+      res.json({
+        status: "success",
+        data: record,
+      });
+    } catch (err) {
+      return res.status(400).json({
+        status: "error",
+        error: err.message,
+      });
+    }
   });
 
   /**

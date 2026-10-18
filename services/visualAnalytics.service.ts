@@ -34,6 +34,15 @@ export type VisualActionType =
   | "visual_generation_rejected"
   | "visual_generation_regenerated"
   | "visual_suggestion_dismissed"
+  // Batch Search & Visual Assistant Actions
+  | "batch_search_started"
+  | "batch_search_completed"
+  | "search_success"
+  | "search_failure"
+  | "candidate_selected"
+  | "image_applied"
+  | "suggestion_dismissed"
+  | "ai_fallback_requested"
   // Legacy Aliases
   | "generated"
   | "accepted"
@@ -93,6 +102,15 @@ export class VisualAnalyticsService {
     "visual_generation_rejected",
     "visual_generation_regenerated",
     "visual_suggestion_dismissed",
+    // Batch Search & Visual Assistant Actions
+    "batch_search_started",
+    "batch_search_completed",
+    "search_success",
+    "search_failure",
+    "candidate_selected",
+    "image_applied",
+    "suggestion_dismissed",
+    "ai_fallback_requested",
     "generated",
     "accepted",
     "regenerated",
@@ -216,14 +234,24 @@ export class VisualAnalyticsService {
         act === "ai_image_recommendation_shown"
       ) {
         created++;
-      } else if (act === "visual_search_started") {
+      } else if (
+        act === "visual_search_started" ||
+        act === "batch_search_started" ||
+        act === "search_preferred" ||
+        act === "search_success"
+      ) {
         searchStarted++;
-      } else if (act === "visual_search_selected") {
+      } else if (
+        act === "visual_search_selected" ||
+        act === "candidate_selected" ||
+        act === "image_applied"
+      ) {
         searchSelected++;
       } else if (
         act === "visual_generation_started" ||
         act === "generated" ||
-        act === "ai_image_generated"
+        act === "ai_image_generated" ||
+        act === "ai_fallback_requested"
       ) {
         genStarted++;
       } else if (
@@ -245,10 +273,11 @@ export class VisualAnalyticsService {
         act === "ai_image_regenerated"
       ) {
         genRegenerated++;
-      } else if (act === "visual_suggestion_dismissed") {
+      } else if (
+        act === "visual_suggestion_dismissed" ||
+        act === "suggestion_dismissed"
+      ) {
         dismissed++;
-      } else if (act === "search_preferred") {
-        searchStarted++;
       }
     }
 

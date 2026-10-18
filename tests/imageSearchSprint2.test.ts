@@ -154,6 +154,8 @@ async function runTests() {
       "https://plus.unsplash.com/premium_photo.jpg",
       "https://images.pexels.com/photos/123/photo.jpg",
       "https://cdn.pixabay.com/photo/2023/example.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/test.jpg",
+      "https://commons.wikimedia.org/wiki/File:test.jpg",
     ];
 
     for (const url of planDomains) {

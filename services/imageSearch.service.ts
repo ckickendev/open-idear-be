@@ -1,18 +1,17 @@
 // =============================================================================
-//  IMAGE SEARCH SERVICE (SPRINT 2 UPGRADE)
+//  IMAGE SEARCH SERVICE — SPRINT 1 FOUNDATION
 //  services/imageSearch.service.ts
 //
-//  Sprint 2 Changes:
-//  - Existing providers (AssetLibraryProvider, MockTechnicalStockProvider) now
-//    conform to the formal ImageSearchProvider interface.
-//  - Two real external providers added: UnsplashProvider, PexelsProvider.
-//    Both are activated only when API keys are present in env variables.
-//  - search() now supports a `page` parameter for pagination.
-//  - NormalizedImageResult extended with provider safety fields.
-//  - All external provider module imports use lazy require for test isolation.
-//
-//  IMPORTANT: Do NOT break existing callers — the exported singleton
-//  `imageSearchService` and module.exports remain unchanged.
+//  Design Decisions:
+//  - All providers conform to the ImageSearchProvider interface (searchImages & search).
+//  - Multi-provider search orchestration:
+//      1. User's Asset Library
+//      2. Real external providers (Unsplash, Pexels, Wikimedia)
+//      3. Curated technical stock (offline / fallback when keys absent)
+//  - Implements searchImages() conforming to Sprint 1 contract.
+//  - Preserves search() signature for 100% backward compatibility.
+//  - Supports pagination (page, limit) and orientation (landscape, portrait, square).
+//  - Results normalized to ImageSearchResult contract with provider safety fields.
 // =============================================================================
 
 const mongoose = require("mongoose");
@@ -20,17 +19,27 @@ const { Asset } = require("../models");
 
 import type {
   ImageSearchProvider,
+  ImageSearchInput,
   ImageSearchOptions,
-  NormalizedImageResult,
+  ImageSearchResult,
+  ImageOrientation,
 } from "./imageSearch/imageSearchProvider.interface";
+import { buildSearchQuery } from "./imageSearch/searchQueryBuilder";
+import { rankCandidates } from "./imageSearch/relevanceRanker";
 
 // ─── Asset Library Provider ────────────────────────────────────────────────────
 
 class AssetLibraryProvider implements ImageSearchProvider {
   readonly name = "asset_library";
 
-  async search(options: ImageSearchOptions): Promise<NormalizedImageResult[]> {
-    const { query, limit = 8, userId = null } = options as any;
+  async searchImages(input: {
+    query: string;
+    page?: number;
+    limit?: number;
+    orientation?: ImageOrientation;
+    userId?: string;
+  }): Promise<ImageSearchResult[]> {
+    const { query, limit = 8, userId = null } = input;
     if (!query || !query.trim()) return [];
     if (mongoose.connection.readyState !== 1) return [];
 
@@ -51,11 +60,14 @@ class AssetLibraryProvider implements ImageSearchProvider {
 
       const docs = await Asset.find(filter)
         .sort({ createdAt: -1 })
-        .limit(limit)
+        .limit(Math.min(30, Math.max(1, limit)))
         .lean();
 
-      return docs.map((doc: any): NormalizedImageResult => ({
+      return docs.map((doc: any): ImageSearchResult => ({
         id: doc._id.toString(),
+        provider: "asset_library",
+        sourceProvider: doc.sourceProvider || "asset_library",
+        imageUrl: doc.url,
         url: doc.url,
         thumbnailUrl: doc.thumbnailUrl || doc.url,
         title: doc.originalName || doc.alt || "Library Asset",
@@ -65,17 +77,20 @@ class AssetLibraryProvider implements ImageSearchProvider {
         width: doc.width || 1200,
         height: doc.height || 630,
         tags: doc.tags || [],
-        // Provider provenance (populated if originally imported from a provider)
         author: doc.author || undefined,
-        license: doc.license || undefined,
+        license: doc.license || "User Asset",
         attributionUrl: doc.attributionUrl || undefined,
-        sourceProvider: doc.sourceProvider || undefined,
-        sourceUrl: doc.sourceUrl || undefined,
+        sourceUrl: doc.sourceUrl || doc.url,
+        usageRestrictions: ["Owned by user in OpenIdear Asset Library"],
       }));
     } catch (err: any) {
       console.warn("[AssetLibraryProvider] Search fallback:", err?.message);
       return [];
     }
+  }
+
+  async search(options: ImageSearchOptions): Promise<ImageSearchResult[]> {
+    return this.searchImages(options);
   }
 }
 
@@ -91,7 +106,7 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
 
   static CURATED_STOCK = [
     {
-      keywords: ["architecture", "system", "diagram", "infra", "cloud", "aws", "docker", "kubernetes"],
+      keywords: ["architecture", "system", "diagram", "infra", "cloud", "aws", "docker", "kubernetes", "introduction", "overview", "concept", "intro"],
       url: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
       thumbnailUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=400&q=80",
       title: "Cloud Infrastructure Server Racks",
@@ -202,12 +217,14 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
     },
   ];
 
-  async search(optionsOrQuery: ImageSearchOptions | string, legacyLimit?: number): Promise<NormalizedImageResult[]> {
-    // Backward-compatible: accept both search(options) and search(query, limit)
-    const opts: ImageSearchOptions = typeof optionsOrQuery === "string"
-      ? { query: optionsOrQuery, limit: legacyLimit ?? 8 }
-      : optionsOrQuery;
-    const { query, limit = 8 } = opts;
+  async searchImages(input: {
+    query: string;
+    page?: number;
+    limit?: number;
+    orientation?: ImageOrientation;
+    userId?: string;
+  }): Promise<ImageSearchResult[]> {
+    const { query, limit = 8 } = input;
     const q = (query || "").toLowerCase();
     const words = q.split(/\s+/).filter(Boolean);
 
@@ -221,10 +238,14 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       return { item, score, index };
     });
 
-    scored.sort((a, b) => b.score - a.score || a.index - b.index);
+    const matches = scored.filter((s) => s.score > 0);
+    matches.sort((a, b) => b.score - a.score || a.index - b.index);
 
-    return scored.slice(0, limit).map(({ item, index }): NormalizedImageResult => ({
+    return matches.slice(0, Math.min(30, Math.max(1, limit))).map(({ item, index }): ImageSearchResult => ({
       id: `stock_${index}_${Date.now()}`,
+      provider: "technical_stock",
+      sourceProvider: item.sourceProvider || "unsplash",
+      imageUrl: item.url,
       url: item.url,
       thumbnailUrl: item.thumbnailUrl,
       title: item.title,
@@ -236,15 +257,25 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       author: item.author,
       license: item.license,
       attributionUrl: item.attributionUrl,
-      sourceProvider: item.sourceProvider,
       sourceUrl: item.url,
+      usageRestrictions: [
+        "Unsplash License — free for commercial & personal use",
+        "Attribution encouraged",
+      ],
     }));
+  }
+
+  async search(optionsOrQuery: ImageSearchOptions | string, legacyLimit?: number): Promise<ImageSearchResult[]> {
+    const opts: ImageSearchOptions = typeof optionsOrQuery === "string"
+      ? { query: optionsOrQuery, limit: legacyLimit ?? 8 }
+      : optionsOrQuery;
+    return this.searchImages(opts);
   }
 }
 
 // ─── Composite Image Search Service ───────────────────────────────────────────
 
-class ImageSearchService {
+export class ImageSearchService {
   private assetProvider: ImageSearchProvider;
   private stockProvider: ImageSearchProvider;
   private externalProviders: ImageSearchProvider[];
@@ -272,57 +303,267 @@ class ImageSearchService {
     return providers;
   }
 
-  async search(
-    query: string,
-    limit = 12,
-    userId: string | null = null,
-    page = 1
-  ): Promise<NormalizedImageResult[]> {
-    const cleanQuery = (query || "").trim();
-    const safeLimit = Math.min(30, Math.max(1, Number(limit) || 12));
-    const safePage = Math.max(1, Number(page) || 1);
+  /**
+   * Primary unified search method conforming to the Sprint 1 requirements.
+   */
+  async searchImages(input: ImageSearchInput): Promise<ImageSearchResult[]> {
+    // 1. Build or normalize the search query using deterministic rules if needed
+    let effectiveQuery = (input.query || "").trim();
+    const isGenericQuery = /^(?:introduction|overview|summary|conclusion|background|getting\s*started|guide|intro|mục\s*lục|lời\s*mở\s*đầu|kết\s*luận)$/i.test(effectiveQuery);
+    if (!effectiveQuery || effectiveQuery.length < 3 || (isGenericQuery && (input.context?.articleTitle || input.context?.heading))) {
+      if (input.context || input.visualSuggestionId) {
+        const enriched = buildSearchQuery({
+          query: input.query,
+          searchQuery: input.context?.searchQuery,
+          imagePrompt: input.context?.imagePrompt,
+          heading: input.context?.heading,
+          articleTitle: input.context?.articleTitle,
+          sectionContent: input.context?.sectionContent,
+          visualType: input.context?.visualType,
+          visualSuggestionId: input.visualSuggestionId,
+        });
+        if (enriched && enriched.trim()) {
+          effectiveQuery = enriched;
+        }
+      }
+    }
 
-    // 1. User's Asset Library (always first — no pagination needed for own library)
-    const libraryResults = await this.assetProvider.search({
-      query: cleanQuery,
+    if (!effectiveQuery) {
+      return [];
+    }
+
+    const safeLimit = Math.min(30, Math.max(1, Number(input.limit) || 12));
+    const safePage = Math.max(1, Number(input.page) || 1);
+    const orientation = input.orientation || "landscape";
+
+    // 2. Query User's Asset Library (always first — private to current user)
+    const libraryResults = await this.assetProvider.searchImages({
+      query: effectiveQuery,
       limit: safeLimit,
-      userId: userId as string,
+      userId: input.userId,
+      orientation,
     });
 
-    // 2. External providers (Unsplash, Pexels) — only if API keys are configured
-    const externalResults: NormalizedImageResult[] = [];
+    // 3. Query External Providers (Unsplash, Pexels, Wikimedia)
+    const externalResults: ImageSearchResult[] = [];
     const externalSlots = Math.max(4, safeLimit - libraryResults.length);
-    const perProvider = Math.ceil(externalSlots / Math.max(1, this.externalProviders.length));
 
     for (const provider of this.externalProviders) {
+      const remainingNeeded = externalSlots - externalResults.length;
+      if (remainingNeeded <= 0) break;
       try {
-        const results = await provider.search({
-          query: cleanQuery,
-          limit: perProvider,
+        const results = await provider.searchImages({
+          query: effectiveQuery,
+          limit: remainingNeeded,
           page: safePage,
+          orientation,
+          userId: input.userId,
         });
         externalResults.push(...results);
-        if (externalResults.length >= externalSlots) break;
       } catch (err: any) {
         console.warn(`[ImageSearchService] Provider ${provider.name} failed:`, err?.message);
       }
     }
 
-    // 3. Mock technical stock as fallback — only if external providers returned nothing
-    const stockResults: NormalizedImageResult[] = [];
+    // 4. Mock Technical Stock as Fallback if external providers return nothing
+    const stockResults: ImageSearchResult[] = [];
     const totalSoFar = libraryResults.length + externalResults.length;
     if (totalSoFar < safeLimit) {
       const stockSlots = safeLimit - totalSoFar;
-      const mock = await this.stockProvider.search({ query: cleanQuery, limit: Math.max(4, stockSlots) });
+      const mock = await this.stockProvider.searchImages({
+        query: effectiveQuery,
+        limit: Math.max(4, stockSlots),
+        orientation,
+      });
       stockResults.push(...mock);
     }
 
     const combined = [...libraryResults, ...externalResults, ...stockResults];
+
+    // 5. Apply Relevance Ranking if context is provided
+    if (input.context) {
+      const ranked = rankCandidates(combined, {
+        heading: input.context.heading,
+        articleTitle: input.context.articleTitle,
+        sectionContent: input.context.sectionContent,
+        visualType: input.context.visualType,
+        searchQuery: effectiveQuery,
+        previouslySelectedUrls: (input.context as any)?.previouslySelectedUrls,
+      });
+      return ranked.slice(0, safeLimit);
+    }
+
     return combined.slice(0, safeLimit);
+  }
+
+  /**
+   * Backward-compatible search method for existing controllers and callers.
+   */
+  async search(
+    query: string,
+    limit = 12,
+    userId: string | null = null,
+    page = 1,
+    orientation?: ImageOrientation
+  ): Promise<ImageSearchResult[]> {
+    return this.searchImages({
+      query,
+      limit,
+      userId: userId as string,
+      page,
+      orientation,
+    });
+  }
+
+  /**
+   * Batch search images for multiple visual suggestions with bounded concurrency
+   * and request deduplication.
+   */
+  async batchSearchImages(
+    suggestions: Array<{
+      id?: string;
+      heading: string;
+      query?: string;
+      visualType?: string;
+      context?: Record<string, any>;
+    }>,
+    options: {
+      userId?: string;
+      limitPerSuggestion?: number;
+      orientation?: ImageOrientation;
+      concurrency?: number;
+    } = {}
+  ): Promise<{
+    total: number;
+    completed: number;
+    withResults: number;
+    empty: number;
+    failed: number;
+    results: Array<{
+      id?: string;
+      heading: string;
+      query: string;
+      success: boolean;
+      count: number;
+      candidates: ImageSearchResult[];
+      error?: string;
+    }>;
+  }> {
+    const {
+      userId,
+      limitPerSuggestion = 6,
+      orientation = "landscape",
+      concurrency = 2,
+    } = options;
+
+    const total = suggestions.length;
+    if (total === 0) {
+      return { total: 0, completed: 0, withResults: 0, empty: 0, failed: 0, results: [] };
+    }
+
+    const results = new Array(total);
+    // Request deduplication cache: normalized query string -> Promise<ImageSearchResult[]>
+    const queryCache = new Map<string, Promise<ImageSearchResult[]>>();
+
+    const processSuggestion = async (
+      sec: {
+        id?: string;
+        heading: string;
+        query?: string;
+        visualType?: string;
+        context?: Record<string, any>;
+      },
+      index: number
+    ) => {
+      let effectiveQuery = (sec.query || "").trim();
+      if (!effectiveQuery || effectiveQuery.length < 3) {
+        effectiveQuery = buildSearchQuery({
+          query: sec.query,
+          searchQuery: sec.context?.searchQuery,
+          imagePrompt: sec.context?.imagePrompt,
+          heading: sec.heading || sec.context?.heading,
+          articleTitle: sec.context?.articleTitle,
+          sectionContent: sec.context?.sectionContent,
+          visualType: sec.visualType || sec.context?.visualType,
+          visualSuggestionId: sec.id,
+        });
+      }
+
+      const cacheKey = `${effectiveQuery.toLowerCase().trim()}_${orientation}`;
+
+      try {
+        let fetchPromise = queryCache.get(cacheKey);
+        if (!fetchPromise) {
+          fetchPromise = this.searchImages({
+            query: effectiveQuery,
+            limit: limitPerSuggestion,
+            page: 1,
+            orientation,
+            userId,
+            visualSuggestionId: sec.id,
+            context: {
+              heading: sec.heading,
+              visualType: sec.visualType,
+              searchQuery: effectiveQuery,
+              ...sec.context,
+            },
+          });
+          queryCache.set(cacheKey, fetchPromise);
+        }
+
+        const candidates = await fetchPromise;
+        results[index] = {
+          id: sec.id,
+          heading: sec.heading,
+          query: effectiveQuery,
+          success: true,
+          count: candidates.length,
+          candidates,
+        };
+      } catch (err: any) {
+        console.warn(`[ImageSearchService] Batch item failed for "${sec.heading}":`, err?.message);
+        results[index] = {
+          id: sec.id,
+          heading: sec.heading,
+          query: effectiveQuery,
+          success: false,
+          count: 0,
+          candidates: [],
+          error: err?.message || "Search failed",
+        };
+      }
+    };
+
+    // Bounded concurrency pool execution
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < total) {
+        const index = cursor++;
+        await processSuggestion(suggestions[index], index);
+      }
+    };
+
+    const workerCount = Math.max(1, Math.min(concurrency, total));
+    const workers = Array.from({ length: workerCount }, () => worker());
+    await Promise.all(workers);
+
+    const completed = results.filter((r) => r && r.success).length;
+    const withResults = results.filter((r) => r && r.success && r.count > 0).length;
+    const empty = results.filter((r) => r && r.success && r.count === 0).length;
+    const failed = results.filter((r) => r && !r.success).length;
+
+    return {
+      total,
+      completed,
+      withResults,
+      empty,
+      failed,
+      results,
+    };
   }
 }
 
-const imageSearchService = new ImageSearchService();
+export const imageSearchService = new ImageSearchService();
 
 module.exports = {
   AssetLibraryProvider,

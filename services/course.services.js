@@ -71,7 +71,7 @@ class CourseService extends Service {
                     path: 'lessons',
                     match: { del_flag: 0 },
                     options: { sort: { order: 1 } },
-                    populate: { path: 'media', select: 'url type cloudflareId duration' }
+                    populate: { path: 'media', select: 'url type cloudflareId bunnyVideoId bunnyLibraryId provider status thumbnail duration' }
                 }
             })
             .populate('thumbnail', 'url')
@@ -102,7 +102,7 @@ class CourseService extends Service {
                     path: 'lessons',
                     match: { del_flag: 0 },
                     options: { sort: { order: 1 } },
-                    populate: { path: 'media', select: 'url type cloudflareId duration' }
+                    populate: { path: 'media', select: 'url type cloudflareId bunnyVideoId bunnyLibraryId provider status thumbnail duration' }
                 }
             })
             .populate('thumbnail', 'url')
@@ -280,7 +280,7 @@ class CourseService extends Service {
                 lessonId,
                 { ...updateData, $unset: { media: 1 }, $set: { suggestedVideoChapters: [] } },
                 { new: true }
-            ).populate('media', 'url type cloudflareId');
+            ).populate('media', 'url type cloudflareId bunnyVideoId bunnyLibraryId provider status thumbnail duration');
         }
 
         // If replacing existing video with a different video
@@ -288,7 +288,7 @@ class CourseService extends Service {
             await this._deleteMediaAsset(lesson.media);
         }
 
-        return Lesson.findByIdAndUpdate(lessonId, updateData, { new: true }).populate('media', 'url type cloudflareId');
+        return Lesson.findByIdAndUpdate(lessonId, updateData, { new: true }).populate('media', 'url type cloudflareId bunnyVideoId bunnyLibraryId provider status thumbnail duration');
     }
 
     async moveLesson(lessonId, sourceChapterId, targetChapterId, userId) {
@@ -326,7 +326,7 @@ class CourseService extends Service {
                 $set: { suggestedVideoChapters: [] }
             },
             { new: true }
-        ).populate('media', 'url type cloudflareId');
+        ).populate('media', 'url type cloudflareId bunnyVideoId bunnyLibraryId provider status thumbnail duration');
 
         return updated;
     }
@@ -398,7 +398,27 @@ class CourseService extends Service {
                 }
             }
 
-            // 2. Delete from Cloudflare Stream if hosted there
+            // 2. Delete from Bunny Stream if hosted there
+            if (media.provider === 'bunny' || media.bunnyVideoId) {
+                const bunnyVideoId = media.bunnyVideoId || (media.url && !media.url.includes('://') ? media.url : null);
+                const libraryId = (process.env.BUNNY_STREAM_LIBRARY_ID || '').trim();
+                const apiKey = (process.env.BUNNY_STREAM_API_KEY || '').trim();
+                if (bunnyVideoId && libraryId && apiKey) {
+                    try {
+                        await axios.delete(
+                            `https://video.bunnycdn.com/library/${libraryId}/videos/${bunnyVideoId}`,
+                            {
+                                headers: { AccessKey: apiKey },
+                                timeout: 8000,
+                            }
+                        );
+                    } catch (bunnyErr) {
+                        console.warn(`[BunnyStream] Failed to delete video ${bunnyVideoId}:`, bunnyErr.response?.data || bunnyErr.message);
+                    }
+                }
+            }
+
+            // 3. Delete from Cloudflare Stream if hosted there (legacy)
             const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
             const apiToken = (process.env.CLOUDFLARE_API_TOKEN || '').trim();
             const cfId = media.cloudflareId || (media.url && !media.url.includes('://') ? media.url : null);
@@ -417,7 +437,7 @@ class CourseService extends Service {
                 }
             }
 
-            // 3. Delete from Database
+            // 4. Delete from Database
             await Media.findByIdAndDelete(media._id);
         } catch (err) {
             console.warn(`[MediaCleanup] Error during media cleanup:`, err.message);
@@ -616,6 +636,27 @@ class CourseService extends Service {
         return course;
     }
 
+    async cleanTrash(userId) {
+        const query = userId ? { del_flag: 1, instructor: userId } : { del_flag: 1 };
+        const trashedCourses = await Course.find(query).select('_id').lean();
+        if (!trashedCourses.length) return { deleted: 0 };
+
+        const courseIds = trashedCourses.map(c => c._id);
+
+        const chapters = await Chapter.find({ course: { $in: courseIds } }).select('_id').lean();
+        const chapterIds = chapters.map(ch => ch._id);
+
+        await Promise.all([
+            Course.deleteMany({ _id: { $in: courseIds } }),
+            Chapter.deleteMany({ course: { $in: courseIds } }),
+            Lesson.deleteMany({ chapter: { $in: chapterIds } }),
+            Review.deleteMany({ course: { $in: courseIds } }),
+            Enrollment.deleteMany({ course: { $in: courseIds } }),
+        ]);
+
+        return { deleted: courseIds.length };
+    }
+
     async updateCurriculum(courseId, curriculumData, userId) {
         await this.verifyOwnership(courseId, userId);
         const course = await Course.findById(courseId);
@@ -638,7 +679,7 @@ class CourseService extends Service {
                     path: 'lessons',
                     match: { del_flag: 0 },
                     options: { sort: { order: 1 } },
-                    populate: { path: 'media', select: 'url type cloudflareId duration' }
+                    populate: { path: 'media', select: 'url type cloudflareId bunnyVideoId bunnyLibraryId provider status thumbnail duration' }
                 }
             })
             .populate('thumbnail', 'url')

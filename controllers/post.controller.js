@@ -217,13 +217,16 @@ class PostController extends Controller {
 
     deletePost = asyncHandler(async (req, res) => {
         const { postId } = req.body;
-        const { _id } = req.userInfo;
+        const { _id, role } = req.userInfo;
 
         const post = await postService.getPostById(postId);
         if (!post) return res.status(404).json({ message: "Post not found" });
 
-        if (post.author._id.toString() !== _id.toString())
-            return res.status(403).json({ message: "You are not the author of this post" });
+        const authorId = post.author?._id ? post.author._id.toString() : (post.author ? post.author.toString() : "");
+        const userId = _id ? _id.toString() : "";
+
+        if (authorId && userId && authorId !== userId && role !== 1)
+            return res.status(403).json({ message: "You are not authorized to delete this post" });
 
         await postService.deletePost(postId);
         res.status(200).json({ message: "Post deleted successfully" });
@@ -233,6 +236,33 @@ class PostController extends Controller {
         const { postId } = req.body;
         await postService.restorePost(postId);
         res.status(200).json({ message: "Post restored successfully" });
+    });
+
+    cleanTrash = asyncHandler(async (req, res) => {
+        const result = await postService.cleanTrash();
+        res.status(200).json({ message: `Trash cleaned successfully. ${result.deleted} post(s) permanently deleted.`, deleted: result.deleted });
+    });
+
+    deletePostForever = asyncHandler(async (req, res) => {
+        const { postId } = req.body;
+        const { _id, role } = req.userInfo;
+
+        if (!postId) {
+            return res.status(400).json({ message: "postId is required" });
+        }
+
+        const post = await postService.getPostById(postId);
+        if (!post) return res.status(404).json({ message: "Post not found" });
+
+        const authorId = post.author?._id ? post.author._id.toString() : (post.author ? post.author.toString() : "");
+        const userId = _id ? _id.toString() : "";
+
+        if (authorId && userId && authorId !== userId && role !== 1) {
+            return res.status(403).json({ message: "You are not authorized to permanently delete this post" });
+        }
+
+        await postService.deletePostForever(postId);
+        res.status(200).json({ message: "Post permanently deleted successfully" });
     });
 
     public = asyncHandler(async (req, res) => {
@@ -355,6 +385,8 @@ class PostController extends Controller {
         this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
         this._router.post(`${this._rootPath}/restorePost`, AuthMiddleware, this.restorePost);
+        this._router.post(`${this._rootPath}/deleteForever`, AuthMiddleware, this.deletePostForever);
+        this._router.post(`${this._rootPath}/cleanTrash`, AdminMiddleware, this.cleanTrash);
         this._router.post(`${this._rootPath}/public`, AuthMiddleware, this.public);
         this._router.patch(`${this._rootPath}/changePublicManager`, AuthMiddleware, this.changePublicManager);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);

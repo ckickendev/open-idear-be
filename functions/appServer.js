@@ -90,7 +90,14 @@ class AppServer {
     });
     this._app.use(limiter);
 
-    this._app.use(express.json({ limit: '10mb' })); // bodyParser.json() replacement
+    this._app.use(
+      express.json({
+        limit: "10mb",
+        verify: (req, res, buf) => {
+          req.rawBody = buf;
+        },
+      })
+    );
     this._app.use(express.urlencoded({ extended: true }));
   }
 

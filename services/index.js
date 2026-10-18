@@ -35,6 +35,7 @@ const tutorService = require("./tutor.services");
 const masteryService = require("./mastery.services");
 
 const { articleVersionService } = require("./articleVersion.services");
+const bunnyStreamService = require("./bunnyStream.services");
 
 module.exports = {
   userService,
@@ -73,4 +74,5 @@ module.exports = {
   tutorService,
   masteryService,
   articleVersionService,
+  bunnyStreamService,
 };
