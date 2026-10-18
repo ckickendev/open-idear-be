@@ -30,8 +30,10 @@ const AIUsageController = require("./aiUsage.controller");
 const ArticleController = require("./article.controller");
 const ReadingProgressController = require("./readingProgress.controller");
 const CollectionController = require("./collection.controller");
+const HealthController = require("./health.controller");
 
 module.exports = {
+  HealthController,
   CollectionController,
   ReadingProgressController,
   ArticleController,

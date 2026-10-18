@@ -40,11 +40,13 @@ const {
   ArticleController,
   ReadingProgressController,
   CollectionController,
+  HealthController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
 
 const app = new AppServer([
+  new HealthController(),
   new UserController(),
   new CategoryController(),
   new CommentController(),
