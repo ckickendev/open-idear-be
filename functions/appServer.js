@@ -114,7 +114,14 @@ class AppServer {
 
   loadDatabase = () => {
     const mongoUrl = process.env.MONGO_URL;
-    mongoose.connect(mongoUrl, { autoCreate: true, autoIndex: true });
+    mongoose.connect(mongoUrl, {
+      autoCreate: true,
+      autoIndex: true,
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      family: 4, // Prefer IPv4 to avoid macOS DNS getaddrinfo ENOTFOUND IPv6 timeout issues
+      maxPoolSize: 10,
+    });
     mongoose.set("strictQuery", true);
 
     mongoose.connection.on("connected", () => {
