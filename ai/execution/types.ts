@@ -33,6 +33,10 @@ export interface ExecutionContext {
   readonly metadata: Record<string, any>;
   readonly startTime: number;
   readonly tools?: string[] | undefined;
+  readonly featureId?: string | undefined;
+  readonly telemetryKey?: string | undefined;
+  readonly userId?: string | undefined;
+
 
   responseFormat: "text" | "json";
   model: string;

@@ -1,7 +1,8 @@
 const { Service } = require("../core");
-const { Media } = require("../models");
+const { Media, Lesson } = require("../models");
 const mongoose = require("mongoose");
 const axios = require("axios");
+const cloudinary = require("../utils/cloudinary");
 
 class MediaService extends Service {
     async getAll() {
@@ -43,16 +44,22 @@ class MediaService extends Service {
         return media;
     }
 
+    /**
+     * @deprecated Legacy Cloudflare upload URL generator. Decommissioned in Sprint 5.
+     * All video uploads now use BunnyStreamService.authorizeUpload.
+     * Retained strictly as an inactive historical reference.
+     */
     async getCloudflareUploadUrl(userId) {
         console.log("start getCloudflareUploadUrl services");
-        const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-        const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+        const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID || "").trim();
+        const apiToken = (process.env.CLOUDFLARE_API_TOKEN || "").trim();
 
         if (!accountId || !apiToken || accountId === 'your_account_id_here' || apiToken === 'your_api_token_here') {
             throw new Error("Cloudflare credentials are not configured in .env");
         }
 
-        console.log("accountId, apiToken", accountId, apiToken);
+        const maskedToken = apiToken.length > 8 ? `${apiToken.slice(0, 4)}...${apiToken.slice(-4)}` : '***';
+        console.log("accountId:", accountId, "apiToken:", maskedToken);
 
         try {
             const response = await axios.post(
@@ -68,17 +75,92 @@ class MediaService extends Service {
                     },
                 }
             );
-            console.log(1);
 
             if (response.data.success) {
                 return response.data.result;
             } else {
-                throw new Error(response.data.errors[0].message);
+                const errMsg = response.data.errors?.[0]?.message || "Cloudflare direct upload failed";
+                throw new Error(errMsg);
             }
         } catch (error) {
+            const cfErrors = error.response?.data?.errors;
+            const cfMsg = Array.isArray(cfErrors) && cfErrors.length > 0 ? cfErrors.map(e => e.message || e.code).join(", ") : null;
+            const finalMsg = cfMsg || error.response?.data?.messages?.[0] || error.message;
             console.error("Cloudflare API error:", error.response?.data || error.message);
-            throw new Error("Failed to generate Cloudflare upload URL: " + (error.response?.data?.errors?.[0]?.message || error.message));
+            throw new Error(`Failed to generate Cloudflare upload URL: ${finalMsg}`);
         }
+    }
+
+    async deleteMedia(mediaId, userId) {
+        const media = await Media.findOne({ _id: mediaId, user: userId });
+        if (!media) {
+            throw new Error("Media not found or unauthorized");
+        }
+
+        // 1. Delete from Cloudinary if hosted there
+        if (media.url && typeof media.url === "string" && media.url.includes("cloudinary.com")) {
+            try {
+                const uploadIdx = media.url.indexOf("/upload/");
+                if (uploadIdx !== -1) {
+                    const pathAfterUpload = media.url.substring(uploadIdx + "/upload/".length);
+                    let resourceType = "video";
+                    if (media.url.includes("/image/upload/")) {
+                        resourceType = "image";
+                    } else if (media.url.includes("/raw/upload/")) {
+                        resourceType = "raw";
+                    }
+
+                    let clean = pathAfterUpload.split(/[?#]/)[0];
+                    clean = clean.replace(/^(?:[a-zA-Z0-9_]+_[a-zA-Z0-9_-]+(?:,[a-zA-Z0-9_]+_[a-zA-Z0-9_-]+)*\/)*/, "");
+                    clean = clean.replace(/^v\d+\//, "");
+                    clean = clean.replace(/\.[^/.]+$/, "");
+                    const publicId = decodeURIComponent(clean);
+
+                    if (publicId) {
+                        const res = await cloudinary.uploader.destroy(publicId, {
+                            resource_type: resourceType,
+                            invalidate: true,
+                        });
+                        if (res?.result === "not found" && resourceType === "video") {
+                            await cloudinary.uploader.destroy(publicId, {
+                                resource_type: "image",
+                                invalidate: true,
+                            });
+                        }
+                    }
+                }
+            } catch (cldErr) {
+                console.warn(`[Cloudinary] Failed to delete media ${mediaId}:`, cldErr.message);
+            }
+        }
+
+        // 2. Delete from Cloudflare Stream
+        const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID || "").trim();
+        const apiToken = (process.env.CLOUDFLARE_API_TOKEN || "").trim();
+        const cfId = media.cloudflareId || (media.url && !media.url.includes("://") ? media.url : null);
+        if (cfId && accountId && apiToken) {
+            try {
+                await axios.delete(
+                    `https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/${cfId}`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${apiToken}`,
+                        },
+                    }
+                );
+            } catch (cfErr) {
+                console.warn(`[Cloudflare] Failed to delete video ${cfId}:`, cfErr.response?.data || cfErr.message);
+            }
+        }
+
+        // 3. Unlink from any lessons that reference this media
+        if (Lesson) {
+            await Lesson.updateMany({ media: mediaId }, { $unset: { media: 1 } });
+        }
+
+        // 4. Delete from Database
+        await Media.findByIdAndDelete(mediaId);
+        return { success: true };
     }
 }
 

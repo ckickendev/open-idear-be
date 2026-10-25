@@ -3,14 +3,27 @@ require("dotenv").config();
 const { NotFoundException, UnauthorizedException } = require("../exceptions");
 const { User } = require("../models");
 
-async function _verifyToken(req) {
+function _extractToken(req) {
   const headersToken = req?.headers["authorization"];
-  if (!headersToken) {
-    throw new UnauthorizedException("No token provided");
+  if (headersToken) {
+    const token = headersToken.split(" ")[1];
+    if (token) return token;
   }
-  const tokenClient = headersToken.split(" ")[1];
+  // Fallback: check cookie header (e.g. access_token or token)
+  const cookieHeader = req?.headers?.cookie;
+  if (cookieHeader) {
+    const match = cookieHeader.match(/(?:^|;\s*)(?:access_token|token)=([^;]*)/);
+    if (match) {
+      return decodeURIComponent(match[1]);
+    }
+  }
+  return null;
+}
+
+async function _verifyToken(req) {
+  const tokenClient = _extractToken(req);
   if (!tokenClient) {
-    throw new UnauthorizedException("Invalid token format");
+    throw new UnauthorizedException("No token provided");
   }
   const validToken = jwt.verify(tokenClient, process.env.SECRET_KEY || "SECRET_KEY", {
     algorithms: ["HS256"],
@@ -34,13 +47,32 @@ async function AuthMiddleware(req, res, next) {
   }
 }
 
+function isAdminUser(user) {
+  if (!user) return false;
+  const role = user.role;
+  return role === 1 || role === "1" || role === "admin";
+}
+
 async function AdminMiddleware(req, res, next) {
   try {
     const user = await _verifyToken(req);
+    if (!isAdminUser(user)) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Admin access required",
+      });
+    }
+    if (user.activate === false) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Account is deactivated or locked",
+      });
+    }
     req.userInfo = user;
     next();
   } catch (error) {
-    res.status(401).json({ success: false, message: error.message || "Invalid Token" });
+    const status = error.status || 401;
+    res.status(status).json({ success: false, message: error.message || "Invalid Token" });
   }
 }
 
@@ -56,10 +88,7 @@ async function LoginMiddleware(req, res, next) {
 
 async function OptionalAuthMiddleware(req, res, next) {
   try {
-    const headersToken = req?.headers["authorization"];
-    if (!headersToken) return next();
-
-    const tokenClient = headersToken.split(" ")[1];
+    const tokenClient = _extractToken(req);
     if (!tokenClient) return next();
 
     const validToken = jwt.verify(tokenClient, process.env.SECRET_KEY || "SECRET_KEY", {
@@ -75,5 +104,5 @@ async function OptionalAuthMiddleware(req, res, next) {
   }
 }
 
-module.exports = { AuthMiddleware, AdminMiddleware, LoginMiddleware, OptionalAuthMiddleware };
+module.exports = { AuthMiddleware, AdminMiddleware, LoginMiddleware, OptionalAuthMiddleware, isAdminUser };
 

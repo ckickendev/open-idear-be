@@ -46,10 +46,10 @@ export class GrowthTaskRegistry {
   }
 
   /**
-   * Get a registered task by ID.
+   * Get a registered task by ID or canonical feature ID.
    */
   get(id: string): GrowthTask {
-    const task = this.tasks.get(id);
+    const task = this.resolveTask(id);
     if (!task) {
       throw new Error(`Growth task with ID "${id}" is not registered.`);
     }
@@ -57,11 +57,24 @@ export class GrowthTaskRegistry {
   }
 
   /**
-   * Check if a task is registered.
+   * Check if a task is registered by ID or canonical feature ID.
    */
   has(id: string): boolean {
-    return this.tasks.has(id);
+    return this.resolveTask(id) !== undefined;
   }
+
+  private resolveTask(id: string): GrowthTask | undefined {
+    if (!id) return undefined;
+    if (this.tasks.has(id)) return this.tasks.get(id);
+
+    const normalized = id.replace(/_/g, "-");
+    if (this.tasks.has(normalized)) return this.tasks.get(normalized);
+
+    if (id === "faq_generation" && this.tasks.has("faq")) return this.tasks.get("faq");
+    if (id === "comparison_generation" && this.tasks.has("comparison-table")) return this.tasks.get("comparison-table");
+    return undefined;
+  }
+
 
   /**
    * List all registered tasks.

@@ -1,6 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
-const { Post, Like, Series, Category, Course } = require("../models");
+const { Post, Like, Series, Category, Course, PostTranslation, Comment, ArticleVersion, CollectionItem } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 const { default: slugify } = require("slugify");
 const { ContentStructureService } = require("../ai/content/contentStructure.service");
@@ -25,11 +25,12 @@ class PostService extends Service {
         return posts;
     }
 
-    async getPostByUser(userId) {
+    async getPostByUser(userId, locale = "en") {
         if (!userId) {
             throw new NotFoundException("User not found");
         }
         try {
+            const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
             const posts = await Post.find({ author: userId })
                 .sort({ createdAt: -1 })
                 .populate('category', 'name slug')
@@ -64,7 +65,7 @@ class PostService extends Service {
                 }
             });
 
-            return returnPosts;
+            return await this.overlayTranslations(returnPosts, validLocale);
         } catch (error) {
             console.log('error', error);
             throw new ServerException("error");
@@ -91,26 +92,37 @@ class PostService extends Service {
 
     }
 
-    async generateUniqueSlug(title, excludePostId = null) {
+    async generateUniqueSlug(title, excludePostId = null, locale = "en") {
+        const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
         const rawTitle = title && typeof title === "string" && title.trim() ? title.trim() : "untitled";
-        const rawSlug = (slugify ? slugify(rawTitle, { lower: true, strict: true }) : rawTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")) || "post";
+        const rawSlug = (slugify ? slugify(rawTitle, { lower: true, strict: true, locale: validLocale === "vi" ? "vi" : undefined }) : rawTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")) || "post";
         const baseSlug = rawSlug.replace(/^-+|-+$/g, "") || `post-${Date.now()}`;
         let uniqueSlug = baseSlug;
 
-        const query = { slug: uniqueSlug };
-        if (excludePostId) {
-            query._id = { $ne: excludePostId };
-        }
-
-        const count = await Post.countDocuments(query);
-        if (count > 0) {
-            uniqueSlug = `${baseSlug}-${Date.now().toString(36)}`;
-            const secondQuery = { slug: uniqueSlug };
-            if (excludePostId) {
-                secondQuery._id = { $ne: excludePostId };
+        const checkExists = async (candidate) => {
+            if (mongoose.connection.readyState !== 1) {
+                return false;
             }
-            const secondCount = await Post.countDocuments(secondQuery);
-            if (secondCount > 0) {
+            // Check translation collection for current locale
+            const transQuery = { locale: validLocale, slug: candidate };
+            if (excludePostId) {
+                transQuery.postId = { $ne: excludePostId };
+            }
+            const transCount = await PostTranslation.countDocuments(transQuery);
+            if (transCount > 0) return true;
+
+            // Also check legacy Post collection to prevent collisions with unmigrated records
+            const postQuery = { slug: candidate };
+            if (excludePostId) {
+                postQuery._id = { $ne: excludePostId };
+            }
+            const postCount = await Post.countDocuments(postQuery);
+            return postCount > 0;
+        };
+
+        if (await checkExists(uniqueSlug)) {
+            uniqueSlug = `${baseSlug}-${Date.now().toString(36)}`;
+            if (await checkExists(uniqueSlug)) {
                 uniqueSlug = `${baseSlug}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
             }
         }
@@ -118,15 +130,17 @@ class PostService extends Service {
         return uniqueSlug;
     }
 
-    async addPost(post) {
+    async addPost(post, requestedLocale = "en") {
+        const validLocale = ["en", "vi"].includes(requestedLocale) ? requestedLocale : "en";
         const title = post.title?.trim() || "Untitled";
-        const slug = await this.generateUniqueSlug(title);
+        const slug = await this.generateUniqueSlug(title, null, validLocale);
         const readPost = post.text ? post.text.split(" ").length / 225 : 0;
+        const readtime = Math.ceil(readPost);
 
         let contentVersion = post.contentVersion || "html-v1";
         let blocks = post.blocks || undefined;
 
-        // If blocks are provided or if contentVersion is "blocks-v1" or if markdown/aiContext is provided
+        // Auto build blocks if requested or if markdown/aiContext is provided
         if (!blocks && (post.contentVersion === "blocks-v1" || post.markdown || post.aiContext)) {
           const markdownSource = post.markdown || post.content || "";
           if (markdownSource.trim()) {
@@ -141,8 +155,11 @@ class PostService extends Service {
           contentVersion = "blocks-v1";
         }
 
+        const postId = new mongoose.Types.ObjectId();
+
+        // 1. Create parent Post document (shared container for taxonomy, metrics, author)
         const newPost = new Post({
-            _id: new mongoose.Types.ObjectId(),
+            _id: postId,
             title: post.title,
             content: post.content,
             text: post.text,
@@ -159,45 +176,253 @@ class PostService extends Service {
             lessonType: post.lessonType || "text",
             mediaContent: post.mediaContent || null,
             del_flag: 0,
-            readtime: Math.ceil(readPost),
+            readtime,
             contentVersion,
             blocks,
             hero: post.hero || undefined,
             aiContext: post.aiContext || undefined,
             seo: post.seo || undefined,
+            defaultLocale: validLocale,
+            availableLocales: [validLocale],
         });
         const returnPost = await Post.create(newPost);
+
+        // 2. Create authoritative initial PostTranslation record
+        await PostTranslation.create({
+            _id: new mongoose.Types.ObjectId(),
+            postId: newPost._id,
+            locale: validLocale,
+            title,
+            slug,
+            description: (post.description || "").trim(),
+            content: post.content,
+            text: post.text,
+            contentVersion,
+            blocks,
+            hero: post.hero || undefined,
+            aiContext: post.aiContext || undefined,
+            seo: post.seo || undefined,
+            published: false,
+            publishedAt: null,
+            readtime,
+        });
+
+        // Invalidate partitioned caches
+        memoryCache.invalidate('hot_posts_');
+        memoryCache.invalidate(`hot_posts_${validLocale}`);
+
         return returnPost;
     }
 
-    async getPostById(postId) {
+    async getPostById(postId, requestedLocale = null) {
         const post = await Post.findById(postId)
             .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
             .populate('image', 'url description')
-            .populate('mediaContent', 'url type description');
+            .populate('mediaContent', 'url type description')
+            .populate('currentVersionId', 'version changelog source createdAt markdown html blocks');
         if (!post) {
             return null;
         }
-        return post;
+
+        const postObj = post.toObject ? post.toObject() : { ...post };
+
+        if (postObj.currentVersionId && typeof postObj.currentVersionId === "object") {
+            if (!postObj.markdown && postObj.currentVersionId.markdown) {
+                postObj.markdown = postObj.currentVersionId.markdown;
+            }
+            if ((!postObj.blocks || postObj.blocks.length === 0) && postObj.currentVersionId.blocks?.length > 0) {
+                postObj.blocks = postObj.currentVersionId.blocks;
+            }
+        }
+
+        // Look for matching translation in PostTranslation
+        let translation = null;
+        if (requestedLocale && ["en", "vi"].includes(requestedLocale)) {
+            translation = await PostTranslation.findOne({ postId: post._id, locale: requestedLocale }).lean();
+        }
+        if (!translation) {
+            translation = await PostTranslation.findOne({ postId: post._id, locale: post.defaultLocale || "en" }).lean();
+        }
+        if (!translation) {
+            translation = await PostTranslation.findOne({ postId: post._id }).lean();
+        }
+
+        if (translation) {
+            postObj.title = translation.title;
+            postObj.slug = translation.slug;
+            postObj.description = translation.description;
+            postObj.content = translation.content;
+            postObj.text = translation.text;
+            postObj.markdown = translation.markdown || (translation.content && /#{1,6}\s+/.test(translation.content) ? translation.content : undefined);
+            postObj.contentVersion = translation.contentVersion;
+            postObj.blocks = translation.blocks;
+            postObj.hero = translation.hero;
+            postObj.seo = translation.seo;
+            postObj.published = translation.published;
+            postObj.readtime = translation.readtime;
+            postObj.currentVersionId = translation.currentVersionId || (translation.locale === (post.defaultLocale || "en") ? postObj.currentVersionId : null);
+            postObj.activeLocale = translation.locale;
+            postObj.translation = translation;
+        } else {
+            postObj.activeLocale = postObj.defaultLocale || "en";
+        }
+
+        // Fetch available translations for alternate links
+        const translations = await PostTranslation.find({ postId: post._id }, { locale: 1, slug: 1, published: 1 }).lean();
+        postObj.translations = translations;
+        if (translations.length > 0) {
+            postObj.availableLocales = translations.map(t => t.locale);
+            postObj.alternateUrls = {};
+            for (const t of translations) {
+                if (t.published) {
+                    postObj.alternateUrls[t.locale] = t.locale === "vi" ? `/vi/post/${t.slug}` : `/post/${t.slug}`;
+                }
+            }
+        } else {
+            postObj.availableLocales = postObj.availableLocales || ["en"];
+            postObj.alternateUrls = { en: `/post/${postObj.slug}` };
+        }
+
+        return postObj;
     }
 
-    async getPostBySlug(slug) {
-        const post = await Post.findOne({ slug: slug, published: true, del_flag: 0 })
-            .populate('category', "name slug")
-            .populate('author', 'username email avatar')
-            .populate('tags', 'name')
-            .populate('image', 'url description')
-            .populate('mediaContent', 'url type description');
+    async getPostBySlug(slug, requestedLocale = null) {
+        let translation = null;
+        const validLocale = requestedLocale && ["en", "vi"].includes(requestedLocale) ? requestedLocale : null;
+
+        // 1. First, search in PostTranslation
+        if (validLocale) {
+            translation = await PostTranslation.findOne({ slug: slug, locale: validLocale, published: true }).lean();
+        }
+        if (!translation) {
+            translation = await PostTranslation.findOne({ slug: slug, published: true }).lean();
+        }
+
+        let post = null;
+        if (translation) {
+            post = await Post.findOne({ _id: translation.postId, del_flag: 0 })
+                .populate('category', "name slug")
+                .populate('author', 'username email avatar')
+                .populate('tags', 'name')
+                .populate('image', 'url description')
+                .populate('mediaContent', 'url type description')
+                .populate('currentVersionId', 'version changelog source createdAt');
+        }
+
+        // 2. Fallback to legacy Post document lookup (for unmigrated records)
+        if (!post) {
+            post = await Post.findOne({ slug: slug, published: true, del_flag: 0 })
+                .populate('category', "name slug")
+                .populate('author', 'username email avatar')
+                .populate('tags', 'name')
+                .populate('image', 'url description')
+                .populate('mediaContent', 'url type description')
+                .populate('currentVersionId', 'version changelog source createdAt');
+        }
 
         if (!post) {
             return null;
         }
+
+        const postObj = post.toObject ? post.toObject() : { ...post };
+
+        if (translation) {
+            postObj.title = translation.title;
+            postObj.slug = translation.slug;
+            postObj.description = translation.description;
+            postObj.content = translation.content;
+            postObj.text = translation.text;
+            postObj.contentVersion = translation.contentVersion;
+            postObj.blocks = translation.blocks;
+            postObj.hero = translation.hero;
+            postObj.seo = translation.seo;
+            postObj.published = translation.published;
+            postObj.readtime = translation.readtime;
+            postObj.currentVersionId = translation.currentVersionId || postObj.currentVersionId;
+            postObj.activeLocale = translation.locale;
+            postObj.translation = translation;
+
+            // Compute alternate links
+            const allTranslations = await PostTranslation.find({ postId: post._id, published: true }, { locale: 1, slug: 1 }).lean();
+            postObj.alternateUrls = {};
+            for (const t of allTranslations) {
+                postObj.alternateUrls[t.locale] = t.locale === "vi" ? `/vi/post/${t.slug}` : `/post/${t.slug}`;
+            }
+            postObj.availableLocales = allTranslations.map(t => t.locale);
+        } else {
+            postObj.activeLocale = postObj.defaultLocale || "en";
+            postObj.alternateUrls = { en: `/post/${postObj.slug}` };
+            postObj.availableLocales = postObj.availableLocales || ["en"];
+        }
+
+        return postObj;
+    }
+
+    async getPostToEdit(postId, requestedLocale = null) {
+        const post = await this.getPostById(postId, requestedLocale);
+        if (!post) return null;
+
+        const targetLocale = requestedLocale && ["en", "vi"].includes(requestedLocale) ? requestedLocale : (post.defaultLocale || "en");
+        let translation = await PostTranslation.findOne({ postId, locale: targetLocale }).lean();
+
+
+        if (!translation && targetLocale !== (post.defaultLocale || "en")) {
+            // New translation draft requested
+            return {
+                ...post,
+                activeLocale: targetLocale,
+                isNewTranslation: true,
+                title: "",
+                content: "",
+                text: "",
+                blocks: undefined,
+                hero: undefined,
+                seo: undefined,
+                published: false,
+            };
+        }
+
         return post;
     }
 
-    async getRecentlyData() {
+    /**
+     * Batch-overlays published translations for the target locale onto a list of posts.
+     * Prevents duplicate parent records and avoids N+1 queries.
+     * Unpublished translation drafts are never leaked.
+     */
+    async overlayTranslations(posts, locale = "en") {
+        if (!posts || !posts.length) return posts;
+        const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
+        if (validLocale === "en") return posts;
+
+        const postIds = posts.map(p => p._id).filter(Boolean);
+        if (!postIds.length) return posts;
+
+        const translations = await PostTranslation.find({
+            postId: { $in: postIds },
+            locale: validLocale,
+            published: true
+        }).lean();
+
+        const translationMap = new Map(translations.map(t => [t.postId.toString(), t]));
+
+        return posts.map(post => {
+            const plain = typeof post.toObject === 'function' ? post.toObject() : { ...post };
+            const trans = translationMap.get(plain._id?.toString());
+            if (trans) {
+                plain.title = trans.title || plain.title;
+                plain.description = trans.description || plain.description;
+                plain.slug = trans.slug || plain.slug;
+                plain.locale = validLocale;
+            }
+            return plain;
+        });
+    }
+
+    async getRecentlyData(locale = "en") {
+        const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
         const posts = await Post.find({
             del_flag: 0,
             published: true
@@ -217,29 +442,37 @@ class PostService extends Service {
             return acc;
         }, []);
 
-        return { categories, posts };
+        const localizedPosts = await this.overlayTranslations(posts, validLocale);
+        return { categories, posts: localizedPosts };
     }
 
-    async updatePost(postId, post) {
+    async updatePost(postId, post, locale = "en") {
+        const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
         const readPost = post.text ? post.text.split(" ").length / 225 : 0;
+        const readtime = Math.ceil(readPost);
+
         const existingPost = await Post.findById(postId);
         if (!existingPost) {
             throw new NotFoundException("Post not found");
         }
 
-        let slug = existingPost.slug;
-        if (post.title && (post.title.trim() !== existingPost.title || !slug)) {
-            slug = await this.generateUniqueSlug(post.title.trim(), postId);
+        // Look for existing translation or generate slug
+        const existingTranslation = await PostTranslation.findOne({ postId, locale: validLocale });
+        let slug = existingTranslation?.slug || (validLocale === (existingPost.defaultLocale || "en") ? existingPost.slug : null);
+
+        if (post.title && (post.title.trim() !== (existingTranslation?.title || existingPost.title) || !slug)) {
+            slug = await this.generateUniqueSlug(post.title.trim(), postId, validLocale);
         }
 
         const updateObj = {
             title: post.title,
             content: post.content,
             text: post.text,
-            readtime: Math.ceil(readPost),
+            readtime,
             slug,
         };
 
+        if (post.markdown !== undefined) updateObj.markdown = post.markdown;
         if (post.contentVersion) updateObj.contentVersion = post.contentVersion;
         if (post.blocks !== undefined) updateObj.blocks = post.blocks;
         if (post.hero !== undefined) updateObj.hero = post.hero;
@@ -259,17 +492,85 @@ class PostService extends Service {
           }
         }
 
-        const updatedPost = await Post.findByIdAndUpdate(postId, updateObj, { new: true });
+        // 1. Authoritative write to PostTranslation
+        const updatedTranslation = await PostTranslation.findOneAndUpdate(
+            { postId, locale: validLocale },
+            {
+                $set: {
+                    ...updateObj,
+                    postId,
+                    locale: validLocale,
+                },
+            },
+            { upsert: true, new: true }
+        );
+
+        // 2. Ensure availableLocales contains validLocale on Post
+        const postUpdate = {
+            $addToSet: { availableLocales: validLocale },
+        };
+
+        // If updating the default locale, mirror title/slug/readtime to root Post for legacy callers
+        if (validLocale === (existingPost.defaultLocale || "en") || !existingPost.slug) {
+            postUpdate.$set = {
+                title: updateObj.title,
+                content: updateObj.content,
+                text: updateObj.text,
+                readtime,
+                slug,
+                ...(updateObj.markdown ? { markdown: updateObj.markdown } : {}),
+                ...(updateObj.blocks ? { blocks: updateObj.blocks } : {}),
+                ...(updateObj.hero ? { hero: updateObj.hero } : {}),
+                ...(updateObj.seo ? { seo: updateObj.seo } : {}),
+            };
+        }
+
+        const updatedPost = await Post.findByIdAndUpdate(postId, postUpdate, { new: true });
+
+        // Invalidate partitioned caches
         memoryCache.invalidate('hot_posts_');
-        return updatedPost;
+        memoryCache.invalidate(`hot_posts_${validLocale}`);
+
+        const resultObj = updatedPost.toObject ? updatedPost.toObject() : { ...updatedPost };
+        resultObj.title = updatedTranslation.title;
+        resultObj.slug = updatedTranslation.slug;
+        resultObj.content = updatedTranslation.content;
+        resultObj.text = updatedTranslation.text;
+        resultObj.blocks = updatedTranslation.blocks;
+        resultObj.activeLocale = validLocale;
+        resultObj.translation = updatedTranslation;
+
+        return resultObj;
     }
 
-
-    async updateStatusPost(postId, published) {
-        await Post.findByIdAndUpdate(postId, {
-            published: published
-        }, { new: true });
+    async updateStatusPost(postId, published, locale = null) {
+        if (locale && ["en", "vi"].includes(locale)) {
+            // Update specific translation status
+            await PostTranslation.findOneAndUpdate(
+                { postId, locale },
+                { $set: { published: Boolean(published) } }
+            );
+            // Recompute aggregate Post.published
+            const hasPublishedTranslation = await PostTranslation.countDocuments({
+                postId,
+                published: true,
+            });
+            await Post.findByIdAndUpdate(postId, {
+                published: hasPublishedTranslation > 0,
+            }, { new: true });
+        } else {
+            // Update all translations and parent Post
+            await PostTranslation.updateMany(
+                { postId },
+                { $set: { published: Boolean(published) } }
+            );
+            await Post.findByIdAndUpdate(postId, {
+                published: Boolean(published),
+            }, { new: true });
+        }
         memoryCache.invalidate('hot_posts_');
+        memoryCache.invalidate('hot_posts_en');
+        memoryCache.invalidate('hot_posts_vi');
     }
 
     async getPostLikeById(userId) {
@@ -287,7 +588,8 @@ class PostService extends Service {
         return markedPost;
     }
 
-    async publicPost(postId, publicInfo) {
+    async publicPost(postId, publicInfo, locale = "en") {
+        const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
         try {
             if (publicInfo.series) {
                 const series = await Series.findById(publicInfo.series);
@@ -309,13 +611,43 @@ class PostService extends Service {
                 }
             }
             console.log('publicInfo', publicInfo);
-            const updatedPost = await Post.findByIdAndUpdate(postId, {
+
+            // 1. Publish the targeted translation
+            await PostTranslation.findOneAndUpdate(
+                { postId, locale: validLocale },
+                {
+                    $set: {
+                        published: true,
+                        publishedAt: new Date(),
+                        ...(publicInfo.description ? { description: publicInfo.description } : {}),
+                    },
+                },
+                { upsert: true, new: true }
+            );
+
+            // 2. Publish parent Post (aggregate status = true) & update shared fields
+            const postUpdateFields = {
                 description: publicInfo.description,
-                image: publicInfo.image,
                 category: publicInfo.category,
                 published: true,
-            }, { new: true });
+                $addToSet: { availableLocales: validLocale },
+            };
+            if (publicInfo.image) {
+                if (mongoose.Types.ObjectId.isValid(publicInfo.image)) {
+                    postUpdateFields.image = publicInfo.image;
+                } else {
+                    postUpdateFields["hero.image.src"] = publicInfo.image;
+                }
+            }
+
+            const updatedPost = await Post.findByIdAndUpdate(postId, postUpdateFields, { new: true });
+            
+            // Ensure ArticleVersion 1.0 snapshot exists for newly published post
+            const { articleVersionService } = require("./articleVersion.services");
+            await articleVersionService.ensureInitialVersion(updatedPost);
+
             memoryCache.invalidate('hot_posts_');
+            memoryCache.invalidate(`hot_posts_${validLocale}`);
             return updatedPost;
         } catch (error) {
             console.error('Error publishing post:', error);
@@ -361,11 +693,12 @@ class PostService extends Service {
      * Optimized Hot Posts query using MongoDB Aggregation Pipeline, Late Lookup,
      * Field Projection, Smart Fallback window, and In-Memory TTL Caching.
      */
-    async fetchHotPosts({ period = 'week', limit = 10, page = 1, fallbackIfFew = true } = {}) {
+    async fetchHotPosts({ period = 'week', limit = 10, page = 1, fallbackIfFew = true, locale = 'en' } = {}) {
         try {
+            const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
             const limitNum = Math.max(1, parseInt(limit) || 10);
             const pageNum = Math.max(1, parseInt(page) || 1);
-            const cacheKey = `hot_posts_${period}_${limitNum}_${pageNum}`;
+            const cacheKey = `hot_posts_${period}_${limitNum}_${pageNum}_${validLocale}`;
 
             const cached = memoryCache.get(cacheKey);
             if (cached) {
@@ -558,9 +891,10 @@ class PostService extends Service {
                 }
             }
 
+            const localizedPosts = await this.overlayTranslations(posts, validLocale);
             const totalPages = Math.ceil(total / limitNum) || 1;
             const result = {
-                posts,
+                posts: localizedPosts,
                 totalPosts: total,
                 totalPages,
                 currentPage: pageNum,
@@ -577,12 +911,12 @@ class PostService extends Service {
         }
     }
 
-    async getHotPostsToday(limit, page) {
-        return this.fetchHotPosts({ period: 'today', limit, page, fallbackIfFew: false });
+    async getHotPostsToday(limit, page, locale = 'en') {
+        return this.fetchHotPosts({ period: 'today', limit, page, fallbackIfFew: false, locale });
     }
 
-    async getHotPostsThisWeek(limit, page) {
-        return this.fetchHotPosts({ period: 'week', limit, page, fallbackIfFew: true });
+    async getHotPostsThisWeek(limit, page, locale = 'en') {
+        return this.fetchHotPosts({ period: 'week', limit, page, fallbackIfFew: true, locale });
     }
 
     async getHotPostsAggregation(req, res) {
@@ -610,8 +944,9 @@ class PostService extends Service {
         }
     };
 
-    getRecentlyDataByFeatures = async (features) => {
+    getRecentlyDataByFeatures = async (features, locale = "en") => {
         try {
+            const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
             if (features === 'all' || !features) {
                 const posts = await Post.find({ del_flag: 0, published: true })
                     .sort({ createdAt: -1 })
@@ -620,10 +955,11 @@ class PostService extends Service {
                     .populate('author', 'username email avatar')
                     .populate('tags', 'name')
                     .populate('image', 'url description');
-                return { posts };
+                const localizedPosts = await this.overlayTranslations(posts, validLocale);
+                return { posts: localizedPosts };
             }
             const category = await Category.findOne({ slug: features });
-            const posts = await Post.find({ del_flag: 0, published: true, category: category._id })
+            const posts = await Post.find({ del_flag: 0, published: true, category: category ? category._id : null })
                 .sort({ createdAt: -1 })
                 .limit(7)
                 .populate('category', "name slug")
@@ -631,17 +967,17 @@ class PostService extends Service {
                 .populate('tags', 'name')
                 .populate('image', 'url description');
 
-
-            return { posts };
+            const localizedPosts = await this.overlayTranslations(posts, validLocale);
+            return { posts: localizedPosts };
         } catch (error) {
             console.log('error', error);
             throw new ServerException("error");
         }
     }
 
-    getAllPosts = async (limit, page) => {
+    getAllPosts = async (limit, page, locale = "en") => {
         try {
-
+            const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
             const posts = await Post.find({ del_flag: 0, published: true })
                 .sort({ createdAt: -1 })
                 .skip((page - 1) * limit)
@@ -654,9 +990,10 @@ class PostService extends Service {
             const query = { del_flag: 0, published: true };
 
             const totalPosts = await Post.countDocuments(query);
+            const localizedPosts = await this.overlayTranslations(posts, validLocale);
 
             return {
-                posts,
+                posts: localizedPosts,
                 countData: totalPosts
             };
         } catch (error) {
@@ -686,8 +1023,9 @@ class PostService extends Service {
         }
     };
 
-    getTop10IdeasOfMonth = async () => {
+    getTop10IdeasOfMonth = async (locale = "en") => {
         try {
+            const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
             const now = new Date();
 
             // Start of current calendar month
@@ -775,9 +1113,10 @@ class PostService extends Service {
 
             // Calculate max score for relative progress bars
             const maxScore = posts.length > 0 ? posts[0].engagementScore : 1;
+            const localizedPosts = await this.overlayTranslations(posts, validLocale);
 
             return {
-                posts: posts.map((p, idx) => ({
+                posts: localizedPosts.map((p, idx) => ({
                     ...p,
                     rank: idx + 1,
                     relativeScore: maxScore > 0 ? Math.round((p.engagementScore / maxScore) * 100) : 0,
@@ -795,12 +1134,13 @@ class PostService extends Service {
     };
 
     // Aggregate all discovery sidebar data in one call
-    getDiscoverySidebar = async () => {
+    getDiscoverySidebar = async (locale = "en") => {
         try {
+            const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-            const [trending, latestPosts, popularSeries, featuredCourses] = await Promise.all([
+            const [trendingRaw, latestPostsRaw, popularSeries, featuredCourses] = await Promise.all([
                 // 🔥 Trending: hottest posts from last 7 days, sorted by likes+comments
                 Post.find({
                     published: true,
@@ -842,12 +1182,122 @@ class PostService extends Service {
                     .lean(),
             ]);
 
+            const [trending, latestPosts] = await Promise.all([
+                this.overlayTranslations(trendingRaw, validLocale),
+                this.overlayTranslations(latestPostsRaw, validLocale),
+            ]);
+
             return { trending, latestPosts, popularSeries, featuredCourses };
         } catch (error) {
             console.error('Error fetching discovery sidebar:', error);
             throw new ServerException('Error fetching discovery sidebar data');
         }
     };
+
+    /**
+     * Locale-aware search for posts.
+     * For Vietnamese: searches PostTranslation with regex on title/description to support diacritics,
+     * then links back to parent post without duplicates.
+     * For English: searches published parent posts.
+     * Prevents draft leakage (published: true enforced).
+     */
+    async searchPosts(query, locale = "en", limit = 10, page = 1) {
+        try {
+            const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
+            const limitNum = Math.max(1, parseInt(limit) || 10);
+            const pageNum = Math.max(1, parseInt(page) || 1);
+            if (!query || !query.trim()) {
+                return { posts: [], totalPosts: 0, currentPage: pageNum, totalPages: 0 };
+            }
+
+            const cleanQuery = query.trim();
+            const escapeRegex = (s) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+            const regex = new RegExp(escapeRegex(cleanQuery), "i");
+
+            if (validLocale === "vi") {
+                // Search published Vietnamese translations first
+                const matchingTranslations = await PostTranslation.find({
+                    locale: "vi",
+                    published: true,
+                    $or: [{ title: regex }, { description: regex }]
+                })
+                    .sort({ createdAt: -1 })
+                    .skip((pageNum - 1) * limitNum)
+                    .limit(limitNum)
+                    .lean();
+
+                const totalTrans = await PostTranslation.countDocuments({
+                    locale: "vi",
+                    published: true,
+                    $or: [{ title: regex }, { description: regex }]
+                });
+
+                const postIds = matchingTranslations.map(t => t.postId);
+                const parentPosts = await Post.find({
+                    _id: { $in: postIds },
+                    del_flag: 0,
+                    published: true
+                })
+                    .populate('category', 'name slug')
+                    .populate('author', 'username email avatar name')
+                    .populate('tags', 'name')
+                    .populate('image', 'url description')
+                    .lean();
+
+                const parentMap = new Map(parentPosts.map(p => [p._id.toString(), p]));
+                const posts = matchingTranslations
+                    .map(trans => {
+                        const parent = parentMap.get(trans.postId.toString());
+                        if (!parent) return null;
+                        return {
+                            ...parent,
+                            title: trans.title || parent.title,
+                            description: trans.description || parent.description,
+                            slug: trans.slug || parent.slug,
+                            locale: "vi"
+                        };
+                    })
+                    .filter(Boolean);
+
+                const totalPages = Math.ceil(totalTrans / limitNum) || 1;
+                return {
+                    posts,
+                    totalPosts: totalTrans,
+                    currentPage: pageNum,
+                    totalPages
+                };
+            }
+
+            // English search on parent posts
+            const queryFilter = {
+                del_flag: 0,
+                published: true,
+                $or: [{ title: regex }, { description: regex }]
+            };
+
+            const total = await Post.countDocuments(queryFilter);
+            const posts = await Post.find(queryFilter)
+                .sort({ createdAt: -1 })
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum)
+                .populate('category', 'name slug')
+                .populate('author', 'username email avatar name')
+                .populate('tags', 'name')
+                .populate('image', 'url description')
+                .lean();
+
+            const totalPages = Math.ceil(total / limitNum) || 1;
+            return {
+                posts,
+                totalPosts: total,
+                currentPage: pageNum,
+                totalPages
+            };
+        } catch (error) {
+            console.error('Error in searchPosts:', error);
+            throw new ServerException("Error searching posts");
+        }
+    }
 
     deletePost = async (postId) => {
         const post = await Post.findByIdAndUpdate(postId, { del_flag: 1 }, { new: true });
@@ -861,6 +1311,46 @@ class PostService extends Service {
         if (!post) throw new NotFoundException("Post not found");
         memoryCache.invalidate('hot_posts_');
         return { success: true };
+    };
+
+    deletePostForever = async (postId) => {
+        const post = await Post.findById(postId);
+        if (!post) throw new NotFoundException("Post not found");
+
+        const deletePromises = [
+            Post.findByIdAndDelete(postId),
+            Like.deleteMany({ post: postId }),
+            PostTranslation.deleteMany({ postId: postId }),
+        ];
+
+        if (Comment) deletePromises.push(Comment.deleteMany({ post: postId }));
+        if (ArticleVersion) deletePromises.push(ArticleVersion.deleteMany({ articleId: postId }));
+        if (CollectionItem) deletePromises.push(CollectionItem.deleteMany({ itemType: "post", itemId: postId }));
+
+        await Promise.all(deletePromises);
+        memoryCache.invalidate('hot_posts_');
+        return { success: true };
+    };
+
+    cleanTrash = async () => {
+        const trashedPosts = await Post.find({ del_flag: 1 }).select('_id').lean();
+        if (!trashedPosts.length) return { success: true, deleted: 0 };
+
+        const postIds = trashedPosts.map(p => p._id);
+
+        const deletePromises = [
+            Post.deleteMany({ _id: { $in: postIds } }),
+            Like.deleteMany({ post: { $in: postIds } }),
+            PostTranslation.deleteMany({ postId: { $in: postIds } }),
+        ];
+
+        if (Comment) deletePromises.push(Comment.deleteMany({ post: { $in: postIds } }));
+        if (ArticleVersion) deletePromises.push(ArticleVersion.deleteMany({ articleId: { $in: postIds } }));
+        if (CollectionItem) deletePromises.push(CollectionItem.deleteMany({ itemType: "post", itemId: { $in: postIds } }));
+
+        await Promise.all(deletePromises);
+        memoryCache.invalidate('hot_posts_');
+        return { success: true, deleted: postIds.length };
     };
 };
 

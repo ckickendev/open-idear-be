@@ -72,6 +72,9 @@ export class ExecutionContextContainer implements ExecutionContext {
   readonly metadata: Record<string, any> = {};
   readonly startTime: number;
   readonly tools?: string[] | undefined;
+  readonly featureId?: string | undefined;
+  readonly telemetryKey?: string | undefined;
+  readonly userId?: string | undefined;
 
   responseFormat: "text" | "json" = "text";
   model: string = "fast";
@@ -109,6 +112,9 @@ export class ExecutionContextContainer implements ExecutionContext {
     readonly schema?: ZodSchema<any> | undefined;
     readonly startTime: number;
     readonly tools?: string[] | undefined;
+    readonly featureId?: string | undefined;
+    readonly telemetryKey?: string | undefined;
+    readonly userId?: string | undefined;
   }) {
     this.id = params.id;
     this.timestamp = new Date();
@@ -120,7 +126,12 @@ export class ExecutionContextContainer implements ExecutionContext {
     this.schema = params.schema;
     this.startTime = params.startTime;
     this.tools = params.tools;
+    this.featureId = params.featureId;
+    this.telemetryKey = params.telemetryKey;
+    this.userId = params.userId;
   }
+
+
 
   /**
    * Extends the execution context metadata bag with custom engine states.

@@ -10,7 +10,7 @@
 //  - Fully decoupled from AIRuntime, Telemetry, and Prompt registry.
 // =============================================================================
 
-import { aiExecutionFacade } from "../execution";
+import type { ExecutionFacade } from "../execution";
 import type { AgentOptions, AgentResult } from "./types";
 import type { TokenUsage } from "../provider/types";
 import type { AIConfigScope } from "../config";
@@ -30,6 +30,15 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
   protected readonly schema?: ZodSchema<TOutput> | undefined;
 
   /**
+   * Lazily resolves the execution facade to avoid CommonJS circular require deadlocks
+   * when subclasses inherit from BaseAgent during module loading.
+   */
+  private getFacade(): ExecutionFacade {
+    const { aiExecutionFacade } = require("../execution");
+    return aiExecutionFacade;
+  }
+
+  /**
    * Run the agent execution flow.
    *
    * @param input   Custom variables passed to fill the user prompt template.
@@ -46,7 +55,7 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
       ...input,
     };
 
-    const facadeResult = await aiExecutionFacade.execute<TOutput>({
+    const facadeResult = await this.getFacade().execute<TOutput>({
       scope,
       promptName: this.promptName,
       ...(options.promptVersionOverride !== undefined && { promptVersion: options.promptVersionOverride }),
@@ -109,7 +118,7 @@ export abstract class BaseAgent<TInput extends Record<string, any> = Record<stri
       ...input,
     };
 
-    return yield* aiExecutionFacade.executeStream({
+    return yield* this.getFacade().executeStream({
       scope,
       promptName: this.promptName,
       ...(options.promptVersionOverride !== undefined && { promptVersion: options.promptVersionOverride }),

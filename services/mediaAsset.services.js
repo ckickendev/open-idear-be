@@ -578,6 +578,9 @@ class MediaAssetService extends Service {
   // ═══════════════════════════════════════════════════════════════════
 
   async addUsage(mediaId, entityType, entityId, field) {
+    if (!mongoose.Types.ObjectId.isValid(mediaId)) {
+      return;
+    }
     await MediaAsset.updateOne(
       { _id: mediaId },
       {
@@ -588,6 +591,9 @@ class MediaAssetService extends Service {
   }
 
   async removeUsage(mediaId, entityType, entityId) {
+    if (!mongoose.Types.ObjectId.isValid(mediaId)) {
+      return;
+    }
     await MediaAsset.updateOne(
       { _id: mediaId },
       {
@@ -603,6 +609,9 @@ class MediaAssetService extends Service {
   }
 
   async getUsage(mediaId, userId) {
+    if (!mongoose.Types.ObjectId.isValid(mediaId)) {
+      return { usedIn: [], usageCount: 0 };
+    }
     const media = await MediaAsset.findOne(
       { _id: mediaId, user: userId, del_flag: 0 },
       { usedIn: 1, usageCount: 1 }

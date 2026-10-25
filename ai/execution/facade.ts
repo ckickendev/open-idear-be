@@ -8,6 +8,7 @@ import { promptRegistry, PromptBuilder } from "../prompt";
 import { AIContextCollector, type AIContext } from "../context";
 import { providerRegistry } from "../provider";
 import { aiLogger } from "../telemetry";
+import { aiFeatureRegistry, type AIFeatureId } from "../feature";
 import type { AIMessage, TokenUsage } from "../provider/types";
 import type { ZodSchema } from "zod";
 import { v4 as uuidv4 } from "uuid";
@@ -50,9 +51,16 @@ export class ExecutionFacade {
     readonly timeoutMsOverride?: number;
     readonly pipeline?: ExecutionPipeline;
     readonly tools?: string[];
+    readonly featureId?: AIFeatureId | string;
+    readonly userId?: string;
   }): Promise<ExecutionResult<T>> {
-    const config = aiConfigCenter.get(params.scope);
-    const policy = policyRegistry.get(params.scope);
+    const resolvedScope: AIConfigScope =
+      params.scope ||
+      (typeof params.featureId === "string" && params.featureId.includes("content_studio")
+        ? "content_studio"
+        : "editor");
+    const config = aiConfigCenter.get(resolvedScope);
+    const policy = policyRegistry.get(resolvedScope);
 
     let messages: AIMessage[];
     let promptVersion = params.promptVersion || "";
@@ -112,6 +120,11 @@ export class ExecutionFacade {
       ? params.maxTokensOverride
       : config.maxTokens;
 
+    // Resolve feature metadata if featureId is provided
+    const featureDef = params.featureId ? aiFeatureRegistry.find(params.featureId) : undefined;
+    const resolvedFeatureId = featureDef?.id || params.featureId;
+    const resolvedTelemetryKey = featureDef?.telemetryKey;
+
     const context = new ExecutionContextContainer({
       id: uuidv4(),
       scope: params.scope,
@@ -122,7 +135,15 @@ export class ExecutionFacade {
       ...(params.schema !== undefined && { schema: params.schema }),
       startTime: Date.now(),
       tools: params.tools,
+      ...(resolvedFeatureId && { featureId: resolvedFeatureId }),
+      ...(resolvedTelemetryKey && { telemetryKey: resolvedTelemetryKey }),
+      ...(params.userId && { userId: params.userId }),
     });
+
+    if (params.userId) {
+      context.user = { id: params.userId };
+    }
+
 
     context.responseFormat = params.responseFormat;
     context.model = resolvedModel;
@@ -150,10 +171,16 @@ export class ExecutionFacade {
     readonly temperatureOverride?: number;
     readonly maxTokensOverride?: number;
     readonly signal?: AbortSignal;
+    readonly featureId?: AIFeatureId | string;
+    readonly userId?: string;
   }): AsyncGenerator<string, TokenUsage, undefined> {
     const config = aiConfigCenter.get(params.scope);
     const provider = providerRegistry.getDefault();
     const startTime = Date.now();
+
+    const featureDef = params.featureId ? aiFeatureRegistry.find(params.featureId) : undefined;
+    const resolvedFeatureId = featureDef?.id || params.featureId;
+    const resolvedTelemetryKey = featureDef?.telemetryKey;
 
     const promptVersion = params.promptVersion || promptRegistry.getActiveVersion(params.promptName);
     const promptDef = await promptRegistry.get(params.promptName, promptVersion);
@@ -208,6 +235,9 @@ export class ExecutionFacade {
         durationMs: Date.now() - startTime,
         response: totalText,
         ...(usage !== undefined && { usage }),
+        ...(resolvedFeatureId && { featureId: resolvedFeatureId }),
+        ...(resolvedTelemetryKey && { telemetryKey: resolvedTelemetryKey }),
+        ...(params.userId && { userId: params.userId }),
         promptName: params.promptName,
         promptVersion,
       });
@@ -220,6 +250,9 @@ export class ExecutionFacade {
         prompt: { system, messages: [{ role: "user", content: user }] },
         durationMs: Date.now() - startTime,
         error: err,
+        ...(resolvedFeatureId && { featureId: resolvedFeatureId }),
+        ...(resolvedTelemetryKey && { telemetryKey: resolvedTelemetryKey }),
+        ...(params.userId && { userId: params.userId }),
         promptName: params.promptName,
         promptVersion,
       });
@@ -227,6 +260,7 @@ export class ExecutionFacade {
       throw err;
     }
   }
+
 }
 
 export const aiExecutionFacade = new ExecutionFacade();

@@ -12,6 +12,7 @@ const postSchema = new Schema(
     slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
     description: { type: String, default: "", trim: true },
     content: { type: String, required: true },
+    markdown: { type: String, default: "" },
     text: { type: String, required: true },
     author: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "category" },
@@ -131,6 +132,34 @@ const postSchema = new Schema(
         },
       }, { _id: false }),
       default: undefined,
+    },
+
+    /**
+     * Article Versioning System (Sprint 1)
+     * Points to the active immutable ArticleVersion snapshot.
+     */
+    currentVersionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "articleVersion",
+      default: undefined,
+    },
+    latestVersion: {
+      type: String,
+      default: "1.0",
+    },
+
+    // ─── Bilingual Architecture Fields (Sprint 1) ──────────────────────
+    // Parent post tracks default locale and available translation locales.
+    // Localized content (title, slug, content, blocks, seo, published)
+    // is authoritatively stored in the PostTranslation collection.
+    defaultLocale: {
+      type: String,
+      enum: ["en", "vi"],
+      default: "en",
+    },
+    availableLocales: {
+      type: [String],
+      default: ["en"],
     },
   },
   {

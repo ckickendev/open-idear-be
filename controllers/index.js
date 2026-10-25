@@ -26,9 +26,23 @@ const CourseCategoryController = require("./courseCategory.controller");
 const SmartPublishController = require("./smartPublish.controller");
 const CourseIntelligenceController = require("./courseIntelligence.controller");
 const MasteryController = require("./mastery.controller");
-
+const AIUsageController = require("./aiUsage.controller");
+const ArticleController = require("./article.controller");
+const ReadingProgressController = require("./readingProgress.controller");
+const CollectionController = require("./collection.controller");
+const HealthController = require("./health.controller");
+const ShopCategoryController = require("./shopCategory.controller");
+const ShopProductController = require("./shopProduct.controller");
+const ShopOrderController = require("./shopOrder.controller");
+const ShopAnalyticsController = require("./shopAnalytics.controller");
 
 module.exports = {
+  HealthController,
+  CollectionController,
+  ReadingProgressController,
+  ArticleController,
+  AIUsageController,
+  MasteryController,
   UserController,
   CategoryController,
   CommentController,
@@ -57,4 +71,8 @@ module.exports = {
   SmartPublishController,
   CourseIntelligenceController,
   MasteryController,
+  ShopCategoryController,
+  ShopProductController,
+  ShopOrderController,
+  ShopAnalyticsController,
 };

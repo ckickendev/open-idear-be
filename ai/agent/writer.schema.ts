@@ -27,27 +27,109 @@ export interface WriterInput extends Record<string, any> {
 // =============================================================================
 
 /**
- * Zod validation schema representing the expected JSON response from the LLM model.
+ * Controlled enum for allowed visual suggestion types.
+ * Arbitrary values from LLM are strictly disallowed.
  */
-export const WriterSchema = z.object({
-  /**
-   * The complete, compiled body content of the article written in valid Markdown.
-   * This field must contain the H2 and H3 headings matching the plan exactly,
-   * interspersed with detailed paragraphs and code blocks.
-   */
+export const VisualTypeEnum = z.enum([
+  "illustration",
+  "diagram",
+  "screenshot",
+  "product",
+  "comparison",
+  "chart",
+  "code",
+  "none",
+]);
+
+export type VisualType = z.infer<typeof VisualTypeEnum>;
+
+/**
+ * Zod validation schema for a structured visual suggestion.
+ */
+export const VisualSuggestionSchema = z.object({
+  id: z.string().default(() => `vs_${Math.random().toString(36).substring(2, 7)}`),
+  target: z.string(),
+  position: z.string().default("after-heading"),
+  visualType: VisualTypeEnum,
+  searchQuery: z.string(),
+  imagePrompt: z.string(),
+  altText: z.string(),
+  reason: z.string(),
+  confidence: z.number().min(0).max(1).default(0.9),
+});
+
+export type VisualSuggestion = z.infer<typeof VisualSuggestionSchema>;
+
+/**
+ * Legacy Zod validation schema for backward-compatible image suggestions.
+ */
+export const ImageSuggestionSchema = z.object({
+  heading: z.string(),
+  searchQuery: z.string(),
+  imagePrompt: z.string(),
+  alt: z.string(),
+  position: z.union([z.number(), z.string()]).optional(),
+});
+
+export type ImageSuggestion = z.infer<typeof ImageSuggestionSchema>;
+
+/**
+ * Base Zod schema definition for Writer response.
+ */
+const BaseWriterSchema = z.object({
   markdown: z.string(),
-
-  /**
-   * The total word count of the generated markdown text body (integer).
-   * Used to audit document length targets.
-   */
   wordCount: z.number().int().positive(),
-
-  /**
-   * The estimated reading time of the generated article in minutes (integer).
-   * Calculated based on the resulting word count.
-   */
   estimatedReadingTime: z.number().int().positive(),
+  visualSuggestions: z.array(VisualSuggestionSchema).default([]),
+  imageSuggestions: z.array(ImageSuggestionSchema).optional(),
+});
+
+/**
+ * Transformed WriterSchema ensuring bidirectional compatibility between
+ * visualSuggestions and imageSuggestions.
+ */
+export const WriterSchema = BaseWriterSchema.transform((data) => {
+  const visualSuggestions = data.visualSuggestions || [];
+  let imageSuggestions = data.imageSuggestions;
+
+  // 1. If visualSuggestions present and imageSuggestions omitted, populate imageSuggestions
+  if (visualSuggestions.length > 0 && (!imageSuggestions || imageSuggestions.length === 0)) {
+    imageSuggestions = visualSuggestions
+      .filter((v) => v.visualType !== "none")
+      .map((v) => ({
+        heading: v.target,
+        searchQuery: v.searchQuery,
+        imagePrompt: v.imagePrompt,
+        alt: v.altText,
+        position: v.position,
+      }));
+  }
+
+  // 2. If legacy imageSuggestions present and visualSuggestions empty, populate visualSuggestions
+  if ((!visualSuggestions || visualSuggestions.length === 0) && imageSuggestions && imageSuggestions.length > 0) {
+    const derivedVisualSuggestions: VisualSuggestion[] = imageSuggestions.map((img, idx) => ({
+      id: `vs_${String(idx + 1).padStart(3, "0")}`,
+      target: img.heading,
+      position: typeof img.position === "string" ? img.position : "after-heading",
+      visualType: "illustration" as VisualType,
+      searchQuery: img.searchQuery,
+      imagePrompt: img.imagePrompt,
+      altText: img.alt,
+      reason: "Visual suggestion derived from section heading.",
+      confidence: 0.92,
+    }));
+    return {
+      ...data,
+      visualSuggestions: derivedVisualSuggestions,
+      imageSuggestions,
+    };
+  }
+
+  return {
+    ...data,
+    visualSuggestions,
+    imageSuggestions: imageSuggestions || [],
+  };
 });
 
 /**

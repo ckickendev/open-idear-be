@@ -16,6 +16,9 @@ export class PolicyRegistry {
   }
 
   get(scope: AIConfigScope): ExecutionPolicy {
+    if (!scope) {
+      return this.policies.get("content_studio") || this.policies.get("editor")!;
+    }
     const policy = this.policies.get(scope);
     if (!policy) {
       throw new Error(`Execution policy for scope "${scope}" is not registered.`);
@@ -105,6 +108,20 @@ export class PolicyRegistry {
       budgetCap: 0.15,
       allowStreaming: false,
       temperatureOverride: 0.3,
+    });
+
+    // 6. Content Studio Engine Policy
+    this.register("content_studio", {
+      name: "DefaultContentStudioPolicy",
+      scope: "content_studio",
+      allowedModels: sharedModels,
+      maxAttempts: 2,
+      initialDelayMs: 1000,
+      backoffMultiplier: 2,
+      timeoutMs: 45000,
+      budgetCap: 0.15,
+      allowStreaming: false,
+      temperatureOverride: 0.7,
     });
   }
 }

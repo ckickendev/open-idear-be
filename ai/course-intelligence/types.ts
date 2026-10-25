@@ -36,6 +36,7 @@ export interface ITranscriptProvider {
   transcribe(input: {
     mediaId?: string;
     cloudflareId?: string;
+    bunnyVideoId?: string;
     url?: string;
     title: string;
     duration?: number;

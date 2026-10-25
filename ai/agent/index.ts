@@ -11,7 +11,7 @@ export { type AgentOptions, type AgentResult } from "./types";
 export { PlannerAgent, type PlannerInput } from "./planner.agent";
 export { PlannerSchema, type PlannerOutline } from "./planner.schema";
 export { WriterAgent, type WriterInput } from "./writer.agent";
-export { WriterSchema, type WriterOutput } from "./writer.schema";
+export { WriterSchema, type WriterOutput, ImageSuggestionSchema, type ImageSuggestion, VisualTypeEnum, type VisualType, VisualSuggestionSchema, type VisualSuggestion } from "./writer.schema";
 export { DiagramAgent, diagramAgent, type DiagramType, type DiagramRequest, type DiagramResult } from "./diagram.agent";
 export { EditorCopilot, editorCopilot, copilotActionRegistry, type CopilotAction } from "./copilot.agent";
 export { ImproveAgent, improveAgent } from "./improve.agent";
@@ -23,4 +23,6 @@ export { PublisherAgent, publisherAgent, type PublisherAgentInput, type Publishe
 export { SeoAgent, seoAgent, type SeoAgentInput, type SeoAgentOutput } from "./seo.agent";
 export { InternalLinkAgent, type InternalLinkInput } from "./internalLink.agent";
 export { InternalLinkSchema, type InternalLinkOutput } from "./internalLink.schema";
+export { TranslatorAgent, type TranslatorInput } from "./translator.agent";
+export { TranslatorSchema, type TranslatorOutput } from "./translator.schema";
 export * from "./copilot.schema";

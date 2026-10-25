@@ -56,6 +56,41 @@ const assetSchema = new Schema(
       default: [],
       index: true,
     },
+    type: {
+      type: String,
+      enum: ["image", "diagram", "illustration", "photo", "icon", "ai"],
+      default: "image",
+    },
+    searchQuery: { type: String, default: "" },
+    prompt: { type: String, default: "" },
+    model: { type: String, default: "" },
+    seed: { type: Number, default: 0 },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "user",
+      index: true,
+    },
+    source: {
+      type: String,
+      enum: ["upload", "ai_generated", "stock", "placeholder", "asset_library"],
+      default: "upload",
+    },
+
+    // ─── Provider Provenance (Sprint 2) ─────────────────────────
+    // Tracks the external provider a stock image originated from.
+    // Used for duplicate-by-source detection and attribution display.
+    sourceProvider: { type: String, default: "" },  // e.g. "unsplash" | "pexels" | "pixabay"
+    sourceUrl:      { type: String, default: "" },  // original source page URL (Unsplash photo page)
+    author:         { type: String, default: "" },  // photographer/creator name
+    license:        { type: String, default: "" },  // e.g. "unsplash" | "pexels" | "cc0"
+    attributionUrl: { type: String, default: "" },  // link back to original source for attribution
+
+    // ─── AI Illustration Metadata (Sprint 3) ───────────────────
+    sourceType:   { type: String, default: "" },     // e.g. "ai"
+    provider:     { type: String, default: "" },     // e.g. "gemini-imagen"
+    style:        { type: String, default: "" },     // e.g. "isometric" | "blueprint"
+    aspectRatio:  { type: String, default: "16:9" }, // e.g. "16:9" | "1:1"
+    suggestionId: { type: String, default: "" },
 
     // ─── Usage Tracking ─────────────────────────────────────
     usedInPosts: [
@@ -93,6 +128,10 @@ assetSchema.index({ ownerId: 1, hash: 1 }, { unique: true });
 
 // Browse assets sorted by upload date
 assetSchema.index({ ownerId: 1, del_flag: 1, createdAt: -1 });
+assetSchema.index({ searchQuery: 1 });
+assetSchema.index({ source: 1 });
+// Sprint 2: compound index for duplicate-by-source detection
+assetSchema.index({ sourceProvider: 1, sourceUrl: 1 }, { sparse: true });
 
 // Full-text search index for tags, alt, description, OCR, and filenames
 assetSchema.index(

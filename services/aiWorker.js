@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const mongoose = require("mongoose");
 const { AIJob, MediaAsset } = require("../models");
 const aiQueueService = require("./aiQueue.services");
 const aiAnalysisService = require("./aiAnalysis.services");
@@ -10,6 +11,8 @@ class AIWorker {
     this.timer = null;
     this.pollIntervalMs = 5000; // 5 seconds
     this.leaseDurationMs = 5 * 60 * 1000; // 5 minutes lease timeout
+    this.lastStuckRecovery = 0;
+    this.consecutiveFailures = 0;
   }
 
   /**
@@ -40,13 +43,27 @@ class AIWorker {
   async _runLoop() {
     if (!this.running) return;
 
+    // 0. Ensure database connection is ready before querying
+    if (mongoose.connection.readyState !== 1) {
+      // Defer polling until database is connected (0: disconnected, 2: connecting, 3: disconnecting)
+      this.timer = setTimeout(() => this._runLoop(), 3000);
+      return;
+    }
+
     try {
-      // 1. Recover any stuck jobs from crashed worker instances
-      await aiQueueService.recoverStuckJobs(this.leaseDurationMs);
+      // 1. Recover any stuck jobs from crashed worker instances (throttled to once every 60s)
+      const now = Date.now();
+      if (now - this.lastStuckRecovery > 60000) {
+        await aiQueueService.recoverStuckJobs(this.leaseDurationMs);
+        this.lastStuckRecovery = now;
+      }
 
       // 2. Poll and lock the next eligible job
       const job = await aiQueueService.acquireNextJob(this.workerId);
       
+      // Successfully polled MongoDB - reset failure counter
+      this.consecutiveFailures = 0;
+
       if (job) {
         console.log(`[AIWorker] Locked job ${job._id} for media asset ${job.mediaAssetId}`);
         await this._processJob(job);
@@ -56,7 +73,25 @@ class AIWorker {
         return;
       }
     } catch (err) {
-      console.error("[AIWorker] Error in worker polling loop:", err.message);
+      this.consecutiveFailures = (this.consecutiveFailures || 0) + 1;
+      const isNetworkIssue =
+        err.name === "MongoNetworkTimeoutError" ||
+        err.name === "MongoServerSelectionError" ||
+        err.code === "ENOTFOUND" ||
+        err.code === "ETIMEDOUT" ||
+        err.code === "ECONNREFUSED" ||
+        (err.message && (err.message.includes("ENOTFOUND") || err.message.includes("timed out")));
+
+      const backoffMs = isNetworkIssue
+        ? Math.min(30000, 5000 * Math.pow(1.5, Math.min(this.consecutiveFailures, 4)))
+        : this.pollIntervalMs;
+
+      if (this.consecutiveFailures <= 3 || this.consecutiveFailures % 5 === 0) {
+        console.warn(`[AIWorker] Polling paused due to DB/network connectivity (${err.message}). Retrying in ${(backoffMs / 1000).toFixed(0)}s...`);
+      }
+
+      this.timer = setTimeout(() => this._runLoop(), backoffMs);
+      return;
     }
 
     // Schedule next regular poll

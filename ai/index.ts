@@ -41,6 +41,7 @@ export {
 export {
   type AIContext,
   AIContextCollector,
+  getLanguageInstructions,
   type EditorContext,
   EditorContextBuilder,
   type PublishingContext,
@@ -145,6 +146,10 @@ export {
   type WriterInput,
   WriterSchema,
   type WriterOutput,
+  VisualTypeEnum,
+  type VisualType,
+  VisualSuggestionSchema,
+  type VisualSuggestion,
   DiagramAgent,
   diagramAgent,
   type DiagramType,
@@ -172,6 +177,10 @@ export {
   exampleAgent,
   ReviewAgent,
   reviewAgent,
+  TranslatorAgent,
+  type TranslatorInput,
+  TranslatorSchema,
+  type TranslatorOutput,
 } from "./agent";
 
 // ─── Workflow Layer ───────────────────────────────────────────────────────────
@@ -180,6 +189,7 @@ export {
   type WorkflowStage,
   CreateArticlePlanningWorkflow,
   CreateArticleWorkflow,
+  ArticleTranslationWorkflow,
   AssetUploadWorkflow,
   type AssetUploadInput,
   EditingWorkflow,
@@ -333,3 +343,39 @@ export {
   type InternalLinkInput,
   type InternalLinkOutput,
 } from "./agent/internalLink.agent";
+
+// ─── AI Feature Registry Layer ────────────────────────────────────────────────
+export {
+  AIFeatureRegistry,
+  aiFeatureRegistry,
+  type AIFeatureId,
+  type AIFeatureCategory,
+  type AIFeatureDefinition,
+  AI_FEATURE_IDS,
+  AI_FEATURE_CATEGORIES,
+} from "./feature";
+
+// ─── AI Usage Analytics Layer ─────────────────────────────────────────────────
+export {
+  type AIExecutionStatus,
+  type CreateAIUsageDTO,
+  type UserHistoryItemDTO,
+  type UserUsageSummaryDTO,
+  type TopFeatureAnalyticsDTO,
+  type ProviderDistributionDTO,
+  type DailyGenerationDTO,
+  type AdminSummaryMetricsDTO,
+  type AdminUsageAnalyticsDTO,
+  type UsageQueryFilterDTO,
+  AIUsageRepository,
+  aiUsageRepository,
+  AIUsageService,
+  aiUsageService,
+  mongoAIUsageSink,
+} from "./usage";
+
+// ─── Content Studio Layer ─────────────────────────────────────────────────────
+export * from "./content-studio";
+
+
+

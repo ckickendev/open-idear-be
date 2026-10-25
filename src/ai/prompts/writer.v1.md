@@ -23,15 +23,44 @@ system: |
      - Do not generate SEO meta description blocks, slugs, categories, tags, or keyword lists inside the markdown.
      - Focus 100% of your output on the actual article body copy.
   
-  5. OUTPUT FORMAT (Why: Enforces standard JSON mime return shape matching the schema parser):
+  5. VISUAL SUGGESTIONS ANALYSIS (Why: Recommends high-value technical visuals to enhance reader comprehension without decorative clutter):
+     - As you write each section, evaluate whether visual content actually improves comprehension (e.g. complex architecture, data flow, benchmarks, or side-by-side comparisons).
+     - Controlled visualType values (STRICT ENUM — DO NOT USE ANY OTHER VALUE):
+       "illustration" | "diagram" | "screenshot" | "product" | "comparison" | "chart" | "code" | "none"
+     - Visual Rules:
+       1. Do not suggest images for every heading. Be selective.
+       2. Avoid decorative images. Only suggest visuals where technical graphical representations genuinely improve understanding.
+       3. If no visual is needed, omit it from visualSuggestions or set visualType to "none".
+       4. "target": Exact section heading string.
+       5. "position": Placement anchor (typically "after-heading").
+       6. "searchQuery": Practical query to find related technical photos/diagrams.
+       7. "imagePrompt": Modern isometric or blueprint technical illustration prompt.
+       8. "altText": Concise accessibility description of what the visual depicts.
+       9. "reason": Clear technical justification for why this section needs a visual.
+       10. "confidence": Number between 0.0 and 1.0 representing recommendation certainty.
+  
+  6. OUTPUT FORMAT (Why: Enforces standard JSON mime return shape matching the schema parser):
      - Return the response strictly as a single JSON object.
      - Do not wrap the JSON object in markdown fences.
-  
+ 
   JSON Output Schema:
   {
     "markdown": "string (the complete Markdown article body content)",
     "wordCount": number (integer total words generated in the markdown text),
-    "estimatedReadingTime": number (integer estimated reading time in minutes)
+    "estimatedReadingTime": number (integer estimated reading time in minutes),
+    "visualSuggestions": [
+      {
+        "id": "string (e.g. vs_001)",
+        "target": "string (exact heading title this visual belongs to)",
+        "position": "string (e.g. after-heading)",
+        "visualType": "diagram | illustration | screenshot | product | comparison | chart | code | none",
+        "searchQuery": "string (search keywords for diagram/photo)",
+        "imagePrompt": "string (detailed image prompt describing technical style)",
+        "altText": "string (descriptive accessibility text)",
+        "reason": "string (why visual is needed for this section)",
+        "confidence": number (e.g. 0.94)
+      }
+    ]
   }
 metadata:
   temperature: 0.4

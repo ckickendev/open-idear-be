@@ -31,6 +31,24 @@ const TutorSession = require("./tutorSession.schema");
 const TutorMessage = require("./tutorMessage.schema");
 const LearningEvidence = require("./learningEvidence.schema");
 const ObjectiveMastery = require("./objectiveMastery.schema");
+const { AIUsage } = require("./aiUsage.schema");
+const { ArticleVersion } = require("./articleVersion.schema");
+const { ReadingProgress } = require("./readingProgress.schema");
+const { Collection } = require("./collection.schema");
+const { CollectionItem } = require("./collectionItem.schema");
+const { VisualAnalytics } = require("./visualAnalytics.schema");
+const PostTranslation = require("./postTranslation.schema");
+const ShopCategory = require("./shopCategory.schema");
+const ShopProduct = require("./shopProduct.schema");
+const {
+  ShopOrder,
+  ORDER_STATUSES,
+  ALLOWED_TRANSITIONS,
+} = require("./shopOrder.schema");
+const {
+  ShopAnalyticsEvent,
+  SHOP_ANALYTICS_EVENT_TYPES,
+} = require("./shopAnalyticsEvent.schema");
 
 module.exports = {
   User,
@@ -66,4 +84,19 @@ module.exports = {
   TutorMessage,
   LearningEvidence,
   ObjectiveMastery,
+  AIUsage,
+  ArticleVersion,
+  ReadingProgress,
+  Collection,
+  CollectionItem,
+  VisualAnalytics,
+  PostTranslation,
+  ShopCategory,
+  ShopProduct,
+  ShopOrder,
+  ORDER_STATUSES,
+  ALLOWED_TRANSITIONS,
+  ShopAnalyticsEvent,
+  SHOP_ANALYTICS_EVENT_TYPES,
 };
+

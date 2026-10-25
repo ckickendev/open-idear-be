@@ -2,8 +2,19 @@ require("ts-node/register");
 require("dotenv").config();
 
 const { providerRegistry, GeminiProvider } = require("./ai");
-if (process.env.GEMINI_API_KEY) {
-  providerRegistry.register(new GeminiProvider(process.env.GEMINI_API_KEY.trim()));
+const geminiApiKey = (process.env.GEMINI_API_KEY || process.env["GEMINI_API_KEY "] || "").trim();
+if (geminiApiKey) {
+  providerRegistry.register(new GeminiProvider(geminiApiKey));
+}
+
+// Fail-fast environment variable validation for production readiness
+const requiredEnvVars = ["MONGO_URL", "CORS_ALLOW_ORIGINS", "SECRET_KEY"];
+const missingEnv = requiredEnvVars.filter((v) => !process.env[v]);
+if (missingEnv.length > 0) {
+  console.error(`[CRITICAL] Missing required environment variables: ${missingEnv.join(", ")}`);
+  if (process.env.NODE_ENV === "production") {
+    process.exit(1);
+  }
 }
 
 const {
@@ -32,13 +43,24 @@ const {
   PublishingController,
   GrowthController,
   CourseCategoryController,
+  SmartPublishController,
   CourseIntelligenceController,
   MasteryController,
+  AIUsageController,
+  ArticleController,
+  ReadingProgressController,
+  CollectionController,
+  HealthController,
+  ShopCategoryController,
+  ShopProductController,
+  ShopOrderController,
+  ShopAnalyticsController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
 
 const app = new AppServer([
+  new HealthController(),
   new UserController(),
   new CategoryController(),
   new CommentController(),
@@ -64,8 +86,17 @@ const app = new AppServer([
   new PublishingController(),
   new GrowthController(),
   new CourseCategoryController(),
+  new SmartPublishController(),
   new CourseIntelligenceController(),
   new MasteryController(),
+  new AIUsageController(),
+  new ArticleController(),
+  new ReadingProgressController(),
+  new CollectionController(),
+  new ShopCategoryController(),
+  new ShopProductController(),
+  new ShopOrderController(),
+  new ShopAnalyticsController(),
 ]);
 
 app.startListening();
@@ -73,6 +104,6 @@ app.startListening();
 // Start background AI metadata generation worker daemon
 const { aiWorker } = require("./services");
 aiWorker.start();
-// trigger restart nodemon clean - updated writer prompt maxTokens & streamArticle
+// trigger restart nodemon clean - content studio loaded successfully
 
 

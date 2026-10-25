@@ -81,8 +81,51 @@ export class GeminiImagenProvider implements ImageGenerationProvider {
     const mappedRatio = ASPECT_RATIO_MAP[aspectRatio] ?? "1:1";
     const safeCount = Math.min(Math.max(1, count), 4);
 
-    // Call Imagen 3 via REST API (imagen-3.0-generate-001)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`;
+    // 1. Try modern Gemini Image generation models
+    const geminiModels = ["gemini-2.5-flash-image", "gemini-3.1-flash-image"];
+    for (const model of geminiModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const response = await axios.post(
+          url,
+          {
+            contents: [{ parts: [{ text: enrichedPrompt }] }],
+            generationConfig: { responseModalities: ["IMAGE"] },
+          },
+          {
+            headers: { "Content-Type": "application/json" },
+            timeout: 60_000,
+            signal: signal as any,
+          }
+        );
+
+        const candidates = response.data?.candidates ?? [];
+        const parts = candidates[0]?.content?.parts ?? [];
+        for (const part of parts) {
+          if (part?.inlineData?.data) {
+            const b64 = part.inlineData.data;
+            const mimeType = part.inlineData.mimeType || "image/png";
+            return {
+              images: [
+                {
+                  buffer: Buffer.from(b64, "base64"),
+                  mimeType,
+                  revisedPrompt: enrichedPrompt,
+                },
+              ],
+            };
+          }
+        }
+      } catch (err: any) {
+        if (err.name === "AbortError" || err.code === "ERR_CANCELED") {
+          throw new ImageGenerationError("Image generation cancelled.", this.id, false, err);
+        }
+        // If 404 or quota, try next model or predict
+      }
+    }
+
+    // 2. Fallback to Imagen 3 predict endpoint
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
 
     const body: Record<string, any> = {
       instances: [{ prompt: enrichedPrompt }],

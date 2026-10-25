@@ -11,6 +11,7 @@ const mediaUploadLimiter = rateLimit({
   keyGenerator: (req) => req.userInfo?._id?.toString() || req.ip,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
   message: {
     error: "Too many uploads. Please wait a minute before uploading more.",
   },
@@ -27,6 +28,7 @@ const mediaSearchLimiter = rateLimit({
   keyGenerator: (req) => req.userInfo?._id?.toString() || req.ip,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
   message: {
     error: "Too many search requests. Please slow down.",
   },

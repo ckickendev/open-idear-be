@@ -1,17 +1,26 @@
 const express = require("express");
 const { Controller } = require("../core");
 const asyncHandler = require("../utils/asyncHandler");
-const { AuthMiddleware } = require("../middlewares/auth.middleware");
-const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent } = require("../ai");
+const { AuthMiddleware, OptionalAuthMiddleware } = require("../middlewares/auth.middleware");
+const { mediaSearchLimiter } = require("../middlewares/mediaRateLimit.middleware");
+const { buildSearchQuery } = require("../services/imageSearch/searchQueryBuilder");
+const { CreateArticlePlanningWorkflow, CreateArticleWorkflow, ArticleTranslationWorkflow, WriterAgent, diagramAgent, PublisherOrchestrator, PublisherCoverImageService, BrandVoiceService, InternalLinkAgent, aiFeatureRegistry, ideaGeneratorService, briefGeneratorService, outlineGeneratorService, contentInventoryService } = require("../ai");
 const { ContentStructureService } = require("../ai/content/contentStructure.service");
 const { PublisherPipelineWorkflow } = require("../ai/workflow/publisherPipeline.workflow");
 const { aiImageGenerationOrchestratorService } = require("../services/aiImageGeneration.services");
 const { aiImageEditingOrchestratorService } = require("../services/aiImageEditing.services");
-const { Post } = require("../models");
+const { imageSearchService } = require("../services/imageSearch.service");
+const { imageGenerationService, ImageGenerationService } = require("../services/imageGeneration.service");
+const { imageImportService } = require("../services/imageImport.service");
+const { visualClassifierService } = require("../ai/visual-intelligence/visualClassifier.service");
+const { batchVisualService } = require("../services/batchVisual.service");
+const { visualAnalyticsService } = require("../services/visualAnalytics.service");
+const { Post, ArticleVersion } = require("../models");
 const mongoose = require("mongoose");
 const { default: slugify } = require("slugify");
 const fs = require("fs").promises;
 const path = require("path");
+const { marked } = require("marked");
 
 // =============================================================================
 //  AI CONTROLLER
@@ -67,7 +76,11 @@ class AIController extends Controller {
       return res.status(400).json({ error: "category is required" });
     }
 
-    // 2. Instantiate and execute the planning workflow
+    // 2. Resolve feature and execute planning workflow
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+
+    const feature = aiFeatureRegistry.get("seo_outline");
     const workflow = new CreateArticlePlanningWorkflow();
     const result = await workflow.execute({
       topic: topic.trim(),
@@ -76,16 +89,26 @@ class AIController extends Controller {
       tone: tone.trim(),
       length: length.trim(),
       category: category.trim(),
+      language: validatedLocale,
     }, {
       context: {
-        language: req.body.language || "en",
+        language: validatedLocale,
         userPreference: req.body.userPreference || "",
+        featureId: feature.id,
+        telemetryKey: feature.telemetryKey,
       }
     });
 
     // 3. Return JSON response
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
@@ -108,24 +131,39 @@ class AIController extends Controller {
       return res.status(400).json({ error: "plan.outline is required and must be a non-empty array" });
     }
 
-    // 2. Instantiate and execute the writing workflow
+    // 2. Resolve feature and execute writing workflow
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+
+    const feature = aiFeatureRegistry.get("article_writer");
     const workflow = new CreateArticleWorkflow();
     const result = await workflow.execute({
       plan,
       additionalInstructions: additionalInstructions || "",
+      language: validatedLocale,
     }, {
       context: {
-        language: req.body.language || "en",
+        language: validatedLocale,
         userPreference: req.body.userPreference || "",
+        featureId: feature.id,
+        telemetryKey: feature.telemetryKey,
       }
     });
 
     // 3. Return JSON response
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
+
 
   /**
    * POST /ai/v1/writer/stream
@@ -161,18 +199,22 @@ class AIController extends Controller {
     });
 
     // 3. Instantiate WriterAgent
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+    const langLabel = validatedLocale === "vi" ? "Vietnamese (Tiếng Việt)" : "English";
     const agent = new WriterAgent();
 
     try {
       const stream = agent.executeStream({
         plan,
-        additionalInstructions: additionalInstructions || "",
+        additionalInstructions: `${additionalInstructions || ""}\n\nCRITICAL LANGUAGE REQUIREMENT: Write the ENTIRE article strictly in ${langLabel}. All section headings, paragraphs, bullet points, callouts, and explanations must strictly match ${langLabel}. Do NOT mix English and Vietnamese.`,
+        language: validatedLocale,
       }, {
         promptVersionOverride: "v2", // Force text-only markdown prompt (writer.v2.md)
         maxTokensOverride: 8192, // High token output cap for full 15-section articles
         signal: abortController.signal,
         context: {
-          language: req.body.language || "en",
+          language: validatedLocale,
           userPreference: req.body.userPreference || "",
         }
       });
@@ -192,6 +234,86 @@ class AIController extends Controller {
       res.write(`data: ${JSON.stringify({ error: err.message || "Streaming failed" })}\n\n`);
       res.end();
     }
+  });
+
+  /**
+   * POST /ai/v1/translate
+   * Translates an article between English and Vietnamese.
+   * Preserves code blocks, headings, markdown tables, and media references.
+   */
+  translateArticle = asyncHandler(async (req, res) => {
+    const {
+      sourceLocale = "en",
+      targetLocale = "vi",
+      sourceTitle: rawSourceTitle,
+      sourceContent: rawSourceContent,
+      sourceDescription: rawSourceDescription,
+      title,
+      content,
+      description,
+      additionalInstructions = "",
+    } = req.body;
+
+    const sourceTitle = String(rawSourceTitle ?? title ?? "").trim();
+    const sourceContent = String(rawSourceContent ?? content ?? "").trim();
+    const sourceDescription = String(rawSourceDescription ?? description ?? "").trim();
+
+    if (!sourceTitle) {
+      return res.status(400).json({ error: "sourceTitle is required" });
+    }
+    if (!sourceContent) {
+      return res.status(400).json({ error: "sourceContent is required" });
+    }
+
+    const validLocales = ["en", "vi"];
+    const src = String(sourceLocale).toLowerCase().trim();
+    const tgt = String(targetLocale).toLowerCase().trim();
+
+    if (!validLocales.includes(src)) {
+      return res.status(400).json({ error: `Invalid sourceLocale "${sourceLocale}". Must be "en" or "vi".` });
+    }
+    if (!validLocales.includes(tgt)) {
+      return res.status(400).json({ error: `Invalid targetLocale "${targetLocale}". Must be "en" or "vi".` });
+    }
+    if (src === tgt) {
+      return res.status(400).json({ error: "sourceLocale and targetLocale must be different." });
+    }
+
+    const feature = aiFeatureRegistry.get("article_translate");
+    const workflow = new ArticleTranslationWorkflow();
+    const result = await workflow.execute(
+      {
+        sourceLocale: src,
+        targetLocale: tgt,
+        sourceTitle: sourceTitle.trim(),
+        sourceContent: sourceContent.trim(),
+        sourceDescription: sourceDescription.trim(),
+        additionalInstructions: additionalInstructions.trim(),
+      },
+      {
+        context: {
+          language: tgt,
+          featureId: feature.id,
+          telemetryKey: feature.telemetryKey,
+        },
+      }
+    );
+
+    res.json({
+      status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
+      data: {
+        ...result,
+        sourceLocale: src,
+        targetLocale: tgt,
+      },
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -511,11 +633,19 @@ class AIController extends Controller {
       return res.status(400).json({ error: "markdown content is required" });
     }
 
+    const feature = aiFeatureRegistry.get("content_enhancement");
     const { enhancementPipeline } = require("../services");
     const result = await enhancementPipeline.execute(userId, markdown, options);
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
@@ -532,6 +662,7 @@ class AIController extends Controller {
       return res.status(400).json({ error: "markdown content is required" });
     }
 
+    const feature = aiFeatureRegistry.get("image_enhancement");
     const { enhancementPipeline } = require("../services");
     const result = await enhancementPipeline.execute(userId, markdown, {
       title,
@@ -541,6 +672,13 @@ class AIController extends Controller {
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: {
         enhancedMarkdown: result.enhancedMarkdown,
         insertedAssets: result.insertedAssets || result.insertedImages || [],
@@ -559,6 +697,7 @@ class AIController extends Controller {
   structureArticle = asyncHandler(async (req, res) => {
     const { markdown, growthResults } = req.body;
 
+    const feature = aiFeatureRegistry.get("content_structure");
     const result = ContentStructureService.buildArticleStructure({
       markdown: markdown || "",
       growthResults: growthResults || null,
@@ -566,6 +705,13 @@ class AIController extends Controller {
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
@@ -591,6 +737,7 @@ class AIController extends Controller {
       return res.status(400).json({ error: "topic is required" });
     }
 
+    const feature = aiFeatureRegistry.get("publish_by_ai");
     const abortController = new AbortController();
     req.on("close", () => abortController.abort());
 
@@ -610,9 +757,17 @@ class AIController extends Controller {
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result,
     });
   });
+
 
   /**
    * POST /ai/v1/publisher
@@ -754,18 +909,51 @@ class AIController extends Controller {
     const rawMarkdown = resultContext.writerOutput?.rawMarkdown || "";
 
     const postId = new mongoose.Types.ObjectId();
+    const blocks = resultContext.writerOutput?.blocks || [];
+
+    // Clean up headings in markdown before parsing to HTML
+    let cleanedMarkdown = rawMarkdown
+      .replace(/\r\n/g, "\n")
+      .replace(/([^\n#])\n?(#{1,6}\s+[^\n]+)/g, "$1\n\n$2")
+      .replace(/^(#{1,6}\s+[^\n]+)\n([^\n#])/gm, "$1\n\n$2")
+      .replace(/^(#{1,6})\s+(?:#{1,6}\s+)+/gm, "$1 ")
+      .trim();
+
+    const initialHtml = cleanedMarkdown ? marked.parse(cleanedMarkdown) : "";
+    const cleanText = cleanedMarkdown
+      .replace(/#{1,6}\s+/g, "")
+      .replace(/[*_`~]/g, "")
+      .replace(/\n+/g, " ")
+      .trim();
+
+    // Create immutable initial ArticleVersion with source = ai
+    const initialVersion = await ArticleVersion.create({
+      articleId: postId,
+      version: "1.0",
+      markdown: rawMarkdown,
+      html: initialHtml,
+      blocks,
+      changelog: req.body.changelog || "Initial AI generation via Autonomous Publisher Pipeline",
+      createdBy: userId,
+      source: "ai",
+      createdAt: new Date(),
+    });
+
     const draftPost = await Post.create({
       _id: postId,
       title: postTitle,
       slug: postSlug,
       description: resultContext.seo?.metaDescription || "",
-      content: rawMarkdown,
-      text: rawMarkdown,
-      blocks: resultContext.writerOutput?.blocks || [],
+      content: initialHtml,
+      markdown: rawMarkdown,
+      text: cleanText,
+      blocks,
       contentVersion: "blocks-v1",
       published: false, // Save as Draft
       author: userId,
       image: resultContext.coverImage?._id ? resultContext.coverImage._id : undefined,
+      currentVersionId: initialVersion._id,
+      latestVersion: "1.0",
     });
 
     res.json({
@@ -775,6 +963,8 @@ class AIController extends Controller {
         title: draftPost.title,
         slug: draftPost.slug,
         coverImage: resultContext.coverImage,
+        version: "1.0",
+        versionId: initialVersion._id.toString(),
         state: "DONE",
       },
     });
@@ -850,6 +1040,7 @@ class AIController extends Controller {
       return res.status(400).json({ error: "blocks array is required" });
     }
 
+    const feature = aiFeatureRegistry.get("internal_links");
     const agent = new InternalLinkAgent();
     const result = await agent.execute({
       blocks,
@@ -858,14 +1049,404 @@ class AIController extends Controller {
 
     res.json({
       status: "success",
+      feature: {
+        id: feature.id,
+        name: feature.name,
+        category: feature.category,
+        telemetryKey: feature.telemetryKey,
+        estimatedCreditCost: feature.estimatedCreditCost,
+      },
       data: result.data,
     });
   });
 
+  /**
+   * GET /ai/v1/features
+   * Returns all registered AI capabilities or filtered by ?category=
+   */
+  getFeatures = asyncHandler(async (req, res) => {
+    const { category } = req.query;
+    const features = category
+      ? aiFeatureRegistry.getByCategory(category)
+      : aiFeatureRegistry.getAll();
+    res.json({
+      status: "success",
+      total: features.length,
+      data: features,
+    });
+  });
+
+  /**
+   * GET /ai/v1/features/:id
+   * Returns detailed definition of a specific AI feature by canonical ID or alias.
+   */
+  getFeatureById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    try {
+      const feature = aiFeatureRegistry.resolve(id);
+      res.json({
+        status: "success",
+        data: feature,
+      });
+    } catch (err) {
+      res.status(404).json({
+        error: `AI Feature "${id}" not found.`,
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/images/search
+   * POST /ai/images/search
+   * Unified image search across user Asset Library and technical stock.
+   */
+  searchImages = asyncHandler(async (req, res) => {
+    const { query, limit, page, orientation, visualSuggestionId, context } = req.body;
+
+    // 1. Validate & normalize orientation
+    let validOrientation = undefined;
+    if (orientation) {
+      const lowerOrientation = String(orientation).toLowerCase().trim();
+      if (["landscape", "portrait", "square"].includes(lowerOrientation)) {
+        validOrientation = lowerOrientation;
+      } else {
+        return res.status(400).json({
+          error: "Invalid orientation. Must be one of: 'landscape', 'portrait', 'square'",
+        });
+      }
+    }
+
+    // 2. Validate & normalize limit & page
+    const parsedLimit = Math.min(30, Math.max(1, parseInt(limit, 10) || 12));
+    const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+
+    // 3. Resolve or construct query
+    let rawQuery = typeof query === "string" ? query.trim() : "";
+    if (!rawQuery && (visualSuggestionId || context)) {
+      rawQuery = buildSearchQuery({
+        query: rawQuery,
+        searchQuery: context?.searchQuery,
+        imagePrompt: context?.imagePrompt,
+        heading: context?.heading,
+        articleTitle: context?.articleTitle,
+        sectionContent: context?.sectionContent,
+        visualType: context?.visualType,
+        visualSuggestionId,
+      });
+    }
+
+    if (!rawQuery) {
+      return res.status(400).json({
+        error: "query or valid visual suggestion context is required",
+      });
+    }
+
+    // Sanitize query to prevent log injection or abuse (cap at 200 chars)
+    const cleanQuery = rawQuery.slice(0, 200);
+    const userId = req.userInfo?._id;
+
+    // 4. Execute search with error boundary
+    try {
+      const results = await imageSearchService.searchImages({
+        query: cleanQuery,
+        limit: parsedLimit,
+        page: parsedPage,
+        orientation: validOrientation,
+        userId,
+        visualSuggestionId,
+        context,
+      });
+
+      res.json({
+        status: "success",
+        query: cleanQuery,
+        page: parsedPage,
+        limit: parsedLimit,
+        total: results.length,
+        data: results,
+      });
+    } catch (err) {
+      // Safe error logging: do not log secrets or sensitive article content
+      console.error("[AIController] searchImages error:", err?.message);
+      res.json({
+        status: "success",
+        query: cleanQuery,
+        page: parsedPage,
+        limit: parsedLimit,
+        total: 0,
+        data: [],
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/images/batch-search
+   * POST /ai/images/batch-search
+   * Searches for images across multiple visual suggestions with bounded concurrency (2)
+   * and cross-suggestion query deduplication.
+   */
+  batchSearchImages = asyncHandler(async (req, res) => {
+    const { suggestions, limit = 6, orientation = "landscape" } = req.body;
+
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      return res.status(400).json({ error: "suggestions array is required" });
+    }
+
+    const cappedSuggestions = suggestions.slice(0, 30);
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+
+    const result = await imageSearchService.batchSearchImages(cappedSuggestions, {
+      userId,
+      limitPerSuggestion: Math.min(12, Math.max(1, Number(limit) || 6)),
+      orientation: ["landscape", "portrait", "square"].includes(orientation) ? orientation : "landscape",
+      concurrency: 2,
+    });
+
+    res.json({
+      status: "success",
+      ...result,
+    });
+  });
+
+  /**
+   * POST /ai/v1/images/import
+   * POST /ai/images/import
+   * Downloads a stock image from an allowed external provider, uploads to Cloudinary,
+   * deduplicates by sourceUrl and file hash, and persists an Asset record.
+   * Returns the saved Asset so the editor can reference an Asset ID.
+   */
+  importStockImage = asyncHandler(async (req, res) => {
+    const {
+      url,
+      thumbnailUrl,
+      title,
+      alt,
+      author,
+      license,
+      attributionUrl,
+      sourceProvider,
+      sourceUrl,
+      searchQuery,
+    } = req.body;
+
+    if (!url || typeof url !== "string" || !url.trim()) {
+      return res.status(400).json({ error: "url is required" });
+    }
+
+    const userId = req.userInfo?._id?.toString();
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    // Validate URL before any processing
+    const urlCheck = imageImportService.validateUrl(url.trim());
+    if (!urlCheck.valid) {
+      return res.status(400).json({ error: urlCheck.reason || "URL not allowed" });
+    }
+
+    try {
+      const asset = await imageImportService.importFromExternalUrl({
+        url: url.trim(),
+        thumbnailUrl: thumbnailUrl ? thumbnailUrl.trim() : undefined,
+        title: title ? String(title).trim() : undefined,
+        alt: alt ? String(alt).trim() : undefined,
+        author: author ? String(author).trim() : undefined,
+        license: license ? String(license).trim() : undefined,
+        attributionUrl: attributionUrl ? String(attributionUrl).trim() : undefined,
+        sourceProvider: sourceProvider ? String(sourceProvider).trim() : undefined,
+        sourceUrl: sourceUrl ? String(sourceUrl).trim() : url.trim(),
+        searchQuery: searchQuery ? String(searchQuery).trim() : undefined,
+        userId,
+      });
+
+      return res.json({
+        status: "success",
+        isExisting: asset.isExisting || false,
+        isExternalReference: asset.isExternalReference || false,
+        data: asset,
+      });
+    } catch (importErr) {
+      console.warn("[AIController] importStockImage fallback to external reference:", importErr.message);
+      return res.json({
+        status: "success",
+        isExisting: false,
+        isExternalReference: true,
+        data: {
+          _id: "ext_" + Date.now(),
+          url: url.trim(),
+          thumbnailUrl: thumbnailUrl ? thumbnailUrl.trim() : url.trim(),
+          alt: alt ? String(alt).trim() : title || "Stock Photo",
+          source: "stock",
+          sourceProvider: sourceProvider || "unsplash",
+          sourceUrl: sourceUrl || url.trim(),
+          author: author || "Photographer",
+          license: license || "unsplash",
+          attributionUrl: attributionUrl || url.trim(),
+          isExternalReference: true,
+          assetType: "external_reference",
+        },
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/content-studio/ideas
+   * POST /api/ai/content-studio/ideas
+   * Generates 5-20 diverse, structured content ideas for a given topic & goal.
+   */
+  generateContentStudioIdeas = asyncHandler(async (req, res) => {
+    const { topic, contentGoal, numberOfIdeas, existingCategories } = req.body;
+
+    if (!topic || typeof topic !== "string" || !topic.trim()) {
+      return res.status(400).json({ error: "topic is required and must not be empty" });
+    }
+
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+
+    try {
+      const result = await ideaGeneratorService.generate(
+        {
+          topic: topic.trim(),
+          contentGoal: contentGoal || "seo",
+          numberOfIdeas: Number(numberOfIdeas) || 10,
+          existingCategories: Array.isArray(existingCategories) ? existingCategories : undefined,
+          language: validatedLocale,
+        },
+        { userId }
+      );
+
+      res.json({
+        status: "success",
+        ideas: result.ideas,
+        intelligence: result.intelligence,
+      });
+    } catch (error) {
+      console.error("[AIController] generateContentStudioIdeas error:", error);
+      res.status(500).json({
+        error: error.message || "Failed to generate content ideas",
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/content-studio/intelligence
+   * POST /api/ai/content-studio/intelligence
+   * Inspects OpenIdear's existing content inventory and returns Content Intelligence.
+   */
+  getContentStudioIntelligence = asyncHandler(async (req, res) => {
+    const { topic } = req.body;
+
+    if (!topic || typeof topic !== "string" || !topic.trim()) {
+      return res.status(400).json({ error: "topic is required and must not be empty" });
+    }
+
+    try {
+      const inspection = await contentInventoryService.inspectInventory(topic.trim());
+
+      res.json({
+        status: "success",
+        topic: inspection.topic,
+        matchedArticles: inspection.matchedArticles,
+        allInventoryCount: inspection.allInventoryCount,
+        allCategories: inspection.allCategories,
+        intelligence: inspection.intelligence,
+      });
+    } catch (error) {
+      console.error("[AIController] getContentStudioIntelligence error:", error);
+      res.status(500).json({
+        error: error.message || "Failed to analyze content intelligence",
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/content-studio/brief
+   * POST /api/ai/content-studio/brief
+   * Generates a structured Content Brief for a selected Content Idea.
+   */
+  generateContentStudioBrief = asyncHandler(async (req, res) => {
+    const { idea, existingCategories } = req.body;
+
+    if (!idea || !idea.title) {
+      return res.status(400).json({ error: "idea is required with at least a title" });
+    }
+
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+
+    try {
+      const brief = await briefGeneratorService.generate(
+        {
+          idea,
+          existingCategories: Array.isArray(existingCategories) ? existingCategories : undefined,
+          language: validatedLocale,
+        },
+        { userId }
+      );
+
+      res.json({
+        status: "success",
+        brief,
+      });
+    } catch (error) {
+      console.error("[AIController] generateContentStudioBrief error:", error);
+      res.status(500).json({
+        error: error.message || "Failed to generate content brief",
+      });
+    }
+  });
+
+  /**
+   * POST /ai/v1/content-studio/outline
+   * POST /api/ai/content-studio/outline
+   * Generates a structured Content Outline from an idea and content brief.
+   */
+  generateContentStudioOutline = asyncHandler(async (req, res) => {
+    const { idea, contentBrief } = req.body;
+
+    if (!idea || !idea.title) {
+      return res.status(400).json({ error: "idea is required with at least a title" });
+    }
+    if (!contentBrief || !contentBrief.targetAudience) {
+      return res.status(400).json({ error: "contentBrief is required with targetAudience" });
+    }
+
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+    const targetLocale = (req.body.language || req.body.locale || req.headers["x-locale"] || "en").toLowerCase();
+    const validatedLocale = ["en", "vi"].includes(targetLocale) ? targetLocale : "en";
+
+    try {
+      const outline = await outlineGeneratorService.generateOutline(
+        {
+          idea,
+          contentBrief,
+          language: validatedLocale,
+        },
+        { userId }
+      );
+
+      res.json({
+        status: "success",
+        outline,
+      });
+    } catch (error) {
+      console.error("[AIController] generateContentStudioOutline error:", error);
+      res.status(500).json({
+        error: error.message || "Failed to generate content outline",
+      });
+    }
+  });
+
   initController = () => {
+    this._router.get( `${this._rootPath}/features`,           AuthMiddleware, this.getFeatures);
+    this._router.get( `${this._rootPath}/features/:id`,       AuthMiddleware, this.getFeatureById);
     this._router.post(`${this._rootPath}/planner`,            AuthMiddleware, this.planArticle);
     this._router.post(`${this._rootPath}/writer`,             AuthMiddleware, this.writeArticle);
     this._router.post(`${this._rootPath}/writer/stream`,      AuthMiddleware, this.streamArticle);
+    this._router.post(`${this._rootPath}/translate`,          AuthMiddleware, this.translateArticle);
     this._router.post(`${this._rootPath}/structure`,          AuthMiddleware, this.structureArticle);
     this._router.post(`${this._rootPath}/enhance`,            AuthMiddleware, this.enhanceContent);
     this._router.post(`${this._rootPath}/enhance-images`,     AuthMiddleware, this.enhanceImages);
@@ -879,10 +1460,232 @@ class AIController extends Controller {
     this._router.delete(`${this._rootPath}/brand-voice/:id`,   AuthMiddleware, this.deleteBrandVoice);
     this._router.get( `${this._rootPath}/image/providers`,    AuthMiddleware, this.getImageProviders);
     this._router.post(`${this._rootPath}/image/generate`,     AuthMiddleware, this.generateImage);
+    this._router.post(`${this._rootPath}/images/generate`,    AuthMiddleware, this.generateTechnicalIllustration);
+    this._router.post(`/ai/images/generate`,                  AuthMiddleware, this.generateTechnicalIllustration);
     this._router.post(`${this._rootPath}/image/edit`,         AuthMiddleware, this.editImage);
+    this._router.post(`${this._rootPath}/images/search`,      AuthMiddleware, mediaSearchLimiter, this.searchImages);
+    this._router.post(`/ai/images/search`,                    AuthMiddleware, mediaSearchLimiter, this.searchImages);
+    this._router.post(`${this._rootPath}/images/batch-search`, AuthMiddleware, mediaSearchLimiter, this.batchSearchImages);
+    this._router.post(`/ai/images/batch-search`,               AuthMiddleware, mediaSearchLimiter, this.batchSearchImages);
+    this._router.post(`${this._rootPath}/images/import`,      AuthMiddleware, this.importStockImage);
+    this._router.post(`/ai/images/import`,                    AuthMiddleware, this.importStockImage);
     this._router.post(`${this._rootPath}/diagram/generate`,   AuthMiddleware, this.generateDiagram);
     this._router.get( `${this._rootPath}/telemetry`,          AuthMiddleware, this.getTelemetry);
+
+    // AI Content Studio
+    this._router.post(`${this._rootPath}/content-studio/ideas`, OptionalAuthMiddleware, this.generateContentStudioIdeas);
+    this._router.post(`/api/ai/content-studio/ideas`,          OptionalAuthMiddleware, this.generateContentStudioIdeas);
+    this._router.post(`${this._rootPath}/content-studio/brief`, OptionalAuthMiddleware, this.generateContentStudioBrief);
+    this._router.post(`/api/ai/content-studio/brief`,          OptionalAuthMiddleware, this.generateContentStudioBrief);
+    this._router.post(`${this._rootPath}/content-studio/outline`, OptionalAuthMiddleware, this.generateContentStudioOutline);
+    this._router.post(`/api/ai/content-studio/outline`,          OptionalAuthMiddleware, this.generateContentStudioOutline);
+    this._router.post(`${this._rootPath}/content-studio/intelligence`, OptionalAuthMiddleware, this.getContentStudioIntelligence);
+    this._router.post(`/api/ai/content-studio/intelligence`,          OptionalAuthMiddleware, this.getContentStudioIntelligence);
+
+    // Sprint 3: Visual Intelligence, Decision Engine & Batch Pipeline
+    this._router.post(`${this._rootPath}/visuals/classify`,       AuthMiddleware, this.classifyVisuals);
+    this._router.post(`/ai/visuals/classify`,                     AuthMiddleware, this.classifyVisuals);
+    this._router.post(`${this._rootPath}/visuals/batch-generate`, AuthMiddleware, this.batchGenerateVisuals);
+    this._router.post(`/ai/visuals/batch-generate`,               AuthMiddleware, this.batchGenerateVisuals);
+    this._router.post(`${this._rootPath}/visuals/analytics`,      AuthMiddleware, this.recordVisualAnalytics);
+    this._router.post(`/ai/visuals/analytics`,                    AuthMiddleware, this.recordVisualAnalytics);
+    this._router.get( `${this._rootPath}/visuals/analytics/stats`, AuthMiddleware, this.getVisualAnalyticsStats);
+    this._router.get( `/ai/visuals/analytics/stats`,              AuthMiddleware, this.getVisualAnalyticsStats);
   };
+
+  /**
+   * POST /ai/images/generate
+   * POST /ai/v1/images/generate
+   * Generates a technical illustration, saves to Cloudinary & Asset library.
+   * Conforms to Sprint 3 specifications:
+   * Validates:
+   *   - prompt length (3 - 1000 characters)
+   *   - supported style preset
+   *   - supported aspect ratio
+   *   - authenticated user (401 if missing)
+   *   - per-user rate limits (429 if exceeded)
+   */
+  generateTechnicalIllustration = asyncHandler(async (req, res) => {
+    const userId = req.userInfo?._id?.toString() || req.user?._id?.toString();
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { prompt, style, aspectRatio, seed, force, suggestionId } = req.body;
+
+    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+      return res.status(400).json({ error: "prompt is required" });
+    }
+
+    const cleanPrompt = prompt.trim();
+    if (cleanPrompt.length < 3 || cleanPrompt.length > 1000) {
+      return res.status(400).json({
+        error: "prompt length must be between 3 and 1000 characters",
+      });
+    }
+
+    const targetStyle = style || "isometric";
+    if (!imageGenerationService.isValidStyle(targetStyle)) {
+      return res.status(400).json({
+        error: `Invalid style. Supported styles: ${ImageGenerationService.SUPPORTED_STYLES.join(", ")}`,
+      });
+    }
+
+    const targetRatio = aspectRatio || "16:9";
+    if (!imageGenerationService.isValidAspectRatio(targetRatio)) {
+      return res.status(400).json({
+        error: `Invalid aspectRatio. Supported ratios: ${ImageGenerationService.SUPPORTED_ASPECT_RATIOS.join(", ")}`,
+      });
+    }
+
+    try {
+      const asset = await imageGenerationService.generateTechnicalIllustration({
+        prompt: cleanPrompt,
+        style: targetStyle,
+        aspectRatio: targetRatio,
+        seed: seed !== undefined ? Number(seed) : undefined,
+        userId,
+        suggestionId: suggestionId ? String(suggestionId).trim() : undefined,
+        force: Boolean(force),
+      });
+
+      res.json({
+        status: "success",
+        data: asset,
+      });
+    } catch (err) {
+      if (err.status === 429 || err.code === "RATE_LIMIT_EXCEEDED") {
+        return res.status(429).json({ error: err.message });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * POST /ai/visuals/classify
+   * POST /ai/v1/visuals/classify
+   * Analyzes section heading/content or full markdown article and returns visual recommendations.
+   */
+  classifyVisuals = asyncHandler(async (req, res) => {
+    const { heading, content, markdown } = req.body;
+
+    if (markdown && typeof markdown === "string") {
+      const sections = visualClassifierService.analyzeArticle(markdown);
+      return res.json({
+        status: "success",
+        total: sections.length,
+        data: sections,
+      });
+    }
+
+    if (!heading || !String(heading).trim()) {
+      return res.status(400).json({ error: "heading or markdown is required" });
+    }
+
+    const recommendation = visualClassifierService.classifySection(
+      String(heading).trim(),
+      content ? String(content).trim() : ""
+    );
+
+    res.json({
+      status: "success",
+      data: recommendation,
+    });
+  });
+
+  /**
+   * POST /ai/visuals/batch-generate
+   * POST /ai/v1/visuals/batch-generate
+   * Executes batch visual pipeline: skips completed, generates/searches remaining, inserts automatically.
+   */
+  batchGenerateVisuals = asyncHandler(async (req, res) => {
+    const { markdown, preferredStyle, postId } = req.body;
+
+    if (!markdown || !String(markdown).trim()) {
+      return res.status(400).json({ error: "markdown is required" });
+    }
+
+    const userId = req.userInfo?._id || req.user?._id;
+
+    const result = await batchVisualService.executeBatchPipeline({
+      markdown: String(markdown),
+      userId: userId ? userId.toString() : null,
+      postId: postId ? postId.toString() : null,
+      preferredStyle,
+    });
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  });
+
+  /**
+   * POST /ai/visuals/analytics
+   * POST /ai/v1/visuals/analytics
+   * Records author action telemetry: generated, accepted, regenerated, deleted, search_preferred.
+   */
+  recordVisualAnalytics = asyncHandler(async (req, res) => {
+    const {
+      heading,
+      visualType,
+      recommendedAction,
+      actionTaken,
+      preset,
+      prompt,
+      confidence,
+      metadata,
+      postId,
+    } = req.body;
+
+    if (!actionTaken) {
+      return res.status(400).json({ error: "actionTaken is required" });
+    }
+
+    const userId = req.userInfo?._id || req.user?._id;
+
+    try {
+      const record = await visualAnalyticsService.recordEvent({
+        userId: userId ? userId.toString() : null,
+        postId,
+        heading,
+        visualType,
+        recommendation: req.body.recommendation,
+        recommendedAction,
+        actionTaken,
+        preset,
+        prompt,
+        confidence: confidence ? Number(confidence) : undefined,
+        metadata,
+      });
+
+      res.json({
+        status: "success",
+        data: record,
+      });
+    } catch (err) {
+      return res.status(400).json({
+        status: "error",
+        error: err.message,
+      });
+    }
+  });
+
+  /**
+   * GET /ai/visuals/analytics/stats
+   * GET /ai/v1/visuals/analytics/stats
+   * Aggregates telemetry stats.
+   */
+  getVisualAnalyticsStats = asyncHandler(async (req, res) => {
+    const userId = req.userInfo?._id || req.user?._id;
+    const stats = await visualAnalyticsService.getStats(userId ? userId.toString() : null);
+
+    res.json({
+      status: "success",
+      data: stats,
+    });
+  });
+
 }
 
 module.exports = AIController;

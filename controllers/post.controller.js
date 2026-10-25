@@ -5,6 +5,11 @@ const { AuthMiddleware, LoginMiddleware, AdminMiddleware } = require("../middlew
 const asyncHandler = require("../utils/asyncHandler");
 const categoryServices = require("../services/category.services");
 
+const extractLocale = (req) => {
+    const raw = req?.query?.locale || req?.headers?.["x-locale"] || req?.body?.locale || (req?.headers?.["accept-language"]?.toLowerCase().startsWith("vi") ? "vi" : null);
+    return ["en", "vi"].includes(raw) ? raw : null;
+};
+
 class PostController extends Controller {
     _rootPath = "/post";
     _router = express.Router();
@@ -21,10 +26,11 @@ class PostController extends Controller {
     });
 
     getPostToEdit = asyncHandler(async (req, res) => {
-        const { postId } = req.query;
+        const { postId, locale: queryLocale } = req.query;
         const { _id } = req.userInfo;
+        const locale = ["en", "vi"].includes(queryLocale) ? queryLocale : null;
 
-        const post = await postService.getPostById(postId);
+        const post = await postService.getPostToEdit(postId, locale);
 
         if (!post) return res.status(404).json({ message: "Post not found" });
 
@@ -40,8 +46,9 @@ class PostController extends Controller {
 
     getPostByID = asyncHandler(async (req, res) => {
         const { id } = req.params;
+        const locale = extractLocale(req);
 
-        const post = await postService.getPostById(id);
+        const post = await postService.getPostById(id, locale);
 
         if (!post) return res.status(404).json({ message: "Post not found" });
         res.status(200).json({ post });
@@ -49,8 +56,9 @@ class PostController extends Controller {
 
     getPostBySlug = asyncHandler(async (req, res) => {
         const { slug } = req.params;
+        const locale = extractLocale(req);
 
-        const post = await postService.getPostBySlug(slug);
+        const post = await postService.getPostBySlug(slug, locale);
 
         if (!post) return res.status(404).json({ message: "Post not found" });
         res.status(200).json({ post });
@@ -58,7 +66,8 @@ class PostController extends Controller {
 
     getHotTopics = asyncHandler(async (req, res) => {
         const { limit = 10, page = 1 } = req.query;
-        const result = await postService.getHotPostsToday(limit, page);
+        const locale = extractLocale(req) || "en";
+        const result = await postService.getHotPostsToday(limit, page, locale);
         if (!result.posts || result.posts.length === 0) return res.status(404).json({ message: "No hot topics found" });
 
         res.json({
@@ -75,7 +84,8 @@ class PostController extends Controller {
     });
 
     getTop10IdeasOfMonth = asyncHandler(async (req, res) => {
-        const result = await postService.getTop10IdeasOfMonth();
+        const locale = extractLocale(req) || "en";
+        const result = await postService.getTop10IdeasOfMonth(locale);
         res.json({
             success: true,
             posts: result.posts,
@@ -85,7 +95,8 @@ class PostController extends Controller {
 
     getHotPostsWeek = asyncHandler(async (req, res) => {
         const { limit = 10, page = 1 } = req.query;
-        const result = await postService.getHotPostsThisWeek(limit, page);
+        const locale = extractLocale(req) || "en";
+        const result = await postService.getHotPostsThisWeek(limit, page, locale);
 
         res.json({
             success: true,
@@ -102,14 +113,16 @@ class PostController extends Controller {
 
     getPostByAuthor = asyncHandler(async (req, res) => {
         const _id = req.query.profileId || req.userInfo._id;
-        const posts = await postService.getPostByUser(_id);
+        const locale = extractLocale(req) || "en";
+        const posts = await postService.getPostByUser(_id, locale);
 
         res.status(200).json({ posts });
     });
 
     getPostByAuthorId = asyncHandler(async (req, res) => {
         const profileId = req.query.profileId;
-        const posts = await postService.getPostByUser(profileId);
+        const locale = extractLocale(req) || "en";
+        const posts = await postService.getPostByUser(profileId, locale);
 
         res.status(200).json({ posts });
     });
@@ -131,25 +144,36 @@ class PostController extends Controller {
     });
 
     getDiscoverySidebar = asyncHandler(async (req, res) => {
-        const data = await postService.getDiscoverySidebar();
+        const locale = extractLocale(req) || "en";
+        const data = await postService.getDiscoverySidebar(locale);
         res.status(200).json({ success: true, ...data });
     });
 
     getRecentlyData = asyncHandler(async (req, res) => {
-        const recentlyData = await postService.getRecentlyData();
+        const locale = extractLocale(req) || "en";
+        const recentlyData = await postService.getRecentlyData(locale);
         res.status(200).json({ recentlyData });
     });
 
     getRecentlyDataByFeatures = asyncHandler(async (req, res) => {
         const features = req.query.feature ? req.query.feature : null;
-        const recentlyData = await postService.getRecentlyDataByFeatures(features);
+        const locale = extractLocale(req) || "en";
+        const recentlyData = await postService.getRecentlyDataByFeatures(features, locale);
         res.status(200).json({ recentlyData });
     });
 
     getAllPosts = asyncHandler(async (req, res) => {
         const { limit, page } = req.query;
-        const postData = await postService.getAllPosts(limit, page);
+        const locale = extractLocale(req) || "en";
+        const postData = await postService.getAllPosts(limit, page, locale);
         res.status(200).json({ posts: postData.posts, countData: postData.countData });
+    });
+
+    search = asyncHandler(async (req, res) => {
+        const { q, limit = 10, page = 1 } = req.query;
+        const locale = extractLocale(req) || "en";
+        const result = await postService.searchPosts(q, locale, limit, page);
+        res.status(200).json({ success: true, ...result });
     });
 
     getAllPostLikeByUser = asyncHandler(async (req, res) => {
@@ -162,6 +186,7 @@ class PostController extends Controller {
     create = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
         const { title, content, text, markdown, contentVersion, blocks, hero, aiContext, seo } = req.body;
+        const locale = extractLocale(req) || "en";
 
         const user = await userService.findUserById(_id);
         if (!user) return res.status(404).json({ message: "User not found" });
@@ -177,7 +202,7 @@ class PostController extends Controller {
             hero,
             aiContext,
             seo
-        });
+        }, locale);
         if (!post) return res.status(500).json({ message: "Error when creating post" });
 
         res.status(201).json({ message: "Post created successfully", post });
@@ -192,13 +217,16 @@ class PostController extends Controller {
 
     deletePost = asyncHandler(async (req, res) => {
         const { postId } = req.body;
-        const { _id } = req.userInfo;
+        const { _id, role } = req.userInfo;
 
         const post = await postService.getPostById(postId);
         if (!post) return res.status(404).json({ message: "Post not found" });
 
-        if (post.author._id.toString() !== _id.toString())
-            return res.status(403).json({ message: "You are not the author of this post" });
+        const authorId = post.author?._id ? post.author._id.toString() : (post.author ? post.author.toString() : "");
+        const userId = _id ? _id.toString() : "";
+
+        if (authorId && userId && authorId !== userId && role !== 1)
+            return res.status(403).json({ message: "You are not authorized to delete this post" });
 
         await postService.deletePost(postId);
         res.status(200).json({ message: "Post deleted successfully" });
@@ -210,36 +238,66 @@ class PostController extends Controller {
         res.status(200).json({ message: "Post restored successfully" });
     });
 
+    cleanTrash = asyncHandler(async (req, res) => {
+        const result = await postService.cleanTrash();
+        res.status(200).json({ message: `Trash cleaned successfully. ${result.deleted} post(s) permanently deleted.`, deleted: result.deleted });
+    });
+
+    deletePostForever = asyncHandler(async (req, res) => {
+        const { postId } = req.body;
+        const { _id, role } = req.userInfo;
+
+        if (!postId) {
+            return res.status(400).json({ message: "postId is required" });
+        }
+
+        const post = await postService.getPostById(postId);
+        if (!post) return res.status(404).json({ message: "Post not found" });
+
+        const authorId = post.author?._id ? post.author._id.toString() : (post.author ? post.author.toString() : "");
+        const userId = _id ? _id.toString() : "";
+
+        if (authorId && userId && authorId !== userId && role !== 1) {
+            return res.status(403).json({ message: "You are not authorized to permanently delete this post" });
+        }
+
+        await postService.deletePostForever(postId);
+        res.status(200).json({ message: "Post permanently deleted successfully" });
+    });
+
     public = asyncHandler(async (req, res) => {
         const publicInfo = req.body.publicInfo;
         const { _id } = req.userInfo;
-        const post = await postService.getPostById(publicInfo.postId);
+        const locale = extractLocale(req) || publicInfo?.locale || "en";
+        const post = await postService.getPostById(publicInfo.postId, locale);
         if (!post) return res.status(404).json({ message: "Post not found" });
 
         if (post.author._id.toString() !== _id.toString())
             return res.status(403).json({ message: "You are not the author of this post" });
 
-        const updatedPost = await postService.publicPost(publicInfo.postId, publicInfo);
+        const updatedPost = await postService.publicPost(publicInfo.postId, publicInfo, locale);
 
         res.status(200).json({ message: "Post published successfully", post: updatedPost });
     });
 
     changePublicManager = asyncHandler(async (req, res) => {
-        const { id } = req.query;
+        const { id, locale: queryLocale } = req.query;
+        const targetLocale = ["en", "vi"].includes(queryLocale) ? queryLocale : (["en", "vi"].includes(req.body.locale) ? req.body.locale : null);
         const { published } = req.body;
-        const post = await postService.getPostById(id);
+        const post = await postService.getPostById(id, targetLocale);
         if (!post) return res.status(404).json({ message: "Post not found" });
         if (post.published === published)
             return res.status(400).json({ message: "Post already has this status" });
-        const updatedPost = await postService.updateStatusPost(id, published);
+        const updatedPost = await postService.updateStatusPost(id, published, targetLocale);
         res.status(200).json({ message: "Post status updated successfully", post: updatedPost });
     });
 
     update = asyncHandler(async (req, res) => {
         const { postId, title, content, text, markdown, contentVersion, blocks, hero, aiContext, seo } = req.body;
         const { _id } = req.userInfo;
+        const locale = extractLocale(req) || "en";
 
-        const post = await postService.getPostById(postId);
+        const post = await postService.getPostById(postId, locale);
         if (!post) return res.status(404).json({ message: "Post not found" });
 
         if (post.author._id.toString() !== _id.toString())
@@ -255,7 +313,7 @@ class PostController extends Controller {
             hero,
             aiContext,
             seo
-        });
+        }, locale);
         res.status(200).json({ message: "Post updated successfully", post: updatedPost });
     });
 
@@ -320,12 +378,15 @@ class PostController extends Controller {
         this._router.get(`${this._rootPath}/getDiscoverySidebar`, this.getDiscoverySidebar);
         this._router.get(`${this._rootPath}/getRecentlyData`, this.getRecentlyData);
         this._router.get(`${this._rootPath}/getRecentlyDataByFeatures`, this.getRecentlyDataByFeatures);
+        this._router.get(`${this._rootPath}/search`, this.search);
         this._router.get(`${this._rootPath}/getAllPosts`, this.getAllPosts);
         this._router.get(`${this._rootPath}/getAllPostLikeByUser/:id`, AuthMiddleware, this.getAllPostLikeByUser);
         this._router.post(`${this._rootPath}/create`, LoginMiddleware, AuthMiddleware, this.create);
         this._router.post(`${this._rootPath}/marked`, LoginMiddleware, AuthMiddleware, this.marked);
         this._router.post(`${this._rootPath}/deletePost`, AuthMiddleware, this.deletePost);
         this._router.post(`${this._rootPath}/restorePost`, AuthMiddleware, this.restorePost);
+        this._router.post(`${this._rootPath}/deleteForever`, AuthMiddleware, this.deletePostForever);
+        this._router.post(`${this._rootPath}/cleanTrash`, AdminMiddleware, this.cleanTrash);
         this._router.post(`${this._rootPath}/public`, AuthMiddleware, this.public);
         this._router.patch(`${this._rootPath}/changePublicManager`, AuthMiddleware, this.changePublicManager);
         this._router.patch(`${this._rootPath}/update`, AuthMiddleware, this.update);

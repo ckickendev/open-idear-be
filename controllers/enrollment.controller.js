@@ -38,6 +38,26 @@ class EnrollmentController extends Controller {
 
     completeLesson = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
+        const { courseId, lessonId, action } = req.body;
+        if (!courseId || !lessonId) {
+            return res.status(400).json({
+                status: "error",
+                error: "courseId and lessonId are required",
+            });
+        }
+        let result;
+        if (action === "toggle") {
+            result = await enrollmentService.toggleLesson(_id, courseId, lessonId);
+        } else if (action === "uncomplete") {
+            result = await enrollmentService.completeLesson(_id, courseId, lessonId, false);
+        } else {
+            result = await enrollmentService.completeLesson(_id, courseId, lessonId, true);
+        }
+        res.status(200).json({ status: "success", data: result });
+    });
+
+    toggleLesson = asyncHandler(async (req, res) => {
+        const { _id } = req.userInfo;
         const { courseId, lessonId } = req.body;
         if (!courseId || !lessonId) {
             return res.status(400).json({
@@ -45,7 +65,7 @@ class EnrollmentController extends Controller {
                 error: "courseId and lessonId are required",
             });
         }
-        const result = await enrollmentService.completeLesson(_id, courseId, lessonId);
+        const result = await enrollmentService.toggleLesson(_id, courseId, lessonId);
         res.status(200).json({ status: "success", data: result });
     });
 
@@ -53,6 +73,7 @@ class EnrollmentController extends Controller {
         this._router.get(`${this._rootPath}/my-courses`, AuthMiddleware, this.getMyEnrollments);
         this._router.get(`${this._rootPath}/check`, AuthMiddleware, this.checkEnrollment);
         this._router.post(`${this._rootPath}/lesson/complete`, AuthMiddleware, this.completeLesson);
+        this._router.post(`${this._rootPath}/lesson/toggle`, AuthMiddleware, this.toggleLesson);
     };
 }
 
