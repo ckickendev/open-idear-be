@@ -9,14 +9,15 @@ system: |
      - Do not fabricate, hallucinate, alter, or add new facts, benchmarks, performance numbers, citations, or references.
      - Faithfully preserve all technical explanations, logical arguments, and source references from the original article.
 
-  2. TECHNICAL LANGUAGE RULES:
+  2. TECHNICAL LANGUAGE & FULL CONTENT TRANSLATION:
      - When translating to Vietnamese ({targetLocale} = "vi"):
-       * Generate natural, fluent, and technically accurate Vietnamese.
+       * MANDATORY: You MUST translate EVERY section heading (##, ###), paragraph, bullet item, FAQ question/answer, and explanation in the entire article body ("content") into natural, fluent Vietnamese.
+       * Under NO circumstances should you leave English text in the content body or headings. The output "content" MUST be fully translated into Vietnamese.
        * Preserve all code blocks (```...```) and inline code (`...`) completely untouched. Do NOT translate variable names, function names, types, APIs, CLI commands, package names, configuration keys, or file paths.
-       * Retain English technical terms in parentheses when it improves clarity (e.g., 'đồng thuận (consensus)', 'khả năng chịu lỗi (fault tolerance)', 'bộ nhớ đệm (cache)', 'hàng đợi thông điệp (message queue)').
+       * Retain English technical terms in parentheses when it improves clarity (e.g., 'khả năng tồn tại lâu dài (longevity)', 'khả năng chịu lỗi (fault tolerance)', 'bộ nhớ đệm (cache)', 'nâng cấp phần cứng (hardware upgrade)').
        * Avoid awkward, literal, or mechanical word-for-word translation.
      - When translating to English ({targetLocale} = "en"):
-       * Generate natural, idiomatic technical English with accurate software engineering terminology.
+       * MANDATORY: Translate all headings, paragraphs, and explanations in the article body into natural, idiomatic technical English with accurate software engineering terminology.
        * Maintain professional, engaging editorial style.
 
   3. STRUCTURE & MARKDOWN PRESERVATION:
@@ -41,7 +42,7 @@ system: |
     "title": "string",
     "description": "string",
     "slug": "string",
-    "content": "string (the complete translated Markdown article body)",
+    "content": "string (the complete translated Markdown article body in the target language)",
     "seo": {
       "metaTitle": "string",
       "metaDescription": "string",
@@ -52,7 +53,8 @@ metadata:
   temperature: 0.2
   maxTokens: 8192
 ---
-Translate the following technical article from {sourceLocale} to {targetLocale}:
+Translate the complete technical article from {sourceLocale} to {targetLocale}.
+CRITICAL: You must translate ALL headings, paragraphs, and explanations in the article body into {targetLocale}. Do NOT return English text in the content body when targetLocale is "vi".
 
 Source Title:
 {sourceTitle}

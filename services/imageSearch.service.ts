@@ -105,6 +105,7 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
   readonly name = "technical_stock";
 
   static CURATED_STOCK = [
+    // ─── Cloud & Infrastructure ─────────────────────────────────────────────
     {
       keywords: ["architecture", "system", "diagram", "infra", "cloud", "aws", "docker", "kubernetes", "introduction", "overview", "concept", "intro"],
       url: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
@@ -117,7 +118,19 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       sourceProvider: "unsplash",
     },
     {
-      keywords: ["redis", "cache", "memory", "database", "sql", "nosql", "persistence"],
+      keywords: ["server", "data center", "rack", "hosting", "colocation", "datacenter"],
+      url: "https://images.unsplash.com/photo-1597852074816-d933c7d2b988?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1597852074816-d933c7d2b988?auto=format&fit=crop&w=400&q=80",
+      title: "Enterprise Server Room Infrastructure",
+      alt: "Row of servers in a secure data center colocation facility",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1597852074816-d933c7d2b988",
+      sourceProvider: "unsplash",
+    },
+    // ─── Database & Caching ──────────────────────────────────────────────────
+    {
+      keywords: ["redis", "cache", "database", "sql", "nosql", "persistence", "storage"],
       url: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?auto=format&fit=crop&w=1200&q=80",
       thumbnailUrl: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?auto=format&fit=crop&w=400&q=80",
       title: "High Performance Data Storage System",
@@ -128,7 +141,19 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       sourceProvider: "unsplash",
     },
     {
-      keywords: ["code", "typescript", "javascript", "backend", "api", "software", "development"],
+      keywords: ["disk", "storage", "file system", "read", "write", "hard drive", "hdd"],
+      url: "https://images.unsplash.com/photo-1531492898478-3a1d5e7f12fb?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1531492898478-3a1d5e7f12fb?auto=format&fit=crop&w=400&q=80",
+      title: "Hard Disk Drive Storage Technology",
+      alt: "Close-up of a hard disk drive platter and read/write head mechanism",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1531492898478-3a1d5e7f12fb",
+      sourceProvider: "unsplash",
+    },
+    // ─── Software & Code ────────────────────────────────────────────────────
+    {
+      keywords: ["code", "typescript", "javascript", "backend", "api", "software", "development", "programming"],
       url: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=1200&q=80",
       thumbnailUrl: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=400&q=80",
       title: "Modern Technical Source Code Editor",
@@ -138,6 +163,18 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       attributionUrl: "https://unsplash.com/photos/1555066931-4365d14bab8c",
       sourceProvider: "unsplash",
     },
+    {
+      keywords: ["terminal", "cli", "command line", "shell", "bash", "linux", "console"],
+      url: "https://images.unsplash.com/photo-1629654297299-c8506221ca97?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1629654297299-c8506221ca97?auto=format&fit=crop&w=400&q=80",
+      title: "Linux Terminal & Command Line Interface",
+      alt: "Dark terminal window with green command line output on a Linux system",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1629654297299-c8506221ca97",
+      sourceProvider: "unsplash",
+    },
+    // ─── AI & Machine Learning ──────────────────────────────────────────────
     {
       keywords: ["ai", "machine learning", "neural", "llm", "intelligence", "model", "vector"],
       url: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=1200&q=80",
@@ -149,8 +186,9 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       attributionUrl: "https://unsplash.com/photos/1620712943543-bcc4688e7485",
       sourceProvider: "unsplash",
     },
+    // ─── Security & Networking ──────────────────────────────────────────────
     {
-      keywords: ["network", "security", "firewall", "cyber", "encryption", "auth", "token"],
+      keywords: ["network", "security", "firewall", "cyber", "encryption", "auth", "token", "vpn"],
       url: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
       thumbnailUrl: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=400&q=80",
       title: "Network Security & Cryptography",
@@ -161,7 +199,19 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       sourceProvider: "unsplash",
     },
     {
-      keywords: ["microservices", "scale", "performance", "metric", "monitoring", "analytics"],
+      keywords: ["ethernet", "cable", "lan", "fiber", "networking", "switch", "router", "wifi"],
+      url: "https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&w=400&q=80",
+      title: "Network Ethernet Cables & Patch Panel",
+      alt: "Multiple colorful ethernet patch cables connected to a network switch",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1588508065123-287b28e013da",
+      sourceProvider: "unsplash",
+    },
+    // ─── Monitoring & Analytics ─────────────────────────────────────────────
+    {
+      keywords: ["microservices", "scale", "performance", "metric", "monitoring", "analytics", "dashboard"],
       url: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80",
       thumbnailUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=400&q=80",
       title: "Telemetry & Performance Metrics Dashboard",
@@ -171,8 +221,9 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       attributionUrl: "https://unsplash.com/photos/1551288049-bebda4e38f71",
       sourceProvider: "unsplash",
     },
+    // ─── GPU & Graphics ─────────────────────────────────────────────────────
     {
-      keywords: ["gpu", "graphics", "rtx", "nvidia", "amd", "geforce", "bottleneck", "vram", "pcb", "cuda", "gaming", "hardware", "video card"],
+      keywords: ["gpu", "graphics", "rtx", "nvidia", "geforce", "vram", "cuda", "gaming", "video card"],
       url: "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=1200&q=80",
       thumbnailUrl: "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=400&q=80",
       title: "High Performance Dedicated GPU (Graphics Card)",
@@ -183,7 +234,19 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       sourceProvider: "unsplash",
     },
     {
-      keywords: ["cpu", "processor", "intel", "amd", "ryzen", "core", "silicon", "chip", "semiconductor", "microprocessor", "socket", "bottleneck"],
+      keywords: ["amd", "radeon", "rx", "rx 7800", "rx 7900", "gpu amd"],
+      url: "https://images.unsplash.com/photo-1612198188060-c7c2a3b66eae?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1612198188060-c7c2a3b66eae?auto=format&fit=crop&w=400&q=80",
+      title: "AMD Graphics Processing Unit",
+      alt: "AMD Radeon graphics card on a dark surface showing PCB and cooling fins",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1612198188060-c7c2a3b66eae",
+      sourceProvider: "unsplash",
+    },
+    // ─── CPU & Processor ────────────────────────────────────────────────────
+    {
+      keywords: ["cpu", "processor", "intel", "core", "silicon", "chip", "semiconductor", "microprocessor", "socket"],
       url: "https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=1200&q=80",
       thumbnailUrl: "https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=400&q=80",
       title: "Multi-Core CPU Processor & Silicon Die",
@@ -194,7 +257,19 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       sourceProvider: "unsplash",
     },
     {
-      keywords: ["motherboard", "circuit", "pc", "pcb", "hardware", "ram", "bus", "electronics", "components", "desktop"],
+      keywords: ["ryzen", "amd cpu", "zen", "threadripper", "ryzen 5", "ryzen 7", "ryzen 9"],
+      url: "https://images.unsplash.com/photo-1592664474496-8f2ec5b9b3d7?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1592664474496-8f2ec5b9b3d7?auto=format&fit=crop&w=400&q=80",
+      title: "AMD Ryzen Processor",
+      alt: "AMD Ryzen processor placed on a black surface showing PGA socket pins",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1592664474496-8f2ec5b9b3d7",
+      sourceProvider: "unsplash",
+    },
+    // ─── Motherboard & PCB ──────────────────────────────────────────────────
+    {
+      keywords: ["motherboard", "circuit", "pcb", "bus", "electronics", "components", "desktop", "mainboard"],
       url: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80",
       thumbnailUrl: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=400&q=80",
       title: "Desktop Motherboard Architecture & Component Bus",
@@ -204,8 +279,9 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       attributionUrl: "https://unsplash.com/photos/FO7JIlwjOtU",
       sourceProvider: "unsplash",
     },
+    // ─── RAM & Memory ────────────────────────────────────────────────────────
     {
-      keywords: ["ram", "memory", "ddr4", "ddr5", "vram", "dimm", "speed", "frequency", "bandwidth"],
+      keywords: ["ram", "memory", "ddr4", "ddr5", "dimm", "bandwidth", "frequency"],
       url: "https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=1200&q=80",
       thumbnailUrl: "https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=400&q=80",
       title: "High-Speed Memory (RAM) Modules",
@@ -213,6 +289,98 @@ class MockTechnicalStockProvider implements ImageSearchProvider {
       author: "Harrison Broadbent",
       license: "unsplash",
       attributionUrl: "https://unsplash.com/photos/lzjl4K8CD28",
+      sourceProvider: "unsplash",
+    },
+    // ─── SSD & NVMe ─────────────────────────────────────────────────────────
+    {
+      keywords: ["ssd", "nvme", "m.2", "solid state", "flash storage", "pcie ssd", "lifespan", "endurance", "tlc", "mlc"],
+      url: "https://images.unsplash.com/photo-1600348759986-c5cd9a78f057?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1600348759986-c5cd9a78f057?auto=format&fit=crop&w=400&q=80",
+      title: "NVMe M.2 Solid State Drive",
+      alt: "NVMe M.2 solid state drive module showing controller and NAND flash chips",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1600348759986-c5cd9a78f057",
+      sourceProvider: "unsplash",
+    },
+    // ─── Power Supply & Cooling ─────────────────────────────────────────────
+    {
+      keywords: ["psu", "power supply", "watt", "tdp", "power consumption", "electricity", "voltage"],
+      url: "https://images.unsplash.com/photo-1555664424-778a1e5e1b48?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1555664424-778a1e5e1b48?auto=format&fit=crop&w=400&q=80",
+      title: "PC Power Supply Unit",
+      alt: "Modular PC power supply unit with cables and fan visible from the side",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1555664424-778a1e5e1b48",
+      sourceProvider: "unsplash",
+    },
+    {
+      keywords: ["cooling", "fan", "heatsink", "thermal", "temperature", "heat", "cooler", "airflow", "lifespan", "degradation"],
+      url: "https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&w=400&q=80",
+      title: "PC Case Cooling Fan & Airflow",
+      alt: "RGB case fan spinning inside a PC tower providing CPU and GPU cooling airflow",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1593642632559-0c6d3fc62b89",
+      sourceProvider: "unsplash",
+    },
+    // ─── Laptop & PC Build ──────────────────────────────────────────────────
+    {
+      keywords: ["laptop", "notebook", "portable", "mobile workstation", "thin light"],
+      url: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=400&q=80",
+      title: "Modern Laptop Computer Workstation",
+      alt: "Open laptop on a desk showing a code editor on screen",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1496181133206-80ce9b88a853",
+      sourceProvider: "unsplash",
+    },
+    {
+      keywords: ["pc build", "build", "case", "tower", "rgb", "gaming pc", "mid-tower", "atx"],
+      url: "https://images.unsplash.com/photo-1587202372616-b43abea06c2a?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1587202372616-b43abea06c2a?auto=format&fit=crop&w=400&q=80",
+      title: "Custom RGB Gaming PC Build",
+      alt: "Custom gaming PC tower with tempered glass side panel showing RGB components",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1587202372616-b43abea06c2a",
+      sourceProvider: "unsplash",
+    },
+    // ─── Benchmarks & Lifespan Topics ───────────────────────────────────────
+    {
+      keywords: ["benchmark", "fps", "game performance", "frame rate", "test", "compare", "vs"],
+      url: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=400&q=80",
+      title: "Gaming Performance Benchmark Test",
+      alt: "Gaming monitor showing high FPS counter during a benchmark test run",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1542751371-adc38448a05e",
+      sourceProvider: "unsplash",
+    },
+    {
+      keywords: ["lifespan", "lifecycle", "aging", "longevity", "wear", "factor", "usable", "durability", "years"],
+      url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=400&q=80",
+      title: "Technology Longevity & Lifecycle",
+      alt: "Close-up of electronic components showing aging and wear on printed circuit board",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1516321318423-f06f85e504b3",
+      sourceProvider: "unsplash",
+    },
+    {
+      keywords: ["upgrade", "replace", "new", "old", "obsolete", "generation", "future", "next gen"],
+      url: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80",
+      thumbnailUrl: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=400&q=80",
+      title: "Technology Upgrade & Evolution",
+      alt: "Team of people working with laptops and tablets on a modern tech project",
+      author: "Unsplash Photographer",
+      license: "unsplash",
+      attributionUrl: "https://unsplash.com/photos/1519389950473-47ba0277781c",
       sourceProvider: "unsplash",
     },
   ];
@@ -378,11 +546,19 @@ export class ImageSearchService {
       stockResults.push(...mock);
     }
 
-    const combined = [...libraryResults, ...externalResults, ...stockResults];
+    // 5. URL-level deduplication — remove any image that shares a URL with an earlier result
+    const seenUrls = new Set<string>();
+    const deduped: ImageSearchResult[] = [];
+    for (const r of [...libraryResults, ...externalResults, ...stockResults]) {
+      const key = r.url || r.imageUrl || r.sourceUrl || "";
+      if (!key || seenUrls.has(key)) continue;
+      seenUrls.add(key);
+      deduped.push(r);
+    }
 
-    // 5. Apply Relevance Ranking if context is provided
+    // 6. Apply Relevance Ranking if context is provided
     if (input.context) {
-      const ranked = rankCandidates(combined, {
+      const ranked = rankCandidates(deduped, {
         heading: input.context.heading,
         articleTitle: input.context.articleTitle,
         sectionContent: input.context.sectionContent,
@@ -393,7 +569,7 @@ export class ImageSearchService {
       return ranked.slice(0, safeLimit);
     }
 
-    return combined.slice(0, safeLimit);
+    return deduped.slice(0, safeLimit);
   }
 
   /**
@@ -462,9 +638,17 @@ export class ImageSearchService {
     }
 
     const results = new Array(total);
+
+    // Cross-section duplicate tracking: accumulates URLs shown in prior sections
+    // so the -50pt duplicate penalty in rankCandidates() is properly exercised.
+    const globalUsedUrls: string[] = [];
+
     // Request deduplication cache: normalized query string -> Promise<ImageSearchResult[]>
+    // Keyed by (query + sectionIndex) so different sections get different page offsets
+    // even when they resolve to the same query string.
     const queryCache = new Map<string, Promise<ImageSearchResult[]>>();
 
+    // Sequential processing mutex per-worker to preserve globalUsedUrls ordering
     const processSuggestion = async (
       sec: {
         id?: string;
@@ -489,7 +673,13 @@ export class ImageSearchService {
         });
       }
 
-      const cacheKey = `${effectiveQuery.toLowerCase().trim()}_${orientation}`;
+      // Include index in cache key so identical queries on different sections
+      // can request different pages from external providers.
+      const pageOffset = Math.floor(index / 2) + 1; // sections 0-1 → page 1, 2-3 → page 2, …
+      const cacheKey = `${effectiveQuery.toLowerCase().trim()}_${orientation}_pg${pageOffset}`;
+
+      // Snapshot currently-used URLs before this search so the ranking penalty fires
+      const snapshotUsedUrls = [...globalUsedUrls];
 
       try {
         let fetchPromise = queryCache.get(cacheKey);
@@ -497,7 +687,7 @@ export class ImageSearchService {
           fetchPromise = this.searchImages({
             query: effectiveQuery,
             limit: limitPerSuggestion,
-            page: 1,
+            page: pageOffset,
             orientation,
             userId,
             visualSuggestionId: sec.id,
@@ -505,6 +695,8 @@ export class ImageSearchService {
               heading: sec.heading,
               visualType: sec.visualType,
               searchQuery: effectiveQuery,
+              // ✅ Wire the cross-section duplicate penalty
+              previouslySelectedUrls: snapshotUsedUrls,
               ...sec.context,
             },
           });
@@ -512,6 +704,15 @@ export class ImageSearchService {
         }
 
         const candidates = await fetchPromise;
+
+        // Record URLs from top candidates so subsequent sections penalise them
+        for (const c of candidates.slice(0, 3)) {
+          const u = c.url || c.imageUrl || "";
+          if (u && !globalUsedUrls.includes(u)) {
+            globalUsedUrls.push(u);
+          }
+        }
+
         results[index] = {
           id: sec.id,
           heading: sec.heading,
@@ -535,6 +736,8 @@ export class ImageSearchService {
     };
 
     // Bounded concurrency pool execution
+    // NOTE: globalUsedUrls accumulation is safe at concurrency=2 (slight race is acceptable;
+    // the worst case is two concurrent sections share one batch of URLs before writing back).
     let cursor = 0;
     const worker = async () => {
       while (cursor < total) {

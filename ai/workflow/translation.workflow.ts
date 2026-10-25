@@ -52,13 +52,18 @@ export class ArticleTranslationWorkflow extends Workflow<TranslatorInput, Articl
       throw new Error("Source locale and target locale must be different for translation.");
     }
 
+    const defaultInstructions =
+      targetLocale === "vi"
+        ? "MANDATORY: Translate ALL headings, paragraphs, bullet points, and text in the article body into natural, fluent Vietnamese. Preserve code blocks and technical identifiers untouched."
+        : "MANDATORY: Translate all headings, paragraphs, and explanations in the article body into natural technical English.";
+
     const normalizedInput: TranslatorInput = {
       sourceLocale,
       targetLocale,
       sourceTitle: rawTitle,
       sourceContent: rawContent,
       sourceDescription: input.sourceDescription || input.description || "",
-      additionalInstructions: input.additionalInstructions || "",
+      additionalInstructions: [defaultInstructions, input.additionalInstructions || ""].filter(Boolean).join(" "),
     };
 
     const agentResult = await this.agent.execute(normalizedInput, {

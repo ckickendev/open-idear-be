@@ -14,8 +14,17 @@ export class PublisherSEOAgent extends BaseAgent<PublisherSEOInput, PublisherSEO
   protected override readonly schema = PublisherSEOSchema;
 
   protected override async validate(data: PublisherSEOOutput): Promise<boolean> {
-    if (!data.metaDescription || data.metaDescription.length > 160) {
-      console.error("[PublisherSEOAgent] metaDescription missing or exceeds 160 characters.");
+    // metaDescription is auto-truncated to <=160 chars by the schema transform.
+    // This guard is a final safety assertion after transformation.
+    if (!data.metaDescription) {
+      console.error("[PublisherSEOAgent] metaDescription is missing.");
+      return false;
+    }
+    if (data.metaDescription.length > 160) {
+      // Should never reach here due to schema transform, but log if it does.
+      console.error(
+        `[PublisherSEOAgent] metaDescription still exceeds 160 chars after transform (${data.metaDescription.length} chars).`
+      );
       return false;
     }
     if (!data.slug || !data.category || !Array.isArray(data.tags)) {
@@ -25,3 +34,4 @@ export class PublisherSEOAgent extends BaseAgent<PublisherSEOInput, PublisherSEO
     return true;
   }
 }
+

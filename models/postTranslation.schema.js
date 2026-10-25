@@ -52,6 +52,10 @@ const postTranslationSchema = new Schema(
       type: String,
       required: true,
     },
+    markdown: {
+      type: String,
+      default: "",
+    },
     text: {
       type: String,
       required: true,

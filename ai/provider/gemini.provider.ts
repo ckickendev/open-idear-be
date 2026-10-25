@@ -70,7 +70,7 @@ const MODEL_ALIASES: Readonly<Record<string, string>> = {
 // ─── Retry Configuration ──────────────────────────────────────────────────────
 
 const RETRY_CONFIG = {
-  maxAttempts: 3,
+  maxAttempts: 4,
   initialDelayMs: 1_000,
   backoffMultiplier: 2,
   jitterMs: 200,
@@ -437,9 +437,14 @@ export class GeminiProvider implements AIProvider {
         // Check cancellation before sleeping
         signal?.throwIfAborted();
 
-        const delay =
+        let delay =
           config.initialDelayMs * config.backoffMultiplier ** (attempt - 1) +
           Math.random() * config.jitterMs;
+
+        // If rate limited, give Gemini at least 6s-10s to reset quota window
+        if (aiError.code === "rate_limited") {
+          delay = Math.max(delay, 6_000 * attempt);
+        }
 
         await this._sleep(delay);
         lastError = aiError;

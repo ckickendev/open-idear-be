@@ -221,12 +221,21 @@ class PostService extends Service {
             .populate('tags', 'name')
             .populate('image', 'url description')
             .populate('mediaContent', 'url type description')
-            .populate('currentVersionId', 'version changelog source createdAt');
+            .populate('currentVersionId', 'version changelog source createdAt markdown html blocks');
         if (!post) {
             return null;
         }
 
         const postObj = post.toObject ? post.toObject() : { ...post };
+
+        if (postObj.currentVersionId && typeof postObj.currentVersionId === "object") {
+            if (!postObj.markdown && postObj.currentVersionId.markdown) {
+                postObj.markdown = postObj.currentVersionId.markdown;
+            }
+            if ((!postObj.blocks || postObj.blocks.length === 0) && postObj.currentVersionId.blocks?.length > 0) {
+                postObj.blocks = postObj.currentVersionId.blocks;
+            }
+        }
 
         // Look for matching translation in PostTranslation
         let translation = null;
@@ -246,13 +255,14 @@ class PostService extends Service {
             postObj.description = translation.description;
             postObj.content = translation.content;
             postObj.text = translation.text;
+            postObj.markdown = translation.markdown || (translation.content && /#{1,6}\s+/.test(translation.content) ? translation.content : undefined);
             postObj.contentVersion = translation.contentVersion;
             postObj.blocks = translation.blocks;
             postObj.hero = translation.hero;
             postObj.seo = translation.seo;
             postObj.published = translation.published;
             postObj.readtime = translation.readtime;
-            postObj.currentVersionId = translation.currentVersionId || postObj.currentVersionId;
+            postObj.currentVersionId = translation.currentVersionId || (translation.locale === (post.defaultLocale || "en") ? postObj.currentVersionId : null);
             postObj.activeLocale = translation.locale;
             postObj.translation = translation;
         } else {
@@ -355,7 +365,8 @@ class PostService extends Service {
         if (!post) return null;
 
         const targetLocale = requestedLocale && ["en", "vi"].includes(requestedLocale) ? requestedLocale : (post.defaultLocale || "en");
-        const translation = await PostTranslation.findOne({ postId, locale: targetLocale }).lean();
+        let translation = await PostTranslation.findOne({ postId, locale: targetLocale }).lean();
+
 
         if (!translation && targetLocale !== (post.defaultLocale || "en")) {
             // New translation draft requested
@@ -461,6 +472,7 @@ class PostService extends Service {
             slug,
         };
 
+        if (post.markdown !== undefined) updateObj.markdown = post.markdown;
         if (post.contentVersion) updateObj.contentVersion = post.contentVersion;
         if (post.blocks !== undefined) updateObj.blocks = post.blocks;
         if (post.hero !== undefined) updateObj.hero = post.hero;
@@ -506,6 +518,7 @@ class PostService extends Service {
                 text: updateObj.text,
                 readtime,
                 slug,
+                ...(updateObj.markdown ? { markdown: updateObj.markdown } : {}),
                 ...(updateObj.blocks ? { blocks: updateObj.blocks } : {}),
                 ...(updateObj.hero ? { hero: updateObj.hero } : {}),
                 ...(updateObj.seo ? { seo: updateObj.seo } : {}),
@@ -613,13 +626,21 @@ class PostService extends Service {
             );
 
             // 2. Publish parent Post (aggregate status = true) & update shared fields
-            const updatedPost = await Post.findByIdAndUpdate(postId, {
+            const postUpdateFields = {
                 description: publicInfo.description,
-                image: publicInfo.image,
                 category: publicInfo.category,
                 published: true,
                 $addToSet: { availableLocales: validLocale },
-            }, { new: true });
+            };
+            if (publicInfo.image) {
+                if (mongoose.Types.ObjectId.isValid(publicInfo.image)) {
+                    postUpdateFields.image = publicInfo.image;
+                } else {
+                    postUpdateFields["hero.image.src"] = publicInfo.image;
+                }
+            }
+
+            const updatedPost = await Post.findByIdAndUpdate(postId, postUpdateFields, { new: true });
             
             // Ensure ArticleVersion 1.0 snapshot exists for newly published post
             const { articleVersionService } = require("./articleVersion.services");

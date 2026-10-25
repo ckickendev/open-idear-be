@@ -38,6 +38,17 @@ const { Collection } = require("./collection.schema");
 const { CollectionItem } = require("./collectionItem.schema");
 const { VisualAnalytics } = require("./visualAnalytics.schema");
 const PostTranslation = require("./postTranslation.schema");
+const ShopCategory = require("./shopCategory.schema");
+const ShopProduct = require("./shopProduct.schema");
+const {
+  ShopOrder,
+  ORDER_STATUSES,
+  ALLOWED_TRANSITIONS,
+} = require("./shopOrder.schema");
+const {
+  ShopAnalyticsEvent,
+  SHOP_ANALYTICS_EVENT_TYPES,
+} = require("./shopAnalyticsEvent.schema");
 
 module.exports = {
   User,
@@ -80,5 +91,12 @@ module.exports = {
   CollectionItem,
   VisualAnalytics,
   PostTranslation,
+  ShopCategory,
+  ShopProduct,
+  ShopOrder,
+  ORDER_STATUSES,
+  ALLOWED_TRANSITIONS,
+  ShopAnalyticsEvent,
+  SHOP_ANALYTICS_EVENT_TYPES,
 };
 

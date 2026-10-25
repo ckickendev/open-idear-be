@@ -35,7 +35,14 @@ class AppServer {
       },
       credentials: true, // keep true ONLY if you use cookies/session
       methods: ["OPTIONS", "GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
-      allowedHeaders: ["Content-Type", "Authorization", "Accept-Language", "x-locale"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Accept-Language",
+        "x-locale",
+        "x-cron-secret",
+        "x-idempotency-key",
+      ],
       exposedHeaders: ["Content-Type"],
       optionsSuccessStatus: 204,
     };

@@ -59,7 +59,9 @@ class AIUsageController extends Controller {
    * - Average token usage
    */
   getAdminAnalytics = asyncHandler(async (req, res) => {
-    if (req.userInfo && req.userInfo.role && req.userInfo.role !== "admin") {
+    const role = req.userInfo?.role;
+    const isAdmin = role === 1 || role === "1" || role === "admin";
+    if (req.userInfo && !isAdmin) {
       return res.status(403).json({ error: "Access denied. Admin role required." });
     }
 

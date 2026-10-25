@@ -14,7 +14,8 @@
     "rollback:translations": "node -r ts-node/register scripts/rollbackPostTranslations.js --write",
     "cleanup:test-videos": "node scripts/cleanupLegacyTestVideos.js --apply --confirm",
     "cleanup:test-videos:dry": "node scripts/cleanupLegacyTestVideos.js --dry-run",
-    "test": "node tests/bunnyStream.test.js && node tests/bunnyStreamUploadPipeline.test.js && node -r ts-node/register tests/bunnyStreamSecurityAuth.test.js && node tests/sprint5EndToEndLifecycle.test.js && node tests/cleanupLegacyTestVideos.test.js"
+    "test": "node tests/bunnyStream.test.js && node tests/bunnyStreamUploadPipeline.test.js && node -r ts-node/register tests/bunnyStreamSecurityAuth.test.js && node tests/sprint5EndToEndLifecycle.test.js && node tests/cleanupLegacyTestVideos.test.js && node tests/adminAuthorization.test.js && node tests/shopProductLifecycle.test.js && node tests/shopPublicApi.test.js && node tests/shopOrderWorkflow.test.js && node tests/inventoryIntegrityAndConfirmation.test.js && node tests/shopContentCommerce.test.js && node tests/shopLaunchReadinessAnalytics.test.js && node tests/shopS61ProductionVerification.test.js && node tests/shopHttpIntegration.test.js",
+    "test:shop": "node tests/shopProductLifecycle.test.js && node tests/shopPublicApi.test.js && node tests/shopOrderWorkflow.test.js && node tests/inventoryIntegrityAndConfirmation.test.js && node tests/shopContentCommerce.test.js && node tests/shopLaunchReadinessAnalytics.test.js && node tests/shopS61ProductionVerification.test.js && node tests/shopHttpIntegration.test.js"
   },
   "type": "commonjs",
   "author": "",

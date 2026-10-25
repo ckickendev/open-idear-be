@@ -7,6 +7,16 @@ if (geminiApiKey) {
   providerRegistry.register(new GeminiProvider(geminiApiKey));
 }
 
+// Fail-fast environment variable validation for production readiness
+const requiredEnvVars = ["MONGO_URL", "CORS_ALLOW_ORIGINS", "SECRET_KEY"];
+const missingEnv = requiredEnvVars.filter((v) => !process.env[v]);
+if (missingEnv.length > 0) {
+  console.error(`[CRITICAL] Missing required environment variables: ${missingEnv.join(", ")}`);
+  if (process.env.NODE_ENV === "production") {
+    process.exit(1);
+  }
+}
+
 const {
   UserController,
   CategoryController,
@@ -41,6 +51,10 @@ const {
   ReadingProgressController,
   CollectionController,
   HealthController,
+  ShopCategoryController,
+  ShopProductController,
+  ShopOrderController,
+  ShopAnalyticsController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -79,6 +93,10 @@ const app = new AppServer([
   new ArticleController(),
   new ReadingProgressController(),
   new CollectionController(),
+  new ShopCategoryController(),
+  new ShopProductController(),
+  new ShopOrderController(),
+  new ShopAnalyticsController(),
 ]);
 
 app.startListening();

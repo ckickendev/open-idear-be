@@ -15,8 +15,6 @@
 // =============================================================================
 
 import crypto from "crypto";
-import https from "https";
-import http from "http";
 import { URL as NodeURL } from "url";
 import mongoose from "mongoose";
 import cloudinary from "../utils/cloudinary";

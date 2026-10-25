@@ -12,6 +12,7 @@ const postSchema = new Schema(
     slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
     description: { type: String, default: "", trim: true },
     content: { type: String, required: true },
+    markdown: { type: String, default: "" },
     text: { type: String, required: true },
     author: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "category" },

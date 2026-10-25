@@ -20,6 +20,7 @@ const mongoose = require("mongoose");
 const { default: slugify } = require("slugify");
 const fs = require("fs").promises;
 const path = require("path");
+const { marked } = require("marked");
 
 // =============================================================================
 //  AI CONTROLLER
@@ -244,16 +245,23 @@ class AIController extends Controller {
     const {
       sourceLocale = "en",
       targetLocale = "vi",
-      sourceTitle,
-      sourceContent,
-      sourceDescription = "",
+      sourceTitle: rawSourceTitle,
+      sourceContent: rawSourceContent,
+      sourceDescription: rawSourceDescription,
+      title,
+      content,
+      description,
       additionalInstructions = "",
     } = req.body;
 
-    if (!sourceTitle || !sourceTitle.trim()) {
+    const sourceTitle = String(rawSourceTitle ?? title ?? "").trim();
+    const sourceContent = String(rawSourceContent ?? content ?? "").trim();
+    const sourceDescription = String(rawSourceDescription ?? description ?? "").trim();
+
+    if (!sourceTitle) {
       return res.status(400).json({ error: "sourceTitle is required" });
     }
-    if (!sourceContent || !sourceContent.trim()) {
+    if (!sourceContent) {
       return res.status(400).json({ error: "sourceContent is required" });
     }
 
@@ -903,12 +911,27 @@ class AIController extends Controller {
     const postId = new mongoose.Types.ObjectId();
     const blocks = resultContext.writerOutput?.blocks || [];
 
+    // Clean up headings in markdown before parsing to HTML
+    let cleanedMarkdown = rawMarkdown
+      .replace(/\r\n/g, "\n")
+      .replace(/([^\n#])\n?(#{1,6}\s+[^\n]+)/g, "$1\n\n$2")
+      .replace(/^(#{1,6}\s+[^\n]+)\n([^\n#])/gm, "$1\n\n$2")
+      .replace(/^(#{1,6})\s+(?:#{1,6}\s+)+/gm, "$1 ")
+      .trim();
+
+    const initialHtml = cleanedMarkdown ? marked.parse(cleanedMarkdown) : "";
+    const cleanText = cleanedMarkdown
+      .replace(/#{1,6}\s+/g, "")
+      .replace(/[*_`~]/g, "")
+      .replace(/\n+/g, " ")
+      .trim();
+
     // Create immutable initial ArticleVersion with source = ai
     const initialVersion = await ArticleVersion.create({
       articleId: postId,
       version: "1.0",
       markdown: rawMarkdown,
-      html: rawMarkdown,
+      html: initialHtml,
       blocks,
       changelog: req.body.changelog || "Initial AI generation via Autonomous Publisher Pipeline",
       createdBy: userId,
@@ -921,8 +944,9 @@ class AIController extends Controller {
       title: postTitle,
       slug: postSlug,
       description: resultContext.seo?.metaDescription || "",
-      content: rawMarkdown,
-      text: rawMarkdown,
+      content: initialHtml,
+      markdown: rawMarkdown,
+      text: cleanText,
       blocks,
       contentVersion: "blocks-v1",
       published: false, // Save as Draft

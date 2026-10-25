@@ -25,7 +25,7 @@ class CourseController extends Controller {
             page,
             limit
         });
-        res.status(200).json({ status: "success", ...result });
+        res.status(200).json({ status: "success", data: result.courses, ...result });
     });
 
     getCourseBySlug = asyncHandler(async (req, res) => {

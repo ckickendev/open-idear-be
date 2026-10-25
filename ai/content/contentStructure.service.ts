@@ -401,10 +401,10 @@ export class ContentStructureService {
   }
 
   /**
-   * Clean inline text by stripping HTML tags if necessary while leaving text intact.
+   * Clean inline text by stripping leading markdown hashes and trimming whitespace.
    */
   private static cleanInlineText(text: string): string {
     if (!text) return "";
-    return text.trim();
+    return text.replace(/^#+\s*/, "").trim();
   }
 }
