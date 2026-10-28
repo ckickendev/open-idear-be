@@ -223,6 +223,9 @@ export class GeminiProvider implements AIProvider {
         generationConfig,
         ...(systemInstruction ? { systemInstruction } : {}),
       });
+      // CRITICAL: Attach a catch handler immediately to prevent unhandled promise rejection
+      // if stream reading errors out before or during iteration
+      streamResult.response.catch(() => {});
     } catch (err) {
       throw this._normalizeError(err);
     }
@@ -250,8 +253,12 @@ export class GeminiProvider implements AIProvider {
     }
 
     // The final response contains the aggregated usage metadata
-    const finalResponse = await streamResult.response;
-    return this._extractUsage(finalResponse.usageMetadata);
+    try {
+      const finalResponse = await streamResult.response;
+      return this._extractUsage(finalResponse?.usageMetadata);
+    } catch {
+      return ZERO_USAGE;
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
-const { Post, Like, Series, Category, Course, PostTranslation, Comment, ArticleVersion, CollectionItem } = require("../models");
+const { Post, Like, Series, Category, Course, PostTranslation, Comment, ArticleVersion, CollectionItem, Media } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 const { default: slugify } = require("slugify");
 const { ContentStructureService } = require("../ai/content/contentStructure.service");
@@ -65,7 +65,7 @@ class PostService extends Service {
                 }
             });
 
-            return await this.overlayTranslations(returnPosts, validLocale);
+            return await this.overlayTranslations(returnPosts, validLocale, false);
         } catch (error) {
             console.log('error', error);
             throw new ServerException("error");
@@ -253,6 +253,7 @@ class PostService extends Service {
             postObj.title = translation.title;
             postObj.slug = translation.slug;
             postObj.description = translation.description;
+            postObj.background = translation.background || postObj.background || (postObj.hero?.background || translation.hero?.background || "");
             postObj.content = translation.content;
             postObj.text = translation.text;
             postObj.markdown = translation.markdown || (translation.content && /#{1,6}\s+/.test(translation.content) ? translation.content : undefined);
@@ -266,7 +267,15 @@ class PostService extends Service {
             postObj.activeLocale = translation.locale;
             postObj.translation = translation;
         } else {
+            postObj.background = postObj.background || postObj.hero?.background || "";
             postObj.activeLocale = postObj.defaultLocale || "en";
+        }
+
+        if (!postObj.image && (postObj.hero?.image?.src || translation?.hero?.image?.src)) {
+            postObj.image = {
+                url: postObj.hero?.image?.src || translation?.hero?.image?.src,
+                description: postObj.hero?.image?.alt || translation?.hero?.image?.alt || postObj.title || "",
+            };
         }
 
         // Fetch available translations for alternate links
@@ -332,6 +341,7 @@ class PostService extends Service {
             postObj.title = translation.title;
             postObj.slug = translation.slug;
             postObj.description = translation.description;
+            postObj.background = translation.background || postObj.background || (postObj.hero?.background || translation.hero?.background || "");
             postObj.content = translation.content;
             postObj.text = translation.text;
             postObj.contentVersion = translation.contentVersion;
@@ -352,9 +362,17 @@ class PostService extends Service {
             }
             postObj.availableLocales = allTranslations.map(t => t.locale);
         } else {
+            postObj.background = postObj.background || postObj.hero?.background || "";
             postObj.activeLocale = postObj.defaultLocale || "en";
             postObj.alternateUrls = { en: `/post/${postObj.slug}` };
             postObj.availableLocales = postObj.availableLocales || ["en"];
+        }
+
+        if (!postObj.image && (postObj.hero?.image?.src || translation?.hero?.image?.src)) {
+            postObj.image = {
+                url: postObj.hero?.image?.src || translation?.hero?.image?.src,
+                description: postObj.hero?.image?.alt || translation?.hero?.image?.alt || postObj.title || "",
+            };
         }
 
         return postObj;
@@ -388,23 +406,40 @@ class PostService extends Service {
     }
 
     /**
+     * Returns an array of parent Post ObjectIds that have an authoritative published translation
+     * for the requested locale.
+     * @param {string} locale - "en" or "vi"
+     * @returns {Promise<mongoose.Types.ObjectId[]>}
+     */
+    async getPublishedPostIdsForLocale(locale = "en") {
+        const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
+        return await PostTranslation.find({
+            locale: validLocale,
+            published: true,
+        }).distinct("postId");
+    }
+
+    /**
      * Batch-overlays published translations for the target locale onto a list of posts.
      * Prevents duplicate parent records and avoids N+1 queries.
      * Unpublished translation drafts are never leaked.
      */
-    async overlayTranslations(posts, locale = "en") {
+    async overlayTranslations(posts, locale = "en", onlyPublished = true) {
         if (!posts || !posts.length) return posts;
         const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
-        if (validLocale === "en") return posts;
 
         const postIds = posts.map(p => p._id).filter(Boolean);
         if (!postIds.length) return posts;
 
-        const translations = await PostTranslation.find({
+        const query = {
             postId: { $in: postIds },
             locale: validLocale,
-            published: true
-        }).lean();
+        };
+        if (onlyPublished) {
+            query.published = true;
+        }
+
+        const translations = await PostTranslation.find(query).lean();
 
         const translationMap = new Map(translations.map(t => [t.postId.toString(), t]));
 
@@ -414,8 +449,22 @@ class PostService extends Service {
             if (trans) {
                 plain.title = trans.title || plain.title;
                 plain.description = trans.description || plain.description;
+                plain.text = trans.text || trans.description || plain.text;
+                if (trans.content) plain.content = trans.content;
+                if (trans.blocks) plain.blocks = trans.blocks;
+                plain.background = trans.background || plain.background || trans.hero?.background || plain.hero?.background || "";
                 plain.slug = trans.slug || plain.slug;
+                plain.readtime = trans.readtime || plain.readtime;
                 plain.locale = validLocale;
+                if (typeof trans.published === "boolean") {
+                    plain.published = trans.published;
+                }
+            }
+            if (!plain.image && (plain.hero?.image?.src || trans?.hero?.image?.src)) {
+                plain.image = {
+                    url: plain.hero?.image?.src || trans?.hero?.image?.src,
+                    description: plain.hero?.image?.alt || trans?.hero?.image?.alt || plain.title || "",
+                };
             }
             return plain;
         });
@@ -423,7 +472,9 @@ class PostService extends Service {
 
     async getRecentlyData(locale = "en") {
         const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
+        const allowedPostIds = await this.getPublishedPostIdsForLocale(validLocale);
         const posts = await Post.find({
+            _id: { $in: allowedPostIds },
             del_flag: 0,
             published: true
         })
@@ -472,6 +523,8 @@ class PostService extends Service {
             slug,
         };
 
+        if (post.description !== undefined) updateObj.description = (post.description || "").trim();
+        if (post.background !== undefined) updateObj.background = post.background;
         if (post.markdown !== undefined) updateObj.markdown = post.markdown;
         if (post.contentVersion) updateObj.contentVersion = post.contentVersion;
         if (post.blocks !== undefined) updateObj.blocks = post.blocks;
@@ -518,6 +571,8 @@ class PostService extends Service {
                 text: updateObj.text,
                 readtime,
                 slug,
+                ...(updateObj.description !== undefined ? { description: updateObj.description } : {}),
+                ...(updateObj.background !== undefined ? { background: updateObj.background } : {}),
                 ...(updateObj.markdown ? { markdown: updateObj.markdown } : {}),
                 ...(updateObj.blocks ? { blocks: updateObj.blocks } : {}),
                 ...(updateObj.hero ? { hero: updateObj.hero } : {}),
@@ -594,10 +649,8 @@ class PostService extends Service {
             if (publicInfo.series) {
                 const series = await Series.findById(publicInfo.series);
                 if (series) {
-                    console.log('series', series);
-
-                    await Series.findByIdAndUpdate(series, {
-                        $push: { posts: postId }
+                    await Series.findByIdAndUpdate(series._id, {
+                        $addToSet: { posts: postId }
                     });
                 } else {
                     throw new NotFoundException("Series not found");
@@ -612,34 +665,70 @@ class PostService extends Service {
             }
             console.log('publicInfo', publicInfo);
 
-            // 1. Publish the targeted translation
-            await PostTranslation.findOneAndUpdate(
-                { postId, locale: validLocale },
-                {
-                    $set: {
-                        published: true,
-                        publishedAt: new Date(),
-                        ...(publicInfo.description ? { description: publicInfo.description } : {}),
-                    },
-                },
-                { upsert: true, new: true }
-            );
+            // 1. Prepare translation updates
+            const transUpdate = {
+                published: true,
+                publishedAt: new Date(),
+            };
+            if (publicInfo.description !== undefined) {
+                transUpdate.description = (publicInfo.description || "").trim();
+            }
+            if (publicInfo.background !== undefined) {
+                transUpdate.background = publicInfo.background;
+                transUpdate["hero.background"] = publicInfo.background;
+            }
 
-            // 2. Publish parent Post (aggregate status = true) & update shared fields
+            // 2. Prepare parent Post updates
             const postUpdateFields = {
-                description: publicInfo.description,
-                category: publicInfo.category,
                 published: true,
                 $addToSet: { availableLocales: validLocale },
             };
-            if (publicInfo.image) {
-                if (mongoose.Types.ObjectId.isValid(publicInfo.image)) {
+            if (publicInfo.description !== undefined) {
+                postUpdateFields.description = (publicInfo.description || "").trim();
+            }
+            if (publicInfo.category !== undefined) {
+                postUpdateFields.category = publicInfo.category;
+            }
+            if (publicInfo.background !== undefined) {
+                postUpdateFields.background = publicInfo.background;
+                postUpdateFields["hero.background"] = publicInfo.background;
+            }
+
+            // Handle image updates across Media ObjectId, Media object, and URL string
+            if (publicInfo.image !== undefined) {
+                if (!publicInfo.image) {
+                    postUpdateFields.image = null;
+                    postUpdateFields["hero.image.src"] = "";
+                    transUpdate["hero.image.src"] = "";
+                } else if (typeof publicInfo.image === "object") {
+                    if (publicInfo.image._id && mongoose.Types.ObjectId.isValid(publicInfo.image._id)) {
+                        postUpdateFields.image = publicInfo.image._id;
+                    }
+                    if (publicInfo.image.url) {
+                        postUpdateFields["hero.image.src"] = publicInfo.image.url;
+                        transUpdate["hero.image.src"] = publicInfo.image.url;
+                    }
+                } else if (mongoose.Types.ObjectId.isValid(publicInfo.image)) {
                     postUpdateFields.image = publicInfo.image;
-                } else {
+                    const mediaDoc = await Media.findById(publicInfo.image);
+                    if (mediaDoc && mediaDoc.url) {
+                        postUpdateFields["hero.image.src"] = mediaDoc.url;
+                        transUpdate["hero.image.src"] = mediaDoc.url;
+                    }
+                } else if (typeof publicInfo.image === "string") {
                     postUpdateFields["hero.image.src"] = publicInfo.image;
+                    transUpdate["hero.image.src"] = publicInfo.image;
                 }
             }
 
+            // Update PostTranslation
+            await PostTranslation.findOneAndUpdate(
+                { postId, locale: validLocale },
+                { $set: transUpdate },
+                { upsert: true, new: true }
+            );
+
+            // Update parent Post
             const updatedPost = await Post.findByIdAndUpdate(postId, postUpdateFields, { new: true });
             
             // Ensure ArticleVersion 1.0 snapshot exists for newly published post
@@ -696,6 +785,7 @@ class PostService extends Service {
     async fetchHotPosts({ period = 'week', limit = 10, page = 1, fallbackIfFew = true, locale = 'en' } = {}) {
         try {
             const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
+            const allowedPostIds = await this.getPublishedPostIdsForLocale(validLocale);
             const limitNum = Math.max(1, parseInt(limit) || 10);
             const pageNum = Math.max(1, parseInt(page) || 1);
             const cacheKey = `hot_posts_${period}_${limitNum}_${pageNum}_${validLocale}`;
@@ -722,6 +812,7 @@ class PostService extends Service {
                 return [
                     {
                         $match: {
+                            _id: { $in: allowedPostIds },
                             published: true,
                             del_flag: 0,
                             createdAt: { $gte: fromStartDate, $lte: now }
@@ -947,8 +1038,10 @@ class PostService extends Service {
     getRecentlyDataByFeatures = async (features, locale = "en") => {
         try {
             const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
+            const allowedPostIds = await this.getPublishedPostIdsForLocale(validLocale);
+
             if (features === 'all' || !features) {
-                const posts = await Post.find({ del_flag: 0, published: true })
+                const posts = await Post.find({ _id: { $in: allowedPostIds }, del_flag: 0, published: true })
                     .sort({ createdAt: -1 })
                     .limit(7)
                     .populate('category', "name slug")
@@ -959,7 +1052,12 @@ class PostService extends Service {
                 return { posts: localizedPosts };
             }
             const category = await Category.findOne({ slug: features });
-            const posts = await Post.find({ del_flag: 0, published: true, category: category ? category._id : null })
+            const posts = await Post.find({
+                _id: { $in: allowedPostIds },
+                del_flag: 0,
+                published: true,
+                category: category ? category._id : null
+            })
                 .sort({ createdAt: -1 })
                 .limit(7)
                 .populate('category', "name slug")
@@ -978,7 +1076,15 @@ class PostService extends Service {
     getAllPosts = async (limit, page, locale = "en") => {
         try {
             const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
-            const posts = await Post.find({ del_flag: 0, published: true })
+            const allowedPostIds = await this.getPublishedPostIdsForLocale(validLocale);
+
+            const query = {
+                _id: { $in: allowedPostIds },
+                del_flag: 0,
+                published: true
+            };
+
+            const posts = await Post.find(query)
                 .sort({ createdAt: -1 })
                 .skip((page - 1) * limit)
                 .limit(parseInt(limit))
@@ -986,8 +1092,6 @@ class PostService extends Service {
                 .populate('author', 'username email avatar name')
                 .populate('tags', 'name')
                 .populate('image', 'url description');
-
-            const query = { del_flag: 0, published: true };
 
             const totalPosts = await Post.countDocuments(query);
             const localizedPosts = await this.overlayTranslations(posts, validLocale);
@@ -1026,6 +1130,7 @@ class PostService extends Service {
     getTop10IdeasOfMonth = async (locale = "en") => {
         try {
             const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
+            const allowedPostIds = await this.getPublishedPostIdsForLocale(validLocale);
             const now = new Date();
 
             // Start of current calendar month
@@ -1034,6 +1139,7 @@ class PostService extends Service {
             const buildPipeline = (startDate) => [
                 {
                     $match: {
+                        _id: { $in: allowedPostIds },
                         published: true,
                         del_flag: 0,
                         createdAt: { $gte: startDate, $lte: now }
@@ -1137,12 +1243,14 @@ class PostService extends Service {
     getDiscoverySidebar = async (locale = "en") => {
         try {
             const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
+            const allowedPostIds = await this.getPublishedPostIdsForLocale(validLocale);
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
             const [trendingRaw, latestPostsRaw, popularSeries, featuredCourses] = await Promise.all([
                 // 🔥 Trending: hottest posts from last 7 days, sorted by likes+comments
                 Post.find({
+                    _id: { $in: allowedPostIds },
                     published: true,
                     del_flag: 0,
                     createdAt: { $gte: sevenDaysAgo }
@@ -1155,7 +1263,11 @@ class PostService extends Service {
                     .lean(),
 
                 // 📚 Latest Posts: most recently published
-                Post.find({ published: true, del_flag: 0 })
+                Post.find({
+                    _id: { $in: allowedPostIds },
+                    published: true,
+                    del_flag: 0
+                })
                     .sort({ createdAt: -1 })
                     .limit(5)
                     .populate('author', 'name username avatar')
@@ -1196,10 +1308,9 @@ class PostService extends Service {
 
     /**
      * Locale-aware search for posts.
-     * For Vietnamese: searches PostTranslation with regex on title/description to support diacritics,
-     * then links back to parent post without duplicates.
-     * For English: searches published parent posts.
-     * Prevents draft leakage (published: true enforced).
+     * Searches PostTranslation strictly for the target locale with regex on title/description,
+     * then links back to parent post.
+     * Prevents cross-language leakage and draft leakage (published: true enforced).
      */
     async searchPosts(query, locale = "en", limit = 10, page = 1) {
         try {
@@ -1214,82 +1325,55 @@ class PostService extends Service {
             const escapeRegex = (s) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
             const regex = new RegExp(escapeRegex(cleanQuery), "i");
 
-            if (validLocale === "vi") {
-                // Search published Vietnamese translations first
-                const matchingTranslations = await PostTranslation.find({
-                    locale: "vi",
-                    published: true,
-                    $or: [{ title: regex }, { description: regex }]
-                })
-                    .sort({ createdAt: -1 })
-                    .skip((pageNum - 1) * limitNum)
-                    .limit(limitNum)
-                    .lean();
-
-                const totalTrans = await PostTranslation.countDocuments({
-                    locale: "vi",
-                    published: true,
-                    $or: [{ title: regex }, { description: regex }]
-                });
-
-                const postIds = matchingTranslations.map(t => t.postId);
-                const parentPosts = await Post.find({
-                    _id: { $in: postIds },
-                    del_flag: 0,
-                    published: true
-                })
-                    .populate('category', 'name slug')
-                    .populate('author', 'username email avatar name')
-                    .populate('tags', 'name')
-                    .populate('image', 'url description')
-                    .lean();
-
-                const parentMap = new Map(parentPosts.map(p => [p._id.toString(), p]));
-                const posts = matchingTranslations
-                    .map(trans => {
-                        const parent = parentMap.get(trans.postId.toString());
-                        if (!parent) return null;
-                        return {
-                            ...parent,
-                            title: trans.title || parent.title,
-                            description: trans.description || parent.description,
-                            slug: trans.slug || parent.slug,
-                            locale: "vi"
-                        };
-                    })
-                    .filter(Boolean);
-
-                const totalPages = Math.ceil(totalTrans / limitNum) || 1;
-                return {
-                    posts,
-                    totalPosts: totalTrans,
-                    currentPage: pageNum,
-                    totalPages
-                };
-            }
-
-            // English search on parent posts
-            const queryFilter = {
-                del_flag: 0,
+            // Search published translations strictly for the target locale
+            const matchingTranslations = await PostTranslation.find({
+                locale: validLocale,
                 published: true,
                 $or: [{ title: regex }, { description: regex }]
-            };
-
-            const total = await Post.countDocuments(queryFilter);
-            const posts = await Post.find(queryFilter)
+            })
                 .sort({ createdAt: -1 })
                 .skip((pageNum - 1) * limitNum)
                 .limit(limitNum)
+                .lean();
+
+            const totalTrans = await PostTranslation.countDocuments({
+                locale: validLocale,
+                published: true,
+                $or: [{ title: regex }, { description: regex }]
+            });
+
+            const postIds = matchingTranslations.map(t => t.postId);
+            const parentPosts = await Post.find({
+                _id: { $in: postIds },
+                del_flag: 0,
+                published: true
+            })
                 .populate('category', 'name slug')
                 .populate('author', 'username email avatar name')
                 .populate('tags', 'name')
                 .populate('image', 'url description')
                 .lean();
 
-            const totalPages = Math.ceil(total / limitNum) || 1;
+            const parentMap = new Map(parentPosts.map(p => [p._id.toString(), p]));
+            const posts = matchingTranslations
+                .map(trans => {
+                    const parent = parentMap.get(trans.postId.toString());
+                    if (!parent) return null;
+                    return {
+                        ...parent,
+                        title: trans.title || parent.title,
+                        description: trans.description || parent.description,
+                        slug: trans.slug || parent.slug,
+                        readtime: trans.readtime || parent.readtime,
+                        locale: validLocale
+                    };
+                })
+                .filter(Boolean);
+
+            const totalPages = Math.ceil(totalTrans / limitNum) || 1;
             return {
                 posts,
-                totalPosts: total,
+                totalPosts: totalTrans,
                 currentPage: pageNum,
                 totalPages
             };

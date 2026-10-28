@@ -48,6 +48,11 @@ const postTranslationSchema = new Schema(
       default: "",
       trim: true,
     },
+    background: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     content: {
       type: String,
       required: true,
@@ -85,6 +90,7 @@ const postTranslationSchema = new Schema(
           },
           category: { type: String },
           readingTime: { type: Number },
+          background: { type: String },
         },
         { _id: false }
       ),

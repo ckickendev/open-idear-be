@@ -116,19 +116,23 @@ export class VisualClassifierService {
       keywords: ["benchmark", "benchmarks", "latency", "throughput", "rps", "qps", "ms", "p99", "p95", "metrics", "chart", "graph"],
       suggestedPreset: "blueprint" as const,
     },
-    // 3. Product Review Rule -> SEARCH_IMAGE
+    // 3. Product Review & Hardware Rule -> SEARCH_IMAGE
     {
       type: "product" as VisualType,
       action: "search" as RecommendedAction,
       decision: "SEARCH_IMAGE" as VisualDecisionType,
-      reason: "Product reviews require authentic hardware/software photography.",
+      reason: "Product reviews and hardware topics require authentic hardware photography.",
       patterns: [
-        /\b(?:review|hands-on|unboxing|first look)\b/i,
-        /\b(?:hardware specs?|specifications?|chassis|ports|camera)\b/i,
-        /\b(?:macbook|iphone|ipad|thinkpad|galaxy|pixel|gpu|rtx|apple silicon)\b/i,
-        /\b(?:pricing|buyer's guide|edition|buy now)\b/i,
+        /\b(?:review|hands-on|unboxing|first look|announcements?|showcase|launch)\b/i,
+        /\b(?:hardware specs?|specifications?|chassis|ports|camera|cooling|thermals?)\b/i,
+        /\b(?:macbooks?|iphones?|ipads?|thinkpads?|galaxy|pixels?|gpus?|rtx|gtx|geforce|nvidias?|amds?|ryzens?|radeons?|intel|snapdragons?|apple silicon)\b/i,
+        /\b(?:graphics cards?|cpus?|processors?|motherboards?|pcies?|chipsets?|vram|hardware|components?|monitors?|gaming rig|pc build)\b/i,
+        /\b(?:next[- ]gen(?:eration)?|generation|flagship|lineup|edition|buyer's guide|buy now|pricing)\b/i,
       ],
-      keywords: ["review", "unboxing", "hands-on", "hardware", "macbook", "laptop", "phone", "specs", "specification", "pricing", "gadget", "device"],
+      keywords: [
+        "review", "unboxing", "hands-on", "hardware", "macbook", "laptop", "phone", "specs", "specification", "pricing", "gadget", "device",
+        "gpu", "gpus", "nvidia", "rtx", "geforce", "amd", "radeon", "intel", "cpu", "graphics", "card", "processor", "motherboard", "pcie", "chipset"
+      ],
       suggestedPreset: "flat_vector" as const,
     },
     // 4. UI Tutorial Rule -> SCREENSHOT
@@ -177,21 +181,36 @@ export class VisualClassifierService {
 
   /**
    * Classify a single section by heading and optional content.
+   * Supports heading level awareness (H1 and H2 permit hero & section visual opportunities).
    */
-  public classifySection(heading: string, content: string = ""): VisualRecommendation {
-    const cleanHeading = (heading || "").trim();
+  public classifySection(
+    heading: string,
+    content: string = "",
+    level?: number
+  ): VisualRecommendation {
+    const cleanHeading = (heading || "")
+      .replace(/^#{1,6}\s+/, "")
+      .trim();
     const cleanContent = (content || "").trim().slice(0, 2000);
+
+    let detectedLevel = level;
+    if (detectedLevel === undefined) {
+      const headingLevelMatch = (heading || "").match(/^(#{1,6})\s+/);
+      if (headingLevelMatch) {
+        detectedLevel = headingLevelMatch[1].length;
+      }
+    }
 
     const headingLower = cleanHeading.toLowerCase();
     const contentLower = cleanContent.toLowerCase();
 
     // ── 1. Strict Exclusion Check for Conclusion, Summary, License, About ─────
-    const isStrictConclusionOrIntro =
-      /^(conclusion|summary|wrap[- ]up|final thoughts|closing remarks?|takeaways?|references|disclaimer|license|acknowledgements?|about the author|about this guide)$/i.test(
+    const isStrictConclusion =
+      /^(conclusion|summary|wrap[- ]up|final thoughts|closing remarks?|takeaways?|references|sources|disclaimer|license|acknowledgements?|about the author|about this guide|frequently asked questions|faqs?|q&a)$/i.test(
         cleanHeading
       );
 
-    if (isStrictConclusionOrIntro) {
+    if (isStrictConclusion) {
       return {
         heading: cleanHeading,
         visualType: "none",
@@ -203,6 +222,24 @@ export class VisualClassifierService {
         searchQuery: "",
       };
     }
+
+    const sanitizedTitle = cleanHeading
+      .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+      .replace(/^(?:công\s+cụ|tiện\s+ích|phần\s+mềm|bước|phần|mục|chương|bài|tool|step|section|part|chapter)\s*(?:[0-9ivx]+|[a-z])?[:\s\-–—.]+/i, "")
+      .replace(/^(?:[0-9]+(?:\.[0-9]+)*|[ivx]+)[.):\s\-–—]+/i, "")
+      .replace(/[:;.\-–—\s]+$/, "")
+      .trim() || cleanHeading;
+
+    const isHardwareContext =
+      /(hwinfo|gpu-z|cpu-z|afterburner|phần cứng|linh kiện|nhiệt độ|cảm biến|ép xung|cpu|gpus?|ram|motherboard|pcie|nvidia|geforce|rtx|gtx|amd|radeon|intel|telemetry|graphics card|processors?)/i.test(
+        `${headingLower} ${contentLower}`
+      );
+
+    const isIntroOrHero =
+      detectedLevel === 1 ||
+      /^(introduction|intro|overview|background|getting started|giới thiệu|tổng quan)$/i.test(
+        cleanHeading
+      );
 
     // ── 2. Evaluate Active Visual Rules ───────────────────────────────────────
     let bestMatch: {
@@ -270,7 +307,74 @@ export class VisualClassifierService {
 
     // If heading has 0 matches, require content to have strong technical focus (score >= 4.5)
     const minRequiredScore = bestMatch && bestMatch.headingMatched ? 3.0 : 4.5;
+
+    // ── 3. Rule Evaluation & Fallbacks for H1 / H2 vs H3+ ─────────────────────
     if (!bestMatch || bestMatch.score < minRequiredScore) {
+      // H1 (Hero Title / Lead Article Section): Always permits hero visual
+      if (detectedLevel === 1) {
+        const visualType: VisualType = isHardwareContext ? "product" : "illustration";
+        const decision: VisualDecisionType = isHardwareContext ? "SEARCH_IMAGE" : "GENERATE_IMAGE";
+        const action: RecommendedAction = isHardwareContext ? "search" : "generate";
+        const preset = "isometric";
+        const imagePrompt = isHardwareContext
+          ? `Modern ${preset} hero technical illustration of ${sanitizedTitle || "tech hardware"}, PC hardware and component engineering, clean composition`
+          : `Modern ${preset} hero illustration of ${sanitizedTitle || "technology concept"}, clean high-tech composition, dark background`;
+        const searchQuery = buildSearchQuery({
+          heading: sanitizedTitle || cleanHeading,
+          visualType,
+          sectionContent: cleanContent,
+        });
+
+        return {
+          heading: cleanHeading,
+          visualType,
+          recommendation: decision,
+          confidence: 0.85,
+          reason: "Hero title section sets the visual anchor and conceptual tone for the entire article.",
+          recommendedAction: action,
+          imagePrompt,
+          searchQuery,
+          suggestedPrompt: imagePrompt,
+          suggestedSearchQuery: searchQuery,
+          suggestedPreset: preset,
+        };
+      }
+
+      // H2 (Major Section): Primary chapter blocks permit visual reinforcement unless strictly generic intro/conclusion
+      const isGenericIntroOrConclusion = /^(introduction|intro|overview|background|conclusion|summary|takeaways?)$/i.test(
+        cleanHeading
+      );
+
+      if (detectedLevel === 2 && !isGenericIntroOrConclusion) {
+        const visualType: VisualType = isHardwareContext ? "product" : "illustration";
+        const decision: VisualDecisionType = isHardwareContext ? "SEARCH_IMAGE" : "GENERATE_IMAGE";
+        const action: RecommendedAction = isHardwareContext ? "search" : "generate";
+        const preset = "isometric";
+        const imagePrompt = isHardwareContext
+          ? `Modern ${preset} technical illustration of ${sanitizedTitle}, PC hardware telemetry and component diagnostics, clean high-tech composition`
+          : `Modern ${preset} technical illustration of ${sanitizedTitle}, software engineering architecture, clean dark background`;
+        const searchQuery = buildSearchQuery({
+          heading: sanitizedTitle,
+          visualType,
+          sectionContent: cleanContent,
+        });
+
+        return {
+          heading: cleanHeading,
+          visualType,
+          recommendation: decision,
+          confidence: 0.78,
+          reason: "Major H2 section introduces core concepts and provides a key visual anchor for readers.",
+          recommendedAction: action,
+          imagePrompt,
+          searchQuery,
+          suggestedPrompt: imagePrompt,
+          suggestedSearchQuery: searchQuery,
+          suggestedPreset: preset,
+        };
+      }
+
+      // H3+ and generic sections without level default to NO_VISUAL (anti-clutter)
       return {
         heading: cleanHeading || "General Section",
         visualType: "none",
@@ -306,18 +410,6 @@ export class VisualClassifierService {
       action = "search";
     }
 
-    const sanitizedTitle = cleanHeading
-      .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
-      .replace(/^(?:công\s+cụ|tiện\s+ích|phần\s+mềm|bước|phần|mục|chương|bài|tool|step|section|part|chapter)\s*(?:[0-9ivx]+|[a-z])?[:\s\-–—.]+/i, "")
-      .replace(/^(?:[0-9]+(?:\.[0-9]+)*|[ivx]+)[.):\s\-–—]+/i, "")
-      .replace(/[:;.\-–—\s]+$/, "")
-      .trim() || cleanHeading;
-
-    const isHardwareContext =
-      /(hwinfo|gpu-z|cpu-z|afterburner|phần cứng|linh kiện|nhiệt độ|cảm biến|ép xung|cpu|gpu|ram|motherboard|telemetry)/i.test(
-        `${headingLower} ${contentLower}`
-      );
-
     const preset = bestMatch.suggestedPreset || "isometric";
     const imagePrompt = isHardwareContext
       ? `Modern ${preset} technical illustration of ${sanitizedTitle}, PC hardware telemetry and component diagnostics, clean high-tech composition`
@@ -325,7 +417,7 @@ export class VisualClassifierService {
     const searchQuery = buildSearchQuery({
       heading: sanitizedTitle,
       visualType,
-      sectionContent: contentSnippet,
+      sectionContent: cleanContent,
     });
 
     return {
@@ -424,7 +516,7 @@ export class VisualClassifierService {
       }
 
       const isCompleted = existingImageUrls.length > 0;
-      const recommendation = this.classifySection(sec.heading, sectionText);
+      const recommendation = this.classifySection(sec.heading, sectionText, sec.level);
 
       return {
         heading: sec.heading,

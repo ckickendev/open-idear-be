@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { ReadingProgress, Post } = require("../models");
+const { ReadingProgress, Post, PostTranslation } = require("../models");
 
 // =============================================================================
 //  READING PROGRESS SERVICE
@@ -13,8 +13,14 @@ const { ReadingProgress, Post } = require("../models");
 //    and heading has not changed, avoiding write amplification.
 //  - Automatic Completion: Automatically sets completedAt when progress >= 90%
 //    and bottom of the article is reached.
-//  - Resilient Article Resolution: Accepts either MongoDB ObjectId or slug.
-// =============================================================================
+//// Regex matching Vietnamese tone marks and special characters (đ, â, ă, ê, ô, ơ, ư, etc.)
+const VIETNAMESE_DIACRITICS_REGEX = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i;
+
+function isVietnameseContent(title = "", text = "") {
+  const sample = `${title} ${(text || "").substring(0, 300)}`;
+  const matches = sample.match(new RegExp(VIETNAMESE_DIACRITICS_REGEX, "gi"));
+  return !!(matches && matches.length >= 2);
+}
 
 class ReadingProgressService {
   /**
@@ -28,7 +34,15 @@ class ReadingProgressService {
       if (post) return post;
     }
 
-    return await Post.findOne({ slug: String(articleIdOrSlug).toLowerCase().trim() });
+    const cleanSlug = String(articleIdOrSlug).toLowerCase().trim();
+    let post = await Post.findOne({ slug: cleanSlug });
+    if (!post) {
+      const translation = await PostTranslation.findOne({ slug: cleanSlug });
+      if (translation && translation.postId) {
+        post = await Post.findById(translation.postId);
+      }
+    }
+    return post;
   }
 
   /**
@@ -53,10 +67,11 @@ class ReadingProgressService {
    * GET /reading/continue
    * Returns recently opened and partially read articles for the user.
    */
-  async getContinueReading(userId, limit = 6) {
+  async getContinueReading(userId, limit = 6, requestedLocale = "en") {
     if (!userId) return [];
 
     const safeLimit = Math.min(20, Math.max(1, Number(limit) || 6));
+    const validLocale = ["en", "vi"].includes(requestedLocale) ? requestedLocale : "en";
 
     // Retrieve active reading records (not fully finished or recently read)
     const records = await ReadingProgress.find({
@@ -65,10 +80,10 @@ class ReadingProgressService {
       completedAt: null,
     })
       .sort({ updatedAt: -1 })
-      .limit(safeLimit)
+      .limit(safeLimit * 3)
       .populate({
         path: "articleId",
-        select: "title slug description image author category aiContext content text createdAt updatedAt",
+        select: "title slug description image author category aiContext content text defaultLocale createdAt updatedAt",
         populate: [
           { path: "image", select: "url thumbnail alt" },
           { path: "category", select: "name slug" },
@@ -77,32 +92,69 @@ class ReadingProgressService {
       })
       .lean();
 
-    // Map and enrich with remaining time calculation
-    return records
-      .filter((rec) => rec.articleId && rec.articleId.title)
-      .map((rec) => {
-        const article = rec.articleId;
-        const totalMinutes = this.calculateReadingMinutes(article);
-        const progressPct = Math.min(100, Math.max(0, rec.progress || 0));
-        const remainingMinutes = Math.max(1, Math.ceil(totalMinutes * (1 - progressPct / 100)));
+    const validRecords = records.filter((rec) => rec.articleId && rec.articleId.title);
+    const articleIds = validRecords.map((rec) => rec.articleId._id).filter(Boolean);
 
-        return {
-          id: rec._id,
-          articleId: article._id,
-          slug: article.slug,
-          title: article.title,
-          description: article.description,
-          thumbnail: article.image?.url || article.image?.thumbnail || null,
-          author: article.author,
-          category: article.category,
-          progress: progressPct,
-          lastHeadingId: rec.lastHeadingId,
-          lastParagraphIndex: rec.lastParagraphIndex,
-          totalReadingMinutes: totalMinutes,
-          remainingMinutes,
-          updatedAt: rec.updatedAt,
-        };
+    // Fetch translations for the requested locale
+    const translations = await PostTranslation.find({
+      postId: { $in: articleIds },
+      locale: validLocale,
+      published: true,
+    }).lean();
+
+    const transMap = new Map();
+    for (const t of translations) {
+      transMap.set(String(t.postId), t);
+    }
+
+    // Filter and map articles matching the requested locale:
+    // Only return articles that either have an active translation in validLocale
+    // or whose native/default language matches validLocale.
+    const localizedItems = [];
+    for (const rec of validRecords) {
+      const article = rec.articleId;
+      const trans = transMap.get(String(article._id));
+
+      const isNativeVi = article.defaultLocale === "vi" || (!article.defaultLocale && isVietnameseContent(article.title, article.text || article.content || ""));
+      const isNativeEn = article.defaultLocale === "en" || (!article.defaultLocale && !isNativeVi);
+
+      // Strict locale check: if trans doesn't exist, native language MUST match validLocale
+      const matchesLocale = trans ? true : (validLocale === "vi" ? isNativeVi : isNativeEn);
+      if (!matchesLocale) {
+        continue;
+      }
+
+      const title = trans?.title || article.title;
+      const slug = trans?.slug || article.slug;
+      const description = trans?.description || article.description;
+      const totalMinutes = trans?.readtime || this.calculateReadingMinutes(trans || article);
+      const progressPct = Math.min(100, Math.max(0, rec.progress || 0));
+      const remainingMinutes = Math.max(1, Math.ceil(totalMinutes * (1 - progressPct / 100)));
+
+      localizedItems.push({
+        id: rec._id,
+        articleId: article._id,
+        slug,
+        title,
+        locale: trans?.locale || (isNativeVi ? "vi" : "en"),
+        description,
+        thumbnail: article.image?.url || article.image?.thumbnail || null,
+        author: article.author,
+        category: article.category,
+        progress: progressPct,
+        lastHeadingId: rec.lastHeadingId,
+        lastParagraphIndex: rec.lastParagraphIndex,
+        totalReadingMinutes: totalMinutes,
+        remainingMinutes,
+        updatedAt: rec.updatedAt,
       });
+
+      if (localizedItems.length >= safeLimit) {
+        break;
+      }
+    }
+
+    return localizedItems;
   }
 
   /**
