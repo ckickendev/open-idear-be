@@ -25,6 +25,7 @@ export interface PublisherInput {
   audience?: string;
   additionalInstructions?: string;
   userId?: string;
+  coverSource?: "internet" | "ai" | "none";
 }
 
 export interface PublisherRunContext {
@@ -161,16 +162,21 @@ export class PublisherOrchestrator {
         ctx.updatedAt = new Date().toISOString();
         if (!ctx.plan) throw new Error("Cannot execute COVER_IMAGE state without a Plan.");
 
-        const coverResult = await this.coverImageService.generateAndSaveCoverImage(
-          {
-            title: ctx.plan.title,
-            keywords: ctx.plan.keywords,
-            userId: ctx.input.userId,
-          },
-          signal
-        );
+        if (ctx.input.coverSource === "none") {
+          ctx.coverImage = undefined;
+        } else {
+          const coverResult = await this.coverImageService.generateAndSaveCoverImage(
+            {
+              title: ctx.plan.title,
+              keywords: ctx.plan.keywords,
+              userId: ctx.input.userId,
+              source: ctx.input.coverSource === "ai" ? "ai" : "internet",
+            },
+            signal
+          );
+          ctx.coverImage = coverResult;
+        }
 
-        ctx.coverImage = coverResult;
         ctx.state = "VALIDATING";
       }
 

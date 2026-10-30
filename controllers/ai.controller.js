@@ -782,7 +782,7 @@ class AIController extends Controller {
    * State Machine: IDLE → PLANNING → WRITING → SEO → VALIDATING → DONE
    */
   publishMultiAgent = asyncHandler(async (req, res) => {
-    const { topic, audience, additionalInstructions } = req.body;
+    const { topic, audience, additionalInstructions, coverSource } = req.body;
 
     if (!topic || !topic.trim()) {
       return res.status(400).json({ error: "topic is required" });
@@ -797,6 +797,7 @@ class AIController extends Controller {
         topic: topic.trim(),
         audience: audience || "developers",
         additionalInstructions: additionalInstructions || "",
+        coverSource: coverSource || "internet",
       },
       abortController.signal
     );
@@ -836,7 +837,7 @@ class AIController extends Controller {
    */
   regeneratePublisherCoverImage = asyncHandler(async (req, res) => {
     const { _id: userId } = req.userInfo;
-    const { title, keywords, customPrompt } = req.body;
+    const { title, keywords, customPrompt, source } = req.body;
 
     if (!title || !title.trim()) {
       return res.status(400).json({ error: "title is required" });
@@ -852,6 +853,7 @@ class AIController extends Controller {
         keywords: keywords || [],
         customPrompt: customPrompt || "",
         userId: userId ? userId.toString() : undefined,
+        source: source || (customPrompt ? "ai" : "ai"),
       },
       abortController.signal
     );

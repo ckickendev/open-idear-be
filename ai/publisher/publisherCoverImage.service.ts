@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { PublisherImageAgent } from "../agent/publisher/publisherImage.agent";
 import cloudinary from "../../utils/cloudinary";
+import { imageSearchService } from "../../services/imageSearch.service";
 const MediaModel = require("../../models/media.schema");
 
 export interface CoverImageResult {
@@ -11,6 +12,9 @@ export interface CoverImageResult {
   width: number;
   height: number;
   createdByAI: boolean;
+  source?: string;
+  author?: string;
+  attributionUrl?: string;
 }
 
 export class PublisherCoverImageService {
@@ -22,18 +26,52 @@ export class PublisherCoverImageService {
 
   /**
    * Complete cover image pipeline:
-   * 1. ImageAgent creates prompt
-   * 2. Generate image
-   * 3. Upload Cloudinary
-   * 4. Save Media Library schema
+   * 1. If source === "internet", search high-resolution Unsplash/stock photography
+   * 2. Else ImageAgent creates prompt -> Generate AI image -> Upload Cloudinary
    */
   public async generateAndSaveCoverImage(
-    params: { title: string; keywords?: string[]; customPrompt?: string; userId?: string },
+    params: {
+      title: string;
+      keywords?: string[];
+      customPrompt?: string;
+      userId?: string;
+      source?: "internet" | "ai";
+    },
     signal?: AbortSignal
   ): Promise<CoverImageResult> {
-    const { title, keywords = [], customPrompt, userId } = params;
+    const { title, keywords = [], customPrompt, userId, source = "internet" } = params;
 
-    // 1. Create prompt using PublisherImageAgent if custom prompt not provided
+    // 1. Try finding high-resolution real stock photo on Internet/Unsplash first if source === "internet"
+    if (source === "internet") {
+      try {
+        const stockResults = await imageSearchService.search({
+          query: title,
+          limit: 4,
+          orientation: "landscape",
+          userId,
+        });
+
+        if (stockResults && stockResults.length > 0) {
+          const best = stockResults[0];
+          return {
+            _id: best.id,
+            url: best.imageUrl || best.url,
+            alt: best.alt || best.title || `Cover photo for ${title}`,
+            prompt: "",
+            width: best.width || 1200,
+            height: best.height || 630,
+            createdByAI: false,
+            source: best.sourceProvider || "unsplash",
+            author: best.author,
+            attributionUrl: best.attributionUrl,
+          };
+        }
+      } catch (searchErr: any) {
+        console.warn(`[PublisherCoverImageService] Stock photo search warning: ${searchErr.message}`);
+      }
+    }
+
+    // 2. Fallback or explicit AI generation flow
     let finalPrompt = customPrompt || "";
     let altText = `Cover image for ${title}`;
 
