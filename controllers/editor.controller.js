@@ -1,7 +1,7 @@
 const express = require("express");
 const { Controller } = require("../core");
 const asyncHandler = require("../utils/asyncHandler");
-const { AuthMiddleware } = require("../middlewares/auth.middleware");
+const { AuthMiddleware, OptionalAuthMiddleware } = require("../middlewares/auth.middleware");
 const { EditingWorkflow, aiFeatureRegistry } = require("../ai");
 
 // =============================================================================
@@ -93,7 +93,7 @@ class EditorController extends Controller {
 
 
   initController = () => {
-    this._router.post(`${this._rootPath}/action`, AuthMiddleware, this.handleAction);
+    this._router.post(`${this._rootPath}/action`, OptionalAuthMiddleware, this.handleAction);
   };
 }
 

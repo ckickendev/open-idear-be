@@ -40,6 +40,7 @@ const shopCategoryService = require("./shopCategory.services");
 const shopProductService = require("./shopProduct.services");
 const shopOrderService = require("./shopOrder.services");
 const shopAnalyticsService = require("./shopAnalytics.services");
+const globalSearchService = require("./globalSearch.services");
 
 module.exports = {
   userService,
@@ -83,4 +84,5 @@ module.exports = {
   shopProductService,
   shopOrderService,
   shopAnalyticsService,
+  globalSearchService,
 };

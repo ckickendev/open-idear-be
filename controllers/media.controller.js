@@ -271,6 +271,56 @@ class MediaController extends Controller {
         });
     });
 
+    /**
+     * HTTP 206 Partial Content video streaming for local fallback video files.
+     * Enables full seek, pause, and play for development & offline playback.
+     */
+    streamLessonVideo = asyncHandler(async (req, res) => {
+        const { lessonId } = req.params;
+        const { Lesson } = require("../models");
+        const fs = require("fs");
+
+        const lesson = await Lesson.findOne({ _id: lessonId, del_flag: 0 });
+        if (!lesson) return res.status(404).send("Lesson not found");
+
+        const filePath = bunnyStreamService.findLocalVideoFile(lesson.title);
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).send("Video file not found on disk");
+        }
+
+        const stat = fs.statSync(filePath);
+        const fileSize = stat.size;
+        const range = req.headers.range;
+
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = end - start + 1;
+            const file = fs.createReadStream(filePath, { start, end });
+            const head = {
+                "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+                "Accept-Ranges": "bytes",
+                "Content-Length": chunksize,
+                "Content-Type": "video/mp4",
+                "Cross-Origin-Resource-Policy": "cross-origin",
+                "Access-Control-Allow-Origin": "*",
+            };
+            res.writeHead(206, head);
+            file.pipe(res);
+        } else {
+            const head = {
+                "Content-Length": fileSize,
+                "Content-Type": "video/mp4",
+                "Accept-Ranges": "bytes",
+                "Cross-Origin-Resource-Policy": "cross-origin",
+                "Access-Control-Allow-Origin": "*",
+            };
+            res.writeHead(200, head);
+            fs.createReadStream(filePath).pipe(res);
+        }
+    });
+
     deleteMedia = asyncHandler(async (req, res) => {
         const { id } = req.params;
         await mediaService.deleteMedia(id, req.userInfo._id);
@@ -284,6 +334,9 @@ class MediaController extends Controller {
         this._router.get(`${this._rootPath}`, this.getAll);
         this._router.get(`${this._rootPath}/user`, AuthMiddleware, this.getByUser);
         this._router.post(`${this._rootPath}/uploadImage`, AuthMiddleware, upload.single("image"), this.uploadImage);
+
+        // ── Direct / Local Stream Route ──
+        this._router.get(`${this._rootPath}/stream/lesson/:lessonId`, OptionalAuthMiddleware, this.streamLessonVideo);
 
         // ── Bunny Stream Routes ──
         this._router.post(`${this._rootPath}/bunny/upload-signature`, AuthMiddleware, this.getBunnyUploadSignature);

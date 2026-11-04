@@ -10,7 +10,8 @@ class BunnyStreamClient {
     this.apiKey = (config.apiKey || process.env.BUNNY_STREAM_API_KEY || "").trim();
     this.libraryId = (config.libraryId || process.env.BUNNY_STREAM_LIBRARY_ID || "").trim();
     this.tokenKey = (config.tokenKey || config.tokenSecurityKey || process.env.BUNNY_STREAM_TOKEN_KEY || "").trim();
-    this.cdnHostname = (config.cdnHostname || process.env.BUNNY_STREAM_CDN_HOSTNAME || "iframe.mediadelivery.net").trim();
+    const rawCdn = (config.cdnHostname || process.env.BUNNY_STREAM_CDN_HOSTNAME || "iframe.mediadelivery.net").trim();
+    this.cdnHostname = rawCdn.replace(/^https?:\/\//i, "").replace(/\/+$/, "") || "iframe.mediadelivery.net";
     this.webhookSecret = (config.webhookSecret || process.env.BUNNY_STREAM_WEBHOOK_SECRET || "").trim();
     this.apiBaseUrl = config.apiBaseUrl || "https://video.bunnycdn.com";
     this.tusEndpoint = config.tusEndpoint || "https://video.bunnycdn.com/tusupload";

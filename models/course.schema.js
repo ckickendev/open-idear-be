@@ -38,5 +38,7 @@ const courseSchema = new Schema(
 
 courseSchema.index({ instructor: 1, del_flag: 1 });
 courseSchema.index({ del_flag: 1, status: 1 });
+courseSchema.index({ del_flag: 1, status: 1, createdAt: -1 });
+courseSchema.index({ del_flag: 1, status: 1, title: 1 });
 
 module.exports = mongoose.model("course", courseSchema);

@@ -173,5 +173,6 @@ const postTranslationSchema = new Schema(
 postTranslationSchema.index({ postId: 1, locale: 1 }, { unique: true });
 postTranslationSchema.index({ locale: 1, slug: 1 }, { unique: true });
 postTranslationSchema.index({ locale: 1, published: 1, createdAt: -1 });
+postTranslationSchema.index({ locale: 1, published: 1, title: 1 });
 
 module.exports = mongoose.model("post_translation", postTranslationSchema);

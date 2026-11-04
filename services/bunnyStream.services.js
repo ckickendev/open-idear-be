@@ -239,6 +239,84 @@ class BunnyStreamService extends Service {
   }
 
   /**
+   * Searches for a matching local video file on disk for development/offline playback.
+   *
+   * @param {string} lessonTitle
+   * @returns {string|null} Absolute path to video file if found
+   */
+  findLocalVideoFile(lessonTitle) {
+    if (!lessonTitle) return null;
+    const fs = require("fs");
+    const path = require("path");
+
+    const searchDirs = [
+      process.env.LOCAL_VIDEO_DIR,
+      "/Users/mac/Documents/video/hieutvkh",
+      path.join(process.cwd(), "public/videos"),
+    ].filter(Boolean);
+
+    const normTarget = lessonTitle
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const numMatch = lessonTitle.match(/^\s*0?(\d+)\./);
+    const targetNum = numMatch ? parseInt(numMatch[1], 10) : null;
+
+    for (const baseDir of searchDirs) {
+      if (!fs.existsSync(baseDir)) continue;
+
+      const scanDirectory = (dir) => {
+        try {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              const res = scanDirectory(fullPath);
+              if (res) return res;
+            } else if (/\.(mp4|mkv|webm|mov)$/i.test(entry.name)) {
+              const normFile = path
+                .parse(entry.name)
+                .name.toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+              if (
+                normFile === normTarget ||
+                normFile.includes(normTarget) ||
+                normTarget.includes(normFile)
+              ) {
+                return fullPath;
+              }
+
+              if (targetNum !== null) {
+                const fNumMatch = entry.name.match(/^\s*0?(\d+)\./);
+                if (fNumMatch && parseInt(fNumMatch[1], 10) === targetNum) {
+                  return fullPath;
+                }
+              }
+            }
+          }
+        } catch (scanErr) {
+          // ignore unreadable directories
+        }
+        return null;
+      };
+
+      const found = scanDirectory(baseDir);
+      if (found) return found;
+    }
+
+    return null;
+  }
+
+  /**
    * Evaluates enrollment & free preview permissions, and returns signed playback configuration.
    * Gated: If video is still processing or failed, it does not become playable.
    *
@@ -310,23 +388,41 @@ class BunnyStreamService extends Service {
       throw error;
     }
 
-    // 5. Resolve video identifier
+    // 5. Resolve video identifier and local fallback
+    const localVideoPath = this.findLocalVideoFile(lesson.title);
+    const backendRoot = process.env.ROOT_BACKEND || "http://localhost:5001";
+    const streamUrl = localVideoPath ? `${backendRoot}/media/stream/lesson/${lesson._id}` : undefined;
+
     const media = lesson.media;
-    if (!media) {
-      const error = new Error("No media asset attached to this lesson.");
-      error.statusCode = 404;
-      throw error;
+    if (!media && !localVideoPath) {
+      return {
+        lessonId: lesson._id.toString(),
+        title: lesson.title,
+        isFreePreview,
+        isEnrolled,
+        isAuthorized: true,
+        isReady: false,
+        status: "empty",
+        message: "Không tìm thấy video bài giảng hoặc nguồn phát cho bài học này.",
+      };
     }
 
-    const videoId = media.bunnyVideoId || media.url;
+    const videoId = media?.bunnyVideoId || media?.url || (localVideoPath ? lesson._id.toString() : null);
     if (!videoId) {
-      const error = new Error("Media asset has no valid video identifier.");
-      error.statusCode = 400;
-      throw error;
+      return {
+        lessonId: lesson._id.toString(),
+        title: lesson.title,
+        isFreePreview,
+        isEnrolled,
+        isAuthorized: true,
+        isReady: false,
+        status: "empty",
+        message: "Chưa cấu hình mã video hợp lệ cho bài học này.",
+      };
     }
 
     // 6. Verify video readiness before returning playable stream
-    let isReady = media.status === "ready";
+    let isReady = (media && media.status === "ready") || !!localVideoPath;
     if (!isReady && media.provider === "bunny") {
       try {
         const liveDetails = await this.client.getVideo(videoId);
@@ -355,15 +451,15 @@ class BunnyStreamService extends Service {
         isEnrolled,
         isAuthorized: true,
         isReady: false,
-        status: media.status || "processing",
-        message: media.status === "failed"
-          ? (media.errorMessage || "Video processing failed on provider.")
+        status: media?.status || "ready",
+        message: media?.status === "failed"
+          ? (media?.errorMessage || "Video processing failed on provider.")
           : "Video is currently encoding and not yet playable. Please check back shortly.",
-        mediaId: media._id.toString(),
+        mediaId: media?._id?.toString() || "",
         videoId,
-        provider: media.provider || "bunny",
-        duration: media.duration || 0,
-        thumbnailUrl: media.thumbnail || `https://${this.client.cdnHostname}/${videoId}/thumbnail.jpg`,
+        provider: media?.provider || "local",
+        duration: media?.duration || 0,
+        thumbnailUrl: media?.thumbnail || `https://${this.client.cdnHostname}/${videoId}/thumbnail.jpg`,
       };
     }
 
@@ -377,12 +473,13 @@ class BunnyStreamService extends Service {
       isEnrolled,
       isAuthorized: true,
       isReady: true,
-      mediaId: media._id.toString(),
+      mediaId: media?._id?.toString() || "",
       videoId,
-      provider: media.provider || "bunny",
-      duration: media.duration || 0,
+      provider: media?.provider || (streamUrl ? "local" : "bunny"),
+      duration: media?.duration || 0,
       embedUrl: playbackConfig.embedUrl,
       hlsUrl: playbackConfig.hlsUrl,
+      streamUrl,
       thumbnailUrl: playbackConfig.thumbnailUrl,
       expires: playbackConfig.expires,
       isTokenized: playbackConfig.isTokenized,

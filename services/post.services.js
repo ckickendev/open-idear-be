@@ -1,6 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
-const { Post, Like, Series, Category, Course, PostTranslation, Comment, ArticleVersion, CollectionItem, Media } = require("../models");
+const { Post, Like, Series, Category, Tag, Course, PostTranslation, Comment, ArticleVersion, CollectionItem, Media } = require("../models");
 const { NotFoundException, ServerException } = require("../exceptions");
 const { default: slugify } = require("slugify");
 const { ContentStructureService } = require("../ai/content/contentStructure.service");
@@ -130,6 +130,175 @@ class PostService extends Service {
         return uniqueSlug;
     }
 
+    /**
+     * Resolves a category input (ObjectId, string name, slug, or object)
+     * to a valid mongoose.Types.ObjectId or null.
+     */
+    async resolveCategoryId(categoryInput) {
+        if (!categoryInput) return null;
+
+        // If an object with _id was provided
+        if (typeof categoryInput === "object" && categoryInput._id) {
+            categoryInput = categoryInput._id;
+        }
+
+        const inputStr = String(categoryInput).trim().replace(/^['"]\s*|\s*['"]$/g, "");
+        if (!inputStr) return null;
+
+        // 1. If it's already a valid 24-character hexadecimal ObjectId
+        if (mongoose.Types.ObjectId.isValid(inputStr) && /^[0-9a-fA-F]{24}$/.test(inputStr)) {
+            const foundById = await Category.findOne({ _id: inputStr, del_flag: 0 }).select("_id").lean();
+            if (foundById) {
+                return foundById._id;
+            }
+            return new mongoose.Types.ObjectId(inputStr);
+        }
+
+        // 2. Lookup by case-insensitive name or slug
+        const targetSlug = slugify(inputStr, { lower: true, remove: /[*+~.()'"!:@]/g }) || `cat-${Date.now().toString(36)}`;
+        let found = await Category.findOne({
+            $or: [
+                { name: { $regex: new RegExp(`^${inputStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } },
+                { slug: targetSlug },
+            ],
+            del_flag: 0,
+        }).select("_id").lean();
+
+        if (found) {
+            return found._id;
+        }
+
+        // 3. Auto-create category if valid name provided, ensuring it never fails schema casting
+        try {
+            const newCat = await Category.create({
+                _id: new mongoose.Types.ObjectId(),
+                name: inputStr,
+                slug: targetSlug,
+                del_flag: 0,
+            });
+            return newCat._id;
+        } catch (createErr) {
+            // In case of duplicate key race, re-fetch
+            const existingCat = await Category.findOne({
+                $or: [{ name: inputStr }, { slug: targetSlug }],
+            }).select("_id").lean();
+            if (existingCat) return existingCat._id;
+        }
+
+        // 4. Fallback: check if any active category exists, or return null to remain schema-valid
+        const anyCategory = await Category.findOne({ del_flag: 0 }).select("_id").lean();
+        return anyCategory ? anyCategory._id : null;
+    }
+
+    /**
+     * Resolves tags input (array of strings, stringified arrays, comma-separated string, or ObjectIds)
+     * to an array of valid mongoose.Types.ObjectId, auto-upserting missing tags.
+     */
+    async resolveTagIds(tagsInput) {
+        if (!tagsInput) return [];
+
+        const extractTokens = (input) => {
+            if (!input) return [];
+            if (Array.isArray(input)) {
+                return input.flatMap((item) => extractTokens(item));
+            }
+            if (typeof input === "object" && input._id) {
+                return [input._id];
+            }
+            let str = String(input).trim();
+            if (!str) return [];
+
+            // If string is wrapped in array brackets [ ... ] (e.g. "[ 'Build PC', 'Comparison' ]")
+            if (str.startsWith("[") && str.endsWith("]")) {
+                const inner = str.slice(1, -1).trim();
+                try {
+                    const parsed = JSON.parse(str);
+                    if (Array.isArray(parsed)) return extractTokens(parsed);
+                } catch (e) {
+                    try {
+                        const parsed = JSON.parse(str.replace(/'/g, '"'));
+                        if (Array.isArray(parsed)) return extractTokens(parsed);
+                    } catch (e2) {
+                        return inner
+                            .split(",")
+                            .map((s) => s.replace(/^['"]\s*|\s*['"]$/g, "").trim())
+                            .filter(Boolean);
+                    }
+                }
+            }
+
+            // If comma-separated string (and not a pure ObjectId hex)
+            if (str.includes(",") && !(/^[0-9a-fA-F]{24}$/.test(str))) {
+                return str
+                    .split(",")
+                    .map((s) => s.replace(/^['"]\s*|\s*['"]$/g, "").trim())
+                    .filter(Boolean);
+            }
+
+            str = str.replace(/^['"]\s*|\s*['"]$/g, "").trim();
+            return str ? [str] : [];
+        };
+
+        const rawList = extractTokens(tagsInput);
+        const resolvedIds = [];
+        const seenStr = new Set();
+
+        for (const item of rawList) {
+            if (!item) continue;
+            let val = typeof item === "object" && item._id ? item._id : item;
+            const strVal = String(val).trim().replace(/^['"]\s*|\s*['"]$/g, "");
+            if (!strVal) continue;
+
+            // 1. If already a valid ObjectId and exists in Tag collection (or valid hex)
+            if (mongoose.Types.ObjectId.isValid(strVal) && /^[0-9a-fA-F]{24}$/.test(strVal)) {
+                const existingById = await Tag.findById(strVal).select("_id").lean();
+                const targetId = existingById ? existingById._id : new mongoose.Types.ObjectId(strVal);
+                const idStr = targetId.toString();
+                if (!seenStr.has(idStr)) {
+                    seenStr.add(idStr);
+                    resolvedIds.push(targetId);
+                }
+                continue;
+            }
+
+            // 2. String keyword or tag name -> lookup or auto-create tag
+            const tagSlug = slugify(strVal, { lower: true, remove: /[*+~.()'"!:@]/g }) || `tag-${Date.now().toString(36)}`;
+            let tagDoc = await Tag.findOne({
+                $or: [
+                    { name: { $regex: new RegExp(`^${strVal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } },
+                    { slug: tagSlug },
+                ],
+                del_flag: 0,
+            }).select("_id").lean();
+
+            if (!tagDoc) {
+                try {
+                    tagDoc = await Tag.create({
+                        _id: new mongoose.Types.ObjectId(),
+                        name: strVal,
+                        slug: tagSlug,
+                        del_flag: 0,
+                    });
+                } catch (createErr) {
+                    // In case of race condition on unique index, re-fetch
+                    tagDoc = await Tag.findOne({
+                        $or: [{ name: strVal }, { slug: tagSlug }],
+                    }).select("_id").lean();
+                }
+            }
+
+            if (tagDoc && tagDoc._id) {
+                const idStr = tagDoc._id.toString();
+                if (!seenStr.has(idStr)) {
+                    seenStr.add(idStr);
+                    resolvedIds.push(tagDoc._id);
+                }
+            }
+        }
+
+        return resolvedIds;
+    }
+
     async addPost(post, requestedLocale = "en") {
         const validLocale = ["en", "vi"].includes(requestedLocale) ? requestedLocale : "en";
         const title = post.title?.trim() || "Untitled";
@@ -155,6 +324,10 @@ class PostService extends Service {
           contentVersion = "blocks-v1";
         }
 
+        // Defensively resolve category and tags to valid ObjectIds
+        const resolvedCategory = await this.resolveCategoryId(post.category);
+        const resolvedTags = await this.resolveTagIds(post.tags);
+
         const postId = new mongoose.Types.ObjectId();
 
         // 1. Create parent Post document (shared container for taxonomy, metrics, author)
@@ -164,8 +337,8 @@ class PostService extends Service {
             content: post.content,
             text: post.text,
             author: post.author,
-            category: post.category,
-            tags: post.tags,
+            category: resolvedCategory,
+            tags: resolvedTags,
             slug,
             published: false,
             views: 0,
@@ -479,7 +652,7 @@ class PostService extends Service {
             published: true
         })
             .sort({ createdAt: -1 })
-            .limit(7)
+            .limit(8)
             .populate('category', "name slug")
             .populate('author', 'username email avatar')
             .populate('tags', 'name')
@@ -580,6 +753,15 @@ class PostService extends Service {
             };
         }
 
+        if (post.category !== undefined) {
+            postUpdate.$set = postUpdate.$set || {};
+            postUpdate.$set.category = await this.resolveCategoryId(post.category);
+        }
+        if (post.tags !== undefined) {
+            postUpdate.$set = postUpdate.$set || {};
+            postUpdate.$set.tags = await this.resolveTagIds(post.tags);
+        }
+
         const updatedPost = await Post.findByIdAndUpdate(postId, postUpdate, { new: true });
 
         // Invalidate partitioned caches
@@ -657,12 +839,6 @@ class PostService extends Service {
                 }
             }
 
-            if (publicInfo.category) {
-                const category = await Category.findById(publicInfo.category);
-                if (!category) {
-                    throw new NotFoundException("Category not found");
-                }
-            }
             console.log('publicInfo', publicInfo);
 
             // 1. Prepare translation updates
@@ -687,7 +863,10 @@ class PostService extends Service {
                 postUpdateFields.description = (publicInfo.description || "").trim();
             }
             if (publicInfo.category !== undefined) {
-                postUpdateFields.category = publicInfo.category;
+                postUpdateFields.category = await this.resolveCategoryId(publicInfo.category);
+            }
+            if (publicInfo.tags !== undefined) {
+                postUpdateFields.tags = await this.resolveTagIds(publicInfo.tags);
             }
             if (publicInfo.background !== undefined) {
                 postUpdateFields.background = publicInfo.background;
@@ -1043,7 +1222,7 @@ class PostService extends Service {
             if (features === 'all' || !features) {
                 const posts = await Post.find({ _id: { $in: allowedPostIds }, del_flag: 0, published: true })
                     .sort({ createdAt: -1 })
-                    .limit(7)
+                    .limit(8)
                     .populate('category', "name slug")
                     .populate('author', 'username email avatar')
                     .populate('tags', 'name')
@@ -1059,7 +1238,7 @@ class PostService extends Service {
                 category: category ? category._id : null
             })
                 .sort({ createdAt: -1 })
-                .limit(7)
+                .limit(8)
                 .populate('category', "name slug")
                 .populate('author', 'username email avatar')
                 .populate('tags', 'name')

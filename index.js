@@ -63,6 +63,7 @@ const {
   ShopProductController,
   ShopOrderController,
   ShopAnalyticsController,
+  SearchController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -105,6 +106,7 @@ const app = new AppServer([
   new ShopProductController(),
   new ShopOrderController(),
   new ShopAnalyticsController(),
+  new SearchController(),
 ]);
 
 app.startListening();
