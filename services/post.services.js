@@ -633,11 +633,21 @@ class PostService extends Service {
                     plain.published = trans.published;
                 }
             }
-            if (!plain.image && (plain.hero?.image?.src || trans?.hero?.image?.src)) {
-                plain.image = {
-                    url: plain.hero?.image?.src || trans?.hero?.image?.src,
-                    description: plain.hero?.image?.alt || trans?.hero?.image?.alt || plain.title || "",
-                };
+            const hasImageUrl = plain.image && typeof plain.image === "object" && plain.image.url;
+            if (!hasImageUrl) {
+                const fallbackSrc =
+                    plain.hero?.image?.src ||
+                    trans?.hero?.image?.src ||
+                    plain.background ||
+                    trans?.background ||
+                    (typeof plain.image === "string" ? plain.image : null);
+
+                if (fallbackSrc) {
+                    plain.image = {
+                        url: fallbackSrc,
+                        description: plain.hero?.image?.alt || trans?.hero?.image?.alt || plain.title || "",
+                    };
+                }
             }
             return plain;
         });
@@ -1438,7 +1448,7 @@ class PostService extends Service {
                     .limit(5)
                     .populate('author', 'name username avatar')
                     .populate('image', 'url')
-                    .select('title slug author image readtime createdAt')
+                    .select('title slug author image hero background readtime createdAt')
                     .lean(),
 
                 // 📚 Latest Posts: most recently published
@@ -1451,7 +1461,7 @@ class PostService extends Service {
                     .limit(5)
                     .populate('author', 'name username avatar')
                     .populate('image', 'url')
-                    .select('title slug author image readtime createdAt')
+                    .select('title slug author image hero background readtime createdAt')
                     .lean(),
 
                 // 🏆 Popular Series: hot series
