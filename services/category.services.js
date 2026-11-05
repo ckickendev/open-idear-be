@@ -1,6 +1,6 @@
 const { default: mongoose } = require("mongoose");
 const { Service } = require("../core");
-const { Category, Post } = require("../models");
+const { Category, Post, PostTranslation } = require("../models");
 const { default: slugify } = require("slugify");
 const { NotFoundException } = require("../exceptions");
 
@@ -41,31 +41,52 @@ class CategoryService extends Service {
         return { ...category._doc, countData };
     }
 
-    async getPostsByCategorySlug(slug, page) {
+    async getPostsByCategorySlug(slug, page, locale = "en") {
+        const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
         const category = await Category.findOne({ slug, del_flag: 0 });
         if (!category) {
             return null;
         }
 
-        const posts = await Post.find({ category: category._id })
+        const allowedPostIds = await PostTranslation.find({
+            locale: validLocale,
+            published: true,
+        }).distinct("postId");
+
+        const posts = await Post.find({
+            category: category._id,
+            _id: { $in: allowedPostIds },
+            del_flag: 0,
+            published: true,
+        })
             .skip((page - 1) * 6)
             .limit(6)
             .sort({ createdAt: -1 })
             .populate('category', "name")
             .populate('author', 'username email')
             .populate('image', 'url description');
-        return posts;
+
+        const postService = require("./post.services");
+        return await postService.overlayTranslations(posts, validLocale);
     }
 
-    async getPostsInAnotherCategorySlug(slug, number) {
+    async getPostsInAnotherCategorySlug(slug, number, locale = "en") {
+        const validLocale = ["en", "vi"].includes(locale) ? locale : "en";
         const category = await Category.findOne({ slug, del_flag: 0 });
         if (!category) {
             return null;
         }
 
+        const allowedPostIds = await PostTranslation.find({
+            locale: validLocale,
+            published: true,
+        }).distinct("postId");
+
         const posts = await Post.find({
             category: { $ne: category._id },
-            del_flag: 0
+            _id: { $in: allowedPostIds },
+            del_flag: 0,
+            published: true,
         })
             .limit(number)
             .sort({ createdAt: -1 })
@@ -73,7 +94,8 @@ class CategoryService extends Service {
             .populate('author', 'username email')
             .populate('image', 'url description');
 
-        return posts;
+        const postService = require("./post.services");
+        return await postService.overlayTranslations(posts, validLocale);
     }
 
     async createCategory({ name, description, background_image }) {

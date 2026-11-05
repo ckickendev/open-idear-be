@@ -228,11 +228,18 @@ class AIController extends Controller {
     } catch (err) {
       if (err.name === "AbortError" || abortController.signal.aborted) {
         console.log("[AIController] Article writing successfully aborted by request signal.");
-        return res.end();
+        if (!res.writableEnded) res.end();
+        return;
       }
       console.error("[AIController] Streaming failure encountered:", err);
-      res.write(`data: ${JSON.stringify({ error: err.message || "Streaming failed" })}\n\n`);
-      res.end();
+      if (!res.writableEnded) {
+        try {
+          res.write(`data: ${JSON.stringify({ error: err.message || "Streaming failed" })}\n\n`);
+          res.end();
+        } catch {
+          // Socket already closed
+        }
+      }
     }
   });
 
@@ -775,7 +782,7 @@ class AIController extends Controller {
    * State Machine: IDLE → PLANNING → WRITING → SEO → VALIDATING → DONE
    */
   publishMultiAgent = asyncHandler(async (req, res) => {
-    const { topic, audience, additionalInstructions } = req.body;
+    const { topic, audience, additionalInstructions, coverSource } = req.body;
 
     if (!topic || !topic.trim()) {
       return res.status(400).json({ error: "topic is required" });
@@ -790,6 +797,7 @@ class AIController extends Controller {
         topic: topic.trim(),
         audience: audience || "developers",
         additionalInstructions: additionalInstructions || "",
+        coverSource: coverSource || "internet",
       },
       abortController.signal
     );
@@ -811,6 +819,7 @@ class AIController extends Controller {
         category: resultContext.seo?.category || "general",
         tags: resultContext.seo?.tags || [],
         blocks: resultContext.writerOutput?.blocks || [],
+        markdown: resultContext.writerOutput?.rawMarkdown || "",
         coverImage: resultContext.coverImage || null,
         validation: resultContext.validation,
         state: resultContext.state,
@@ -828,7 +837,7 @@ class AIController extends Controller {
    */
   regeneratePublisherCoverImage = asyncHandler(async (req, res) => {
     const { _id: userId } = req.userInfo;
-    const { title, keywords, customPrompt } = req.body;
+    const { title, keywords, customPrompt, source } = req.body;
 
     if (!title || !title.trim()) {
       return res.status(400).json({ error: "title is required" });
@@ -844,6 +853,7 @@ class AIController extends Controller {
         keywords: keywords || [],
         customPrompt: customPrompt || "",
         userId: userId ? userId.toString() : undefined,
+        source: source || (customPrompt ? "ai" : "ai"),
       },
       abortController.signal
     );
@@ -962,6 +972,9 @@ class AIController extends Controller {
         draftId: draftPost._id.toString(),
         title: draftPost.title,
         slug: draftPost.slug,
+        description: draftPost.description,
+        blocks: draftPost.blocks,
+        markdown: rawMarkdown,
         coverImage: resultContext.coverImage,
         version: "1.0",
         versionId: initialVersion._id.toString(),
@@ -1567,7 +1580,7 @@ class AIController extends Controller {
    * Analyzes section heading/content or full markdown article and returns visual recommendations.
    */
   classifyVisuals = asyncHandler(async (req, res) => {
-    const { heading, content, markdown } = req.body;
+    const { heading, content, markdown, level } = req.body;
 
     if (markdown && typeof markdown === "string") {
       const sections = visualClassifierService.analyzeArticle(markdown);
@@ -1584,7 +1597,8 @@ class AIController extends Controller {
 
     const recommendation = visualClassifierService.classifySection(
       String(heading).trim(),
-      content ? String(content).trim() : ""
+      content ? String(content).trim() : "",
+      typeof level === "number" ? level : undefined
     );
 
     res.json({

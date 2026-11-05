@@ -6,7 +6,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const categoryServices = require("../services/category.services");
 
 const extractLocale = (req) => {
-    const raw = req?.query?.locale || req?.headers?.["x-locale"] || req?.body?.locale || (req?.headers?.["accept-language"]?.toLowerCase().startsWith("vi") ? "vi" : null);
+    const raw = req?.query?.locale || req?.headers?.["x-locale"] || req?.cookies?.["NEXT_LOCALE"] || req?.body?.locale || (req?.headers?.["accept-language"]?.toLowerCase().startsWith("vi") ? "vi" : null);
     return ["en", "vi"].includes(raw) ? raw : null;
 };
 
@@ -185,7 +185,7 @@ class PostController extends Controller {
 
     create = asyncHandler(async (req, res) => {
         const { _id } = req.userInfo;
-        const { title, content, text, markdown, contentVersion, blocks, hero, aiContext, seo } = req.body;
+        const { title, content, text, markdown, contentVersion, blocks, hero, aiContext, seo, category, tags, description } = req.body;
         const locale = extractLocale(req) || "en";
 
         const user = await userService.findUserById(_id);
@@ -201,7 +201,10 @@ class PostController extends Controller {
             blocks,
             hero,
             aiContext,
-            seo
+            seo,
+            category,
+            tags,
+            description,
         }, locale);
         if (!post) return res.status(500).json({ message: "Error when creating post" });
 
@@ -272,7 +275,8 @@ class PostController extends Controller {
         const post = await postService.getPostById(publicInfo.postId, locale);
         if (!post) return res.status(404).json({ message: "Post not found" });
 
-        if (post.author._id.toString() !== _id.toString())
+        const authorId = post.author?._id ? post.author._id.toString() : (post.author?.toString ? post.author.toString() : "");
+        if (authorId && authorId !== _id.toString())
             return res.status(403).json({ message: "You are not the author of this post" });
 
         const updatedPost = await postService.publicPost(publicInfo.postId, publicInfo, locale);

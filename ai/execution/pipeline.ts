@@ -96,7 +96,7 @@ export class ExecutionPipeline {
         let lastError: Error | undefined;
 
         // Runner wrapper for a single provider execution attempt
-        const executeAttempt = async (providerId: string): Promise<boolean> => {
+        const executeAttempt = async (providerId: string): Promise<{ success: boolean; retryable: boolean }> => {
           context.providerId = providerId;
           const runtimeOptions = {
             model: context.model,
@@ -119,19 +119,19 @@ export class ExecutionPipeline {
             context.rawResponse = result.text;
             context.tokenUsage = result.usage;
             context.error = undefined;
-            return true;
+            return { success: true, retryable: false };
           } catch (err: any) {
             lastError = err;
             const isTimeout = context.signal?.aborted === false && err.message?.includes("timed out");
             const isRetryable = err instanceof AIError ? err.retryable : (isTimeout || err.status === 429 || err.status >= 500);
 
             if (attempt >= maxAttempts || !isRetryable) {
-              return false;
+              return { success: false, retryable: isRetryable };
             }
 
             const backoffMs = initialDelayMs * Math.pow(backoffMultiplier, attempt - 1);
             await new Promise((resolve) => setTimeout(resolve, backoffMs));
-            return false;
+            return { success: false, retryable: true };
           }
         };
 
@@ -141,8 +141,9 @@ export class ExecutionPipeline {
           while (attempt < maxAttempts) {
             attempt++;
             context.retryCount = attempt - 1;
-            const success = await executeAttempt(providerId);
+            const { success, retryable } = await executeAttempt(providerId);
             if (success) return true;
+            if (!retryable) break; // Terminate immediately if error is not retryable
           }
           return false;
         };

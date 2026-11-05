@@ -48,29 +48,16 @@ import type {
 
 import { AIError } from "./types";
 
-// ─── Model Aliases ────────────────────────────────────────────────────────────
-
-/**
- * Maps semantic capability names to actual Gemini model identifiers.
- * Update only this map when Google releases new model versions.
- *
- * "fast"    — high-throughput, low-latency: most steps in the system
- * "quality" — best reasoning: SEO scoring, quality review
- * "vision"  — multimodal: analyzeImage.step (same Flash model, flagged separately
- *             so vision capability is explicitly declared at the call site)
- */
-const MODEL_ALIASES: Readonly<Record<string, string>> = {
-  fast: "gemini-2.5-flash",
-  quality: "gemini-2.5-flash",
-  vision: "gemini-2.5-flash",
-  default: "gemini-2.5-flash",
-} as const;
-
+import {
+  MODEL_ALIASES,
+  resolveModel,
+  getModelFallbacks,
+} from "../config/models";
 
 // ─── Retry Configuration ──────────────────────────────────────────────────────
 
 const RETRY_CONFIG = {
-  maxAttempts: 4,
+  maxAttempts: 3,
   initialDelayMs: 1_000,
   backoffMultiplier: 2,
   jitterMs: 200,
@@ -108,34 +95,55 @@ export class GeminiProvider implements AIProvider {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Blocking text generation with automatic retry.
+   * Blocking text generation with automatic retry and model-level failover.
    * The full response is buffered in memory before returning.
    */
   async generate(
     messages: AIMessage[],
     options: CompletionOptions = {}
   ): Promise<AICompletion> {
-    return this.withRetry(async () => {
+    const candidateModels = getModelFallbacks(options.model);
+    let lastError: AIError | undefined;
+
+    for (const modelId of candidateModels) {
       options.signal?.throwIfAborted();
+      try {
+        return await this.withRetry(async () => {
+          options.signal?.throwIfAborted();
 
-      const { model, systemInstruction, contents } =
-        this._prepareRequest(messages, options);
-      const generationConfig = this._buildGenerationConfig(options);
+          const { model, systemInstruction, contents } =
+            this._prepareRequest(messages, options, modelId);
+          const generationConfig = this._buildGenerationConfig(options);
 
-      const result = await model.generateContent({
-        contents,
-        generationConfig,
-        ...(systemInstruction ? { systemInstruction } : {}),
-      });
+          const result = await model.generateContent({
+            contents,
+            generationConfig,
+            ...(systemInstruction ? { systemInstruction } : {}),
+          });
 
-      const response = result.response;
-      const text = response.text();
+          const response = result.response;
+          const text = response.text();
 
-      return {
-        text,
-        usage: this._extractUsage(response.usageMetadata),
-      };
-    }, options.signal);
+          return {
+            text,
+            usage: this._extractUsage(response.usageMetadata),
+          };
+        }, options.signal);
+      } catch (err: any) {
+        const aiError = err instanceof AIError ? err : this._normalizeError(err);
+        lastError = aiError;
+
+        if (aiError.code === "cancelled" || options.signal?.aborted) {
+          throw aiError;
+        }
+
+        console.warn(
+          `[GeminiProvider] Candidate model "${modelId}" failed (${aiError.code}: ${aiError.message}). Attempting model fallback...`
+        );
+      }
+    }
+
+    throw lastError || new AIError("All candidate Gemini models failed.", "model_error", false);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -158,36 +166,58 @@ export class GeminiProvider implements AIProvider {
     messages: AIMessage[],
     options: CompletionOptions = {}
   ): Promise<AIJSONResult<T>> {
-    return this.withRetry(async () => {
+    const candidateModels = getModelFallbacks(options.model || "fast");
+    let lastError: AIError | undefined;
+
+    for (const modelId of candidateModels) {
       options.signal?.throwIfAborted();
+      try {
+        return await this.withRetry(async () => {
+          options.signal?.throwIfAborted();
 
-      const { model, systemInstruction, contents } =
-        this._prepareRequest(messages, options);
+          const { model, systemInstruction, contents } =
+            this._prepareRequest(messages, options, modelId);
 
-      const generationConfig: GenerationConfig = {
-        ...this._buildGenerationConfig(options),
-        // Force JSON output at the API level — no code fences, no preamble
-        responseMimeType: "application/json",
-        // Lower temperature for structured output (caller can override)
-        temperature: options.temperature ?? 0.2,
-      };
+          const generationConfig: GenerationConfig = {
+            ...this._buildGenerationConfig(options),
+            // Force JSON output at the API level — no code fences, no preamble
+            responseMimeType: "application/json",
+            // Lower temperature for structured output (caller can override)
+            temperature: options.temperature ?? 0.2,
+          };
 
-      const result = await model.generateContent({
-        contents,
-        generationConfig,
-        ...(systemInstruction ? { systemInstruction } : {}),
-      });
+          const result = await model.generateContent({
+            contents,
+            generationConfig,
+            ...(systemInstruction ? { systemInstruction } : {}),
+          });
 
-      const response = result.response;
-      const rawText = response.text();
+          const response = result.response;
+          const rawText = response.text();
 
-      const data = this._parseJSON<T>(rawText);
+          const data = this._parseJSON<T>(rawText);
 
-      return {
-        data,
-        usage: this._extractUsage(response.usageMetadata),
-      };
-    }, options.signal);
+          return {
+            data,
+            usage: this._extractUsage(response.usageMetadata),
+          };
+        }, options.signal);
+      } catch (err: any) {
+        const aiError = err instanceof AIError ? err : this._normalizeError(err);
+        lastError = aiError;
+
+        // If cancelled by caller, do NOT attempt next model fallback
+        if (aiError.code === "cancelled" || options.signal?.aborted) {
+          throw aiError;
+        }
+
+        console.warn(
+          `[GeminiProvider] Candidate model "${modelId}" failed in generateJSON (${aiError.code}: ${aiError.message}). Attempting model fallback...`
+        );
+      }
+    }
+
+    throw lastError || new AIError("All candidate Gemini models failed in generateJSON.", "model_error", false);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -195,7 +225,7 @@ export class GeminiProvider implements AIProvider {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Streaming text generation.
+   * Streaming text generation with model-level failover.
    *
    * Yields each text chunk as it arrives from Gemini's streaming API.
    * The generator's return value is the final TokenUsage, available via
@@ -210,48 +240,71 @@ export class GeminiProvider implements AIProvider {
   ): AsyncGenerator<string, TokenUsage, undefined> {
     options.signal?.throwIfAborted();
 
-    const { model, systemInstruction, contents } = this._prepareRequest(
-      messages,
-      options
-    );
-    const generationConfig = this._buildGenerationConfig(options);
+    const candidateModels = getModelFallbacks(options.model || "default");
+    let lastError: any;
 
-    let streamResult;
-    try {
-      streamResult = await model.generateContentStream({
-        contents,
-        generationConfig,
-        ...(systemInstruction ? { systemInstruction } : {}),
-      });
-    } catch (err) {
-      throw this._normalizeError(err);
-    }
+    for (const modelId of candidateModels) {
+      options.signal?.throwIfAborted();
 
-    try {
-      for await (const chunk of streamResult.stream) {
-        // Check for cancellation on every chunk boundary
-        if (options.signal?.aborted) {
-          throw new AIError(
-            "Stream cancelled by caller.",
-            "cancelled",
-            false,
-            options.signal.reason
-          );
+      const { model, systemInstruction, contents } = this._prepareRequest(
+        messages,
+        options,
+        modelId
+      );
+      const generationConfig = this._buildGenerationConfig(options);
+
+      let streamResult;
+      try {
+        streamResult = await model.generateContentStream({
+          contents,
+          generationConfig,
+          ...(systemInstruction ? { systemInstruction } : {}),
+        });
+        // CRITICAL: Attach a catch handler immediately to prevent unhandled promise rejection
+        // if stream reading errors out before or during iteration
+        streamResult.response.catch(() => {});
+      } catch (err) {
+        const normalized = this._normalizeError(err);
+        lastError = normalized;
+        if (normalized.code === "cancelled" || options.signal?.aborted) {
+          throw normalized;
         }
-
-        const text = chunk.text();
-        if (text) {
-          yield text;
-        }
+        console.warn(`[GeminiProvider] Stream connect failed on model "${modelId}" (${normalized.message}). Trying fallback model...`);
+        continue;
       }
-    } catch (err) {
-      if (err instanceof AIError) throw err;
-      throw this._normalizeError(err);
+
+      try {
+        for await (const chunk of streamResult.stream) {
+          // Check for cancellation on every chunk boundary
+          if (options.signal?.aborted) {
+            throw new AIError(
+              "Stream cancelled by caller.",
+              "cancelled",
+              false,
+              options.signal.reason
+            );
+          }
+
+          const text = chunk.text();
+          if (text) {
+            yield text;
+          }
+        }
+
+        // The final response contains the aggregated usage metadata
+        try {
+          const finalResponse = await streamResult.response;
+          return this._extractUsage(finalResponse?.usageMetadata);
+        } catch {
+          return ZERO_USAGE;
+        }
+      } catch (err) {
+        if (err instanceof AIError) throw err;
+        throw this._normalizeError(err);
+      }
     }
 
-    // The final response contains the aggregated usage metadata
-    const finalResponse = await streamResult.response;
-    return this._extractUsage(finalResponse.usageMetadata);
+    throw lastError || new AIError("All stream candidate models failed.", "model_error", false);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -269,7 +322,8 @@ export class GeminiProvider implements AIProvider {
    */
   private _prepareRequest(
     messages: AIMessage[],
-    options: CompletionOptions
+    options: CompletionOptions,
+    overrideModelId?: string
   ): {
     model: GenerativeModel;
     systemInstruction: string | undefined;
@@ -318,7 +372,7 @@ export class GeminiProvider implements AIProvider {
       };
     });
 
-    const modelId = this._resolveModelAlias(options.model);
+    const modelId = overrideModelId || this._resolveModelAlias(options.model);
     const model = this.client.getGenerativeModel({ model: modelId });
 
     return { model, systemInstruction, contents };
@@ -340,11 +394,9 @@ export class GeminiProvider implements AIProvider {
   /**
    * Resolves a semantic alias to a Gemini model ID.
    * Falls back to "default" if the alias is unknown.
-   * This is the only place where semantic names touch provider-specific strings.
    */
   private _resolveModelAlias(alias?: string): string {
-    if (!alias) return MODEL_ALIASES["default"] as string;
-    return MODEL_ALIASES[alias] ?? (MODEL_ALIASES["default"] as string);
+    return resolveModel(alias);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -441,9 +493,9 @@ export class GeminiProvider implements AIProvider {
           config.initialDelayMs * config.backoffMultiplier ** (attempt - 1) +
           Math.random() * config.jitterMs;
 
-        // If rate limited, give Gemini at least 6s-10s to reset quota window
+        // If rate limited, give Gemini a reasonable backoff without exceeding request timeout
         if (aiError.code === "rate_limited") {
-          delay = Math.max(delay, 6_000 * attempt);
+          delay = Math.max(delay, 2_000 * attempt);
         }
 
         await this._sleep(delay);
@@ -483,11 +535,60 @@ export class GeminiProvider implements AIProvider {
       err instanceof Error ? err.message : "Unknown provider error";
     const lowerMessage = message.toLowerCase();
 
-    if (lowerMessage.includes("429") || lowerMessage.includes("quota")) {
+    // Check specifically for Daily Quota / Free Tier Limit Exceeded (which cannot be fixed with a short retry)
+    const isDailyQuota =
+      lowerMessage.includes("per day") ||
+      lowerMessage.includes("daily") ||
+      lowerMessage.includes("requests per day") ||
+      lowerMessage.includes("limit exceeded on free tier");
+
+    if (isDailyQuota) {
+      return new AIError(
+        `Gemini daily quota limit exceeded for model: ${message}`,
+        "quota_exceeded",
+        false,
+        err
+      );
+    }
+
+    // Temporary rate limit (RPM/TPM)
+    if (
+      lowerMessage.includes("429") ||
+      lowerMessage.includes("quota") ||
+      lowerMessage.includes("resource_exhausted")
+    ) {
       return new AIError(
         "Gemini rate limit exceeded. Retrying…",
         "rate_limited",
         true,
+        err
+      );
+    }
+
+    // Model capacity / spikes in demand
+    if (
+      lowerMessage.includes("503") ||
+      lowerMessage.includes("high demand") ||
+      lowerMessage.includes("overloaded")
+    ) {
+      return new AIError(
+        `AI provider model overloaded: ${message}`,
+        "service_unavailable",
+        true,
+        err
+      );
+    }
+
+    // Model deprecated or not found
+    if (
+      lowerMessage.includes("404") ||
+      lowerMessage.includes("not found") ||
+      lowerMessage.includes("no longer available")
+    ) {
+      return new AIError(
+        `AI provider model not found or deprecated: ${message}`,
+        "model_error",
+        false,
         err
       );
     }

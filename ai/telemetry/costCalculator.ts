@@ -21,8 +21,12 @@ interface ModelPricing {
  * Priced in USD per 1,000,000 tokens.
  */
 const PRICING_REGISTRY: Readonly<Record<string, ModelPricing>> = {
-  // Gemini 2.0 Flash
+  // Gemini 2.0 / 2.5 / 3.x Flash
   "gemini-2.0-flash": { inputPerMillion: 0.075, outputPerMillion: 0.30 },
+  "gemini-2.5-flash": { inputPerMillion: 0.075, outputPerMillion: 0.30 },
+  "gemini-3.5-flash-lite": { inputPerMillion: 0.075, outputPerMillion: 0.30 },
+  "gemini-3.5-flash": { inputPerMillion: 0.15, outputPerMillion: 0.60 },
+  "gemini-3-flash-preview": { inputPerMillion: 0.075, outputPerMillion: 0.30 },
   // Gemini 2.5 Pro
   "gemini-2.5-pro": { inputPerMillion: 1.25, outputPerMillion: 5.00 },
   // General fallback rates

@@ -35,6 +35,7 @@ const ShopCategoryController = require("./shopCategory.controller");
 const ShopProductController = require("./shopProduct.controller");
 const ShopOrderController = require("./shopOrder.controller");
 const ShopAnalyticsController = require("./shopAnalytics.controller");
+const SearchController = require("./search.controller");
 
 module.exports = {
   HealthController,
@@ -75,4 +76,5 @@ module.exports = {
   ShopProductController,
   ShopOrderController,
   ShopAnalyticsController,
+  SearchController,
 };

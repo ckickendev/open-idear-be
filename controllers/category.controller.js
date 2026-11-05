@@ -4,6 +4,11 @@ const { categorieService } = require("../services");
 const { AdminMiddleware } = require("../middlewares/auth.middleware");
 const asyncHandler = require("../utils/asyncHandler");
 
+const extractLocale = (req) => {
+    const raw = req?.query?.locale || req?.headers?.["x-locale"] || req?.cookies?.["NEXT_LOCALE"] || req?.body?.locale || (req?.headers?.["accept-language"]?.toLowerCase().startsWith("vi") ? "vi" : null);
+    return ["en", "vi"].includes(raw) ? raw : "en";
+};
+
 class CategoryController extends Controller {
     _rootPath = "/category";
     _router = express.Router();
@@ -57,8 +62,9 @@ class CategoryController extends Controller {
         if (!slug) {
             return res.status(400).json({ message: "Slug is required" });
         }
+        const locale = extractLocale(req);
 
-        const posts = await categorieService.getPostsByCategorySlug(slug, page);
+        const posts = await categorieService.getPostsByCategorySlug(slug, page, locale);
         if (!posts) {
             return res.status(404).json({ message: "No posts found for this category" });
         }
@@ -71,7 +77,8 @@ class CategoryController extends Controller {
         if (!slug) {
             return res.status(400).json({ message: "Slug is required" });
         }
-        const posts = await categorieService.getPostsInAnotherCategorySlug(slug, number);
+        const locale = extractLocale(req);
+        const posts = await categorieService.getPostsInAnotherCategorySlug(slug, number, locale);
         if (!posts) {
             return res.status(404).json({ message: "No posts found for this category" });
         }

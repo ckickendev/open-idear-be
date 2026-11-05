@@ -328,6 +328,59 @@ async function runTests() {
         assert(legacyResult.alternateUrls !== undefined, "alternateUrls must be object");
       });
 
+      // ─── DB TEST 13: String Taxonomy Normalization (Regression Test) ────────
+      await test("[DB] addPost seamlessly normalizes string taxonomy (Category name & bracketed string tags) without CastError/BSONError", async () => {
+        let taxonomyPostId: any = null;
+        try {
+          const result = await postService.addPost(
+            {
+              title: "Test Taxonomy Normalization Article " + Date.now(),
+              content: "<p>Hardware analysis</p>",
+              text: "Hardware analysis text",
+              author: testAuthorId,
+              category: "Technology",
+              tags: ["[ 'Build PC', 'Comparison', 'Trade-Offs', 'Evaluation' ]"],
+            },
+            "en"
+          );
+
+          assert(result !== null && result._id !== undefined, "Post with string taxonomy must be created");
+          taxonomyPostId = result._id;
+
+          const savedPost = await Post.findById(result._id).populate("category tags");
+          assert(savedPost !== null, "Saved post must exist in DB");
+          assert(savedPost.category !== null, "Category must be resolved to a valid ObjectId");
+          assert(typeof (savedPost.category as any).name === "string", "Populated category has valid string name");
+          assert(Array.isArray(savedPost.tags) && savedPost.tags.length === 4, "All 4 tags in bracketed array must be extracted and resolved");
+
+          const tagNames = savedPost.tags.map((t: any) => (t as any).name);
+          assert(tagNames.includes("Build PC"), "Tags must include 'Build PC'");
+          assert(tagNames.includes("Comparison"), "Tags must include 'Comparison'");
+          assert(tagNames.includes("Trade-Offs"), "Tags must include 'Trade-Offs'");
+          assert(tagNames.includes("Evaluation"), "Tags must include 'Evaluation'");
+
+          // Test updatePost with comma-separated tags and new category name
+          await postService.updatePost(
+            taxonomyPostId,
+            {
+              title: "Updated Taxonomy Title",
+              category: "PC Hardware",
+              tags: "RTX 4090, Benchmark, Performance",
+            },
+            "en"
+          );
+
+          const updatedPost = await Post.findById(taxonomyPostId).populate("category tags");
+          assert(updatedPost !== null, "Updated post must exist");
+          assert(Array.isArray(updatedPost.tags) && updatedPost.tags.length === 3, "Updated tags must resolve 3 new tags");
+        } finally {
+          if (taxonomyPostId) {
+            await Post.deleteOne({ _id: taxonomyPostId });
+            await PostTranslation.deleteMany({ postId: taxonomyPostId });
+          }
+        }
+      });
+
       // Clean up test post & translations
       if (createdPostId) {
         await Post.deleteOne({ _id: createdPostId });

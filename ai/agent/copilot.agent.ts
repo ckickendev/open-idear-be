@@ -76,7 +76,7 @@ copilotActionRegistry.register({
   defaultPromptVersion: "v1",
   inputSchema: z.object({
     selectedText: z.string(),
-    instruction: z.string(),
+    instruction: z.string().optional().default("Improve clarity, grammar, and readability while preserving original meaning."),
     surroundingContext: z.string().optional(),
     audience: z.string().optional(),
     tone: z.string().optional(),

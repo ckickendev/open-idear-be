@@ -1,6 +1,14 @@
 require("ts-node/register");
 require("dotenv").config();
 
+// Process-level anti-crash handlers: prevent unhandled stream/socket errors from terminating the backend
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[AntiCrash] Intercepted unhandledRejection:", reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error("[AntiCrash] Intercepted uncaughtException:", error);
+});
+
 const { providerRegistry, GeminiProvider } = require("./ai");
 const geminiApiKey = (process.env.GEMINI_API_KEY || process.env["GEMINI_API_KEY "] || "").trim();
 if (geminiApiKey) {
@@ -55,6 +63,7 @@ const {
   ShopProductController,
   ShopOrderController,
   ShopAnalyticsController,
+  SearchController,
 } = require("./controllers/index.js");
 
 const AppServer = require("./functions/appServer");
@@ -97,6 +106,7 @@ const app = new AppServer([
   new ShopProductController(),
   new ShopOrderController(),
   new ShopAnalyticsController(),
+  new SearchController(),
 ]);
 
 app.startListening();

@@ -77,8 +77,12 @@ export class AIRuntime {
       options.signal.addEventListener("abort", () => controller.abort());
     }
 
+    let timeoutTriggered = false;
     if (options.timeoutMs) {
-      timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
+      timeoutId = setTimeout(() => {
+        timeoutTriggered = true;
+        controller.abort(new Error(`AIRuntime request timed out after ${options.timeoutMs}ms.`));
+      }, options.timeoutMs);
     }
 
     try {
@@ -90,8 +94,16 @@ export class AIRuntime {
       });
       if (timeoutId) clearTimeout(timeoutId);
       return result;
-    } catch (err) {
+    } catch (err: any) {
       if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutTriggered) {
+        throw new AIError(
+          `AIRuntime request timed out after ${options.timeoutMs}ms.`,
+          "timeout",
+          true,
+          err
+        );
+      }
       throw err;
     }
   }
@@ -109,11 +121,15 @@ export class AIRuntime {
     const controller = new AbortController();
 
     if (options.signal) {
-      options.signal.addEventListener("abort", () => controller.abort());
+      options.signal.addEventListener("abort", () => controller.abort(options.signal?.reason));
     }
 
+    let timeoutTriggered = false;
     if (options.timeoutMs) {
-      timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
+      timeoutId = setTimeout(() => {
+        timeoutTriggered = true;
+        controller.abort(new Error(`AIRuntime request timed out after ${options.timeoutMs}ms.`));
+      }, options.timeoutMs);
     }
 
     try {
@@ -125,8 +141,16 @@ export class AIRuntime {
       });
       if (timeoutId) clearTimeout(timeoutId);
       return result;
-    } catch (err) {
+    } catch (err: any) {
       if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutTriggered) {
+        throw new AIError(
+          `AIRuntime request timed out after ${options.timeoutMs}ms.`,
+          "timeout",
+          true,
+          err
+        );
+      }
       throw err;
     }
   }

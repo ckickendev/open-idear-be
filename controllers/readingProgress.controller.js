@@ -32,8 +32,10 @@ class ReadingProgressController extends Controller {
   getContinueReading = asyncHandler(async (req, res) => {
     const userId = req.userInfo?._id;
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 6;
+    const rawLocale = req.query.locale || req.headers?.["x-locale"] || req.cookies?.["NEXT_LOCALE"] || (req.headers?.["accept-language"]?.toLowerCase().startsWith("vi") ? "vi" : "en");
+    const locale = ["en", "vi"].includes(rawLocale) ? rawLocale : "en";
 
-    const items = await readingProgressService.getContinueReading(userId, limit);
+    const items = await readingProgressService.getContinueReading(userId, limit, locale);
 
     res.status(200).json({
       success: true,
