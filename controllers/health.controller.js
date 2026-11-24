@@ -2,6 +2,7 @@ const express = require("express");
 const { Controller } = require("../core");
 const { default: mongoose } = require("mongoose");
 const asyncHandler = require("../utils/asyncHandler");
+const { providerRegistry } = require("../ai/provider");
 
 const serverStartTime = new Date();
 
@@ -56,6 +57,8 @@ class HealthController extends Controller {
 
     const uptimeSeconds = process.uptime();
     const mem = process.memoryUsage();
+    const registeredAiProviders = providerRegistry.list();
+    const isAiConfigured = registeredAiProviders.length > 0;
     const isHealthy = isDbConnected;
 
     return {
@@ -71,6 +74,10 @@ class HealthController extends Controller {
         formatted: this.formatUptime(uptimeSeconds),
       },
       environment: process.env.NODE_ENV || "development",
+      ai: {
+        configured: isAiConfigured,
+        providers: registeredAiProviders,
+      },
       database: {
         status: dbStatus,
         connected: isDbConnected,
@@ -342,6 +349,17 @@ class HealthController extends Controller {
         <div class="card-label">🌍 Environment</div>
         <div class="card-value" style="text-transform: capitalize;">${data.environment}</div>
         <div class="card-subtext">Node ${data.system.nodeVersion} (${data.system.platform})</div>
+      </div>
+
+      <!-- AI Provider -->
+      <div class="card">
+        <div class="card-label">✨ AI Providers</div>
+        <div class="card-value" style="color: ${data.ai.configured ? "#10B981" : "#EF4444"}">
+          ${data.ai.configured ? "Configured" : "Not Configured"}
+        </div>
+        <div class="card-subtext">
+          ${data.ai.configured ? data.ai.providers.join(", ") : "Set GEMINI_API_KEY in env"}
+        </div>
       </div>
     </div>
 

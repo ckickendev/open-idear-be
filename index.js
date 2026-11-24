@@ -9,10 +9,18 @@ process.on("uncaughtException", (error) => {
   console.error("[AntiCrash] Intercepted uncaughtException:", error);
 });
 
-const { providerRegistry, GeminiProvider } = require("./ai");
-const geminiApiKey = (process.env.GEMINI_API_KEY || process.env["GEMINI_API_KEY "] || "").trim();
-if (geminiApiKey) {
-  providerRegistry.register(new GeminiProvider(geminiApiKey));
+const { providerRegistry, registerDefaultProvidersFromEnv } = require("./ai");
+const aiBootstrap = registerDefaultProvidersFromEnv(providerRegistry);
+if (aiBootstrap.registered.length > 0) {
+  console.log(
+    `[AI] Registered providers: [${aiBootstrap.registered.join(", ")}]` +
+      (aiBootstrap.sourceKey ? ` (env: ${aiBootstrap.sourceKey})` : "")
+  );
+} else {
+  console.error(
+    "[AI CRITICAL] No AI providers registered at startup: GEMINI_API_KEY is missing or empty. " +
+      "AI features (planner, writer, etc.) will fail until GEMINI_API_KEY is configured."
+  );
 }
 
 // Fail-fast environment variable validation for production readiness

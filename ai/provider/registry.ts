@@ -19,6 +19,71 @@
 
 import type { AIProvider } from "./types";
 import { AIError } from "./types";
+import { GeminiProvider } from "./gemini.provider";
+
+const GEMINI_ENV_KEYS = [
+  "GEMINI_API_KEY",
+  "GOOGLE_GENERATIVE_AI_API_KEY",
+  "GOOGLE_GEMINI_API_KEY",
+  "GOOGLE_API_KEY",
+] as const;
+
+/**
+ * Strips whitespace and matching surrounding single/double quotes from an env value.
+ */
+function sanitizeEnvValue(raw: string | undefined): string {
+  if (!raw) return "";
+  let val = raw.trim();
+  if (
+    (val.startsWith('"') && val.endsWith('"')) ||
+    (val.startsWith("'") && val.endsWith("'"))
+  ) {
+    val = val.slice(1, -1).trim();
+  }
+  return val;
+}
+
+/**
+ * Resolves a Gemini API key from environment variables, tolerating common
+ * aliases and accidental whitespace in dashboard-configured variable names/values.
+ */
+export function resolveGeminiApiKey(
+  env: Record<string, string | undefined> = process.env
+): { apiKey: string; sourceKey?: string } {
+  for (const candidateKey of GEMINI_ENV_KEYS) {
+    const direct = sanitizeEnvValue(env[candidateKey]);
+    if (direct) {
+      return { apiKey: direct, sourceKey: candidateKey };
+    }
+  }
+
+  // Fallback: match keys with accidental leading/trailing whitespace (e.g. "GEMINI_API_KEY ")
+  for (const [rawKey, rawVal] of Object.entries(env)) {
+    const trimmedKey = rawKey.trim();
+    if ((GEMINI_ENV_KEYS as readonly string[]).includes(trimmedKey)) {
+      const sanitized = sanitizeEnvValue(rawVal);
+      if (sanitized) {
+        return { apiKey: sanitized, sourceKey: rawKey };
+      }
+    }
+  }
+
+  return { apiKey: "" };
+}
+
+export interface ProviderRegistryOptions {
+  /**
+   * When true, empty lookups lazily attempt to register default providers
+   * from environment variables (used by the production singleton).
+   */
+  readonly autoRegisterFromEnv?: boolean;
+}
+
+export interface ProviderBootstrapResult {
+  readonly registered: string[];
+  readonly missing: boolean;
+  readonly sourceKey?: string;
+}
 
 // =============================================================================
 //  ProviderRegistry
@@ -26,6 +91,49 @@ import { AIError } from "./types";
 
 export class ProviderRegistry {
   private readonly providers = new Map<string, AIProvider>();
+  private readonly autoRegisterFromEnv: boolean;
+  private autoRegisterSuppressed = false;
+
+  constructor(options: ProviderRegistryOptions = {}) {
+    this.autoRegisterFromEnv = options.autoRegisterFromEnv ?? false;
+  }
+
+  /**
+   * Lazily registers default providers from process.env if this registry
+   * is configured for auto-registration and currently empty.
+   */
+  private ensureAutoRegistered(): void {
+    if (!this.autoRegisterFromEnv || this.autoRegisterSuppressed || this.providers.size > 0) {
+      return;
+    }
+    this.bootstrapFromEnv();
+  }
+
+  /**
+   * Registers default AI providers (currently GeminiProvider) from environment
+   * variables if not already present. Clears prior unregister() suppression.
+   */
+  bootstrapFromEnv(
+    env: Record<string, string | undefined> = process.env
+  ): ProviderBootstrapResult {
+    this.autoRegisterSuppressed = false;
+    if (!this.providers.has("gemini")) {
+      const { apiKey, sourceKey } = resolveGeminiApiKey(env);
+      if (apiKey) {
+        this.register(new GeminiProvider(apiKey));
+        return {
+          registered: [...this.providers.keys()],
+          missing: false,
+          ...(sourceKey !== undefined && { sourceKey }),
+        };
+      }
+    }
+    const existing = [...this.providers.keys()];
+    return {
+      registered: existing,
+      missing: existing.length === 0,
+    };
+  }
 
   /**
    * Register a provider instance.
@@ -35,6 +143,7 @@ export class ProviderRegistry {
    * @param provider  Any class implementing AIProvider.
    */
   register(provider: AIProvider): void {
+    this.autoRegisterSuppressed = false;
     this.providers.set(provider.id, provider);
   }
 
@@ -47,12 +156,13 @@ export class ProviderRegistry {
    *            is wrong — it should surface loudly, not return undefined.
    */
   get(id: string): AIProvider {
+    this.ensureAutoRegistered();
     const provider = this.providers.get(id);
     if (!provider) {
       throw new AIError(
         `No AI provider registered with id "${id}". ` +
           `Available providers: [${this.list().join(", ")}]. ` +
-          `Ensure register() is called during application startup.`,
+          `Ensure GEMINI_API_KEY is configured or register() is called during application startup.`,
         "model_error",
         false
       );
@@ -67,10 +177,11 @@ export class ProviderRegistry {
    * @throws AIError if no providers are registered at all.
    */
   getDefault(): AIProvider {
+    this.ensureAutoRegistered();
     const first = this.providers.values().next();
     if (first.done) {
       throw new AIError(
-        "No AI providers are registered. Call register() during startup.",
+        "No AI providers are registered. Set GEMINI_API_KEY in the server environment or call register() during startup.",
         "model_error",
         false
       );
@@ -83,6 +194,7 @@ export class ProviderRegistry {
    * Useful for conditional feature availability checks.
    */
   has(id: string): boolean {
+    this.ensureAutoRegistered();
     return this.providers.has(id);
   }
 
@@ -90,6 +202,7 @@ export class ProviderRegistry {
    * Returns all registered provider IDs. Used in error messages and monitoring.
    */
   list(): string[] {
+    this.ensureAutoRegistered();
     return [...this.providers.keys()];
   }
 
@@ -98,8 +211,20 @@ export class ProviderRegistry {
    * Primarily useful in test teardown to restore clean state.
    */
   unregister(id: string): void {
+    this.autoRegisterSuppressed = true;
     this.providers.delete(id);
   }
+}
+
+/**
+ * Registers default AI providers (currently GeminiProvider) on the given
+ * registry from environment variables if not already registered.
+ */
+export function registerDefaultProvidersFromEnv(
+  registry: ProviderRegistry = providerRegistry,
+  env: Record<string, string | undefined> = process.env
+): ProviderBootstrapResult {
+  return registry.bootstrapFromEnv(env);
 }
 
 // =============================================================================
@@ -128,4 +253,4 @@ export class ProviderRegistry {
  * const provider = providerRegistry.get('gemini');
  * ```
  */
-export const providerRegistry = new ProviderRegistry();
+export const providerRegistry = new ProviderRegistry({ autoRegisterFromEnv: true });
