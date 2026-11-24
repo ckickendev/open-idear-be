@@ -18,6 +18,10 @@ export {
   GeminiProvider,
   ProviderRegistry,
   providerRegistry,
+  resolveGeminiApiKey,
+  registerDefaultProvidersFromEnv,
+  type ProviderRegistryOptions,
+  type ProviderBootstrapResult,
   FallbackStrategy,
   fallbackStrategy,
 } from "./provider";

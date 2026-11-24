@@ -45,4 +45,11 @@ export { GeminiProvider } from "./gemini.provider";
 export { FallbackStrategy, fallbackStrategy } from "./fallback.strategy";
 
 // ─── Registry singleton ───────────────────────────────────────────────────────
-export { ProviderRegistry, providerRegistry } from "./registry";
+export {
+  ProviderRegistry,
+  providerRegistry,
+  resolveGeminiApiKey,
+  registerDefaultProvidersFromEnv,
+  type ProviderRegistryOptions,
+  type ProviderBootstrapResult,
+} from "./registry";
